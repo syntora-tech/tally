@@ -120,6 +120,27 @@
       "when": 1790706408759,
       "tag": "20260929182648_invoice_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790706906517,
+      "tag": "20260929183506_company_place",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790707068093,
+      "tag": "20260929183748_invoice_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790707069623,
+      "tag": "20260929183749_invoice_revision_guards",
+      "breakpoints": true
     }
   ]
 }

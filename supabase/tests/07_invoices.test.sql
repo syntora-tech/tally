@@ -59,8 +59,8 @@ select lives_ok($$ update public.invoice set status = 'issued', number = '1/31',
   'issue on a working day');
 
 -- I1: frozen after issue.
-select throws_ok($$ update public.invoice set total = 1 where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL001', null, 'I1: total frozen');
-select throws_ok($$ update public.invoice set issue_date = '2031-04-02' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL001', null, 'I1: date frozen');
+select throws_ok($$ update public.invoice set total = 1 where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL005', null, 'I1: total changes only through a revision');
+select throws_ok($$ update public.invoice set issue_date = '2031-04-02' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL005', null, 'I1: date changes only through a revision');
 select throws_ok($$ update public.invoice_line set amount = 1 $$, 'TL001', null, 'I1: lines frozen');
 select throws_ok($$ delete from public.invoice where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL001', null, 'I1: cannot delete');
 select lives_ok($$ update public.invoice set pdf_file_id = 'drive-1' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'generated file id set once');

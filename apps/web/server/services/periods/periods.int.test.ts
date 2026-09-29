@@ -12,6 +12,7 @@ import {
   timesheet,
 } from '@tally/db/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
+import { sum } from '@tally/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { closePeriod, getPeriodOverview, openPeriod, reopenPeriod, setHours } from '.';
@@ -180,11 +181,14 @@ describe('period wizard (spec 6.4)', () => {
     const overview = (
       await getPeriodOverview.run(h.ctxFor(finance), { periodId: ids.period })
     )._unsafeUnwrap();
-    expect(overview.preview.totals).toEqual({
-      invoiceUsd: '14373.00',
-      payUsd: '12240.00',
-      payUahApprox: '544435.20',
-    });
+    // The shared DB may hold other active assignments; sum only this test's rows.
+    const mine = new Set(Object.values(ids.assignments));
+    const rows = overview.preview.rows.filter((r) => mine.has(r.assignmentId));
+    const total = (pick: (r: (typeof rows)[number]) => string | null) =>
+      sum(rows.map((r) => pick(r) ?? '0')).toFixed(2);
+    expect(total((r) => r.invoiceAmount)).toBe('14373.00');
+    expect(total((r) => r.payUsd)).toBe('10220.00');
+    expect(total((r) => r.payUahApprox)).toBe('454585.60');
   });
 
   it('closing creates one draft invoice per contract with 5.1 lines', async () => {

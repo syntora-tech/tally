@@ -28,6 +28,9 @@ export const company = pgTable(
     directorEn: text(),
     bankDetailsEn: text(),
     bankDetailsUa: text(),
+    /** Place of issue in document headers (spec 7.2 doc.place_en / doc.place_ua). */
+    placeEn: text().notNull().default('Odesa'),
+    placeUa: text().notNull().default('м. Одеса'),
   },
   () => [...rolePolicies('company', { read: 'finance', write: 'owner' })],
 );

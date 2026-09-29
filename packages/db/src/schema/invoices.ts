@@ -7,13 +7,16 @@ import {
   integer,
   jsonb,
   numeric,
+  pgPolicy,
   pgTable,
   text,
+  timestamp,
   unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { baseColumns, currencyCheck, rolePolicies } from './_common';
+import { authenticatedRole } from 'drizzle-orm/supabase';
+import { baseColumns, currencyCheck, isOwnerOrFinance, rolePolicies } from './_common';
 import { contract, period, timesheet } from './engagements';
 import { invoiceStatus } from './enums';
 import { client } from './parties';
@@ -48,6 +51,8 @@ export const invoice = pgTable(
     pdfFileId: text(),
     dateOverrideReason: text(),
     voidReason: text(),
+    /** Bumped on every edit of an issued, still unpaid invoice (owner decision, A-044). */
+    revision: integer().notNull().default(1),
   },
   (t) => [
     unique('invoice_legacy_ref_key').on(t.legacyRef),
@@ -97,5 +102,34 @@ export const invoiceLine = pgTable(
   ],
 );
 
+/** Previous states of an issued invoice, written by the DB on every revision (append-only). */
+export const invoiceRevision = pgTable(
+  'invoice_revision',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    invoiceId: uuid()
+      .notNull()
+      .references(() => invoice.id, { onDelete: 'cascade' }),
+    revision: integer().notNull(),
+    issueDate: date({ mode: 'string' }).notNull(),
+    dueDate: date({ mode: 'string' }).notNull(),
+    total: numeric({ precision: 20, scale: 8 }).notNull(),
+    snapshot: jsonb(),
+    pdfFileId: text(),
+    reason: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    createdBy: uuid().default(sql`auth.uid()`),
+  },
+  (t) => [
+    unique('invoice_revision_key').on(t.invoiceId, t.revision),
+    pgPolicy('invoice_revision_select', {
+      for: 'select',
+      to: authenticatedRole,
+      using: isOwnerOrFinance,
+    }),
+  ],
+).enableRLS();
+
 export type Invoice = typeof invoice.$inferSelect;
+export type InvoiceRevision = typeof invoiceRevision.$inferSelect;
 export type InvoiceLine = typeof invoiceLine.$inferSelect;
