@@ -43,3 +43,9 @@ export const BENCH_LABELS: Record<string, string> = {
 
 export const toOptions = (labels: Record<string, string>) =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
+
+export const PAYEE_KIND_LABELS: Record<string, string> = {
+  fop: 'ФОП',
+  crypto: 'Крипто-гаманець',
+  other: 'Інше',
+};

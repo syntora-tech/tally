@@ -62,6 +62,11 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
           >
             Експорт CSV
           </Button>
+          {canWrite && (
+            <Button variant="outline" render={<Link href="/people/payees" />}>
+              Одержувачі
+            </Button>
+          )}
           {canWrite && <Button render={<Link href="/people/new" />}>Додати людину</Button>}
         </div>
       </div>

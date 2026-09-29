@@ -11,7 +11,9 @@ import { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS } from '@/lib/lab
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPerson } from '@/server/services/people';
+import { listPayees } from '@/server/services/payees';
 import { CvUpload } from './cv-upload';
+import { DefaultPayeeForm } from './default-payee-form';
 
 export const metadata: Metadata = { title: 'Людина · Tally' };
 
@@ -49,6 +51,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (result.isErr()) notFound();
   const p = result.value;
   const isFinance = FINANCE_ROLES.includes(ctx.actor.role);
+  const payees = isFinance ? await listPayees.run(ctx, {}) : null;
+  const payeeOptions = payees?.isOk()
+    ? payees.value.map((py) => ({ value: py.id, label: py.name }))
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,7 +106,15 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
                 {[p.location, p.timezone].filter(Boolean).join(', ') || '—'}
               </Row>
               <Row label="Контактна особа">{p.contactOwner ?? '—'}</Row>
-              {isFinance && <Row label="Одержувач виплат">{p.defaultPayee?.name ?? '—'}</Row>}
+              {isFinance && (
+                <Row label="Одержувач виплат">
+                  <DefaultPayeeForm
+                    personId={p.id}
+                    currentPayeeId={p.defaultPayee?.id ?? null}
+                    options={payeeOptions}
+                  />
+                </Row>
+              )}
               {p.notes && <Row label="Нотатки">{p.notes}</Row>}
             </dl>
           </CardContent>
