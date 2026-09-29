@@ -42,7 +42,7 @@
 1. Add New → Project → Import `syntora-tech/tally`.
 2. **Root Directory:** `apps/web` (галочка «Include files outside the root directory» — увімкнена, потрібна для `packages/*`). Framework: Next.js; команди install/build — за замовчуванням.
 3. **Settings → Build and Deployment → Node.js Version:** 24.x (також зафіксовано в `engines`).
-4. **Environment Variables** (для Preview і Development; Production — порожньо до Етапу 6):
+4. **Environment Variables** — для «Production and Preview». Vercel вважає Production кожен деплой гілки `main`, тому на Hobby-проєкті його «Production» — це наше середовище `preview` (2.2): усі змінні вказують на preview-проєкт Supabase, дані лише тестові. Справжній production — окремий Vercel Pro проєкт на Етапі 6.
 
 | Змінна                            | Значення                                                                                      |
 | --------------------------------- | --------------------------------------------------------------------------------------------- |
