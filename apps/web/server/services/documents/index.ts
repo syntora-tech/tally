@@ -19,6 +19,7 @@ import type { DocumentStorage } from '../../storage/types';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
+import { signedCopyTarget } from '../invoices';
 import { optionalHttpUrl, optionalLocalDate, optionalText, requiredText } from '../fields';
 
 /** Vercel caps function request bodies at 4.5 MB (assumptions A-027). */
@@ -111,6 +112,7 @@ async function resolveAnchor(
 
 type NewDocument = z.output<typeof createDocumentInput> & {
   supersedes?: { id: string; version: number };
+  signed?: { at: Date; sourceRevision: number };
 };
 
 /**
@@ -156,6 +158,8 @@ export async function insertDocument(
         sizeBytes: stored?.sizeBytes ?? null,
         version: input.supersedes ? input.supersedes.version + 1 : 1,
         supersedesId: input.supersedes?.id ?? null,
+        signedAt: input.signed?.at ?? null,
+        sourceRevision: input.signed?.sourceRevision ?? null,
       })
       .returning({ id: document.id });
     if (!row) throw new Error('Document insert returned no row');
@@ -226,5 +230,34 @@ export function documentServices(getStorage: () => DocumentStorage) {
     },
   });
 
-  return { createDocument, uploadCv };
+  /**
+   * Signed copy of an issued invoice (A-039): supersedes the generated file and remembers which
+   * revision was signed, so a later revision marks it as outdated.
+   */
+  const attachSignedInvoice = defineService({
+    name: 'invoices.attachSigned',
+    input: z.object({ invoiceId: z.uuid(), file: uploadFile }),
+    handler: async (ctx, { invoiceId, file }) => {
+      const target = await signedCopyTarget(ctx, invoiceId);
+      if (!target) return err(serviceError('not_found', 'Випущений інвойс не знайдено'));
+      const created = await insertDocument(ctx, getStorage(), {
+        type: 'invoice',
+        title: `Invoice ${target.number} (signed)`,
+        number: target.number,
+        docDate: target.issueDate,
+        url: null,
+        notes: null,
+        file,
+        links: [
+          { entityType: 'invoice', entityId: invoiceId },
+          { entityType: 'client', entityId: target.clientId },
+        ],
+        signed: { at: new Date(), sourceRevision: target.revision },
+        ...(target.current ? { supersedes: target.current } : {}),
+      });
+      return ok(created);
+    },
+  });
+
+  return { createDocument, uploadCv, attachSignedInvoice };
 }

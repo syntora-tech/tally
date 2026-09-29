@@ -63,6 +63,10 @@ export function mapDbError(error: unknown): ServiceError | null {
         'validation_error',
         `Дата ${pg.detail ?? ''} — неробочий день. Оберіть робочий день або (власник) вкажіть причину`,
       );
+    case 'TL005':
+      return serviceError('conflict', 'Інвойс щойно змінили — оновіть сторінку й спробуйте ще раз');
+    case 'TL006':
+      return serviceError('validation_error', 'Вкажіть причину зміни випущеного інвойсу');
     case 'TL020':
       return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
     case 'TL021':
