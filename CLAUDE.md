@@ -34,7 +34,7 @@ pnpm db:generate         # drizzle-kit → supabase/migrations
 pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
 ```
 
-- Supabase CLI is a devDependency — use `pnpm supabase …`, not a global install.
+- Supabase CLI is a devDependency — run it via `pnpm sb …` (`scripts/supabase.sh` loads `supabase/.env` and defaults Google OAuth to off), never a global install.
 - TypeScript: `tsc` is TS 7 (`@typescript/native`); the `typescript` package is aliased to `@typescript/typescript6` for typescript-eslint and Next.js (see assumptions A-001).
 - Drizzle schema: `packages/db/src/schema`. Generated migrations go to `supabase/migrations`; triggers/functions/RLS are hand-written SQL migrations.
 
