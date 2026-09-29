@@ -22,7 +22,7 @@ export const serviceError = (
   fieldErrors?: Record<string, string[]>,
 ): ServiceError => (fieldErrors ? { code, message, fieldErrors } : { code, message });
 
-type PgError = { code: string; hint?: string; constraint_name?: string };
+type PgError = { code: string; hint?: string; detail?: string; constraint_name?: string };
 
 function findPgError(error: unknown): PgError | null {
   let current: unknown = error;
@@ -50,6 +50,29 @@ export function mapDbError(error: unknown): ServiceError | null {
         'closed_period',
         `Не можна змінювати умови заднім числом у закритому періоді. Нова версія може починатися не раніше ${pg.hint ? formatHint(pg.hint) : 'першого відкритого місяця'}.`,
       );
+    case 'TL001':
+    case 'TL002':
+      return serviceError(
+        'conflict',
+        'Випущений документ не можна змінити — лише анулювати й перевипустити',
+      );
+    case 'TL003':
+      return serviceError('validation_error', 'Для випуску потрібен знімок документа');
+    case 'TL004':
+      return serviceError(
+        'validation_error',
+        `Дата ${pg.detail ?? ''} — неробочий день. Оберіть робочий день або (власник) вкажіть причину`,
+      );
+    case 'TL020':
+      return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
+    case 'TL021':
+      return serviceError('not_found', 'Для договору не налаштовано послідовність номерів');
+    case 'TL022':
+      return serviceError('validation_error', 'Дата документа раніша за рік послідовності номерів');
+    case 'TL030':
+      return serviceError('closed_period', 'Період закрито — години змінювати не можна');
+    case 'TL031':
+      return serviceError('validation_error', 'Вкажіть причину відкриття періоду');
     case '23505':
       return pg.constraint_name?.endsWith('_version_key')
         ? serviceError('conflict', 'Версія умов з цієї дати вже існує')

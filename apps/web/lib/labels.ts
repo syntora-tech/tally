@@ -103,3 +103,12 @@ export const ACT_DATE_TYPES = [
   { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
   { value: 'manual', label: 'Лише вручну' },
 ];
+
+export const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: 'Чернетка',
+  issued: 'Випущено',
+  partially_paid: 'Частково оплачено',
+  paid: 'Оплачено',
+  void: 'Анульовано',
+  written_off: 'Списано',
+};

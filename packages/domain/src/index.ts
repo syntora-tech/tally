@@ -10,3 +10,4 @@ export * from './csv';
 export * from './calendar';
 export * from './date-rules';
 export * from './words';
+export * from './period';
