@@ -24,7 +24,8 @@
     "db:generate": "pnpm --filter @tally/db generate",
     "db:migration": "pnpm --filter @tally/db migration",
     "test:int": "pnpm --filter @tally/web test:int",
-    "env:local": "node scripts/setup-env.mjs"
+    "env:local": "node scripts/setup-env.mjs",
+    "e2e:install": "pnpm --filter @tally/web e2e:install"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
