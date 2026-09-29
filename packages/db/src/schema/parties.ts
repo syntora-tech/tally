@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   uniqueIndex,
+  unique,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -35,6 +36,8 @@ export const person = pgTable(
   'person',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     fullName: text().notNull(),
     displayName: text(),
     position: text(),
@@ -61,6 +64,7 @@ export const person = pgTable(
     notes: text(),
   },
   (t) => [
+    unique('person_legacy_ref_key').on(t.legacyRef),
     check('person_allocation_check', sql`${t.allocation} in ('full_time', 'part_time')`),
     check('person_status_check', sql`${t.status} in ('active', 'bench', 'inactive')`),
     check('person_market_rate_check', sql`${t.marketRateUsd} >= 0`),
@@ -74,6 +78,8 @@ export const payee = pgTable(
   'payee',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     kind: text().notNull(),
     legalNameUa: text(),
     legalNameEn: text(),
@@ -88,6 +94,7 @@ export const payee = pgTable(
     personId: uuid().references((): AnyPgColumn => person.id, { onDelete: 'set null' }),
   },
   (t) => [
+    unique('payee_legacy_ref_key').on(t.legacyRef),
     check('payee_kind_check', sql`${t.kind} in ('fop', 'crypto', 'other')`),
     check('payee_name_check', sql`num_nonnulls(${t.legalNameUa}, ${t.legalNameEn}) >= 1`),
     ...rolePolicies('payee', { read: 'finance', write: 'finance' }),
@@ -98,6 +105,8 @@ export const client = pgTable(
   'client',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     legalName: text().notNull(),
     shortName: text(),
     address: text(),
@@ -110,6 +119,7 @@ export const client = pgTable(
     zohoId: text(),
   },
   (t) => [
+    unique('client_legacy_ref_key').on(t.legacyRef),
     currencyCheck('client_default_currency_check', t.defaultCurrency),
     uniqueIndex('client_zoho_id_key')
       .on(t.zohoId)

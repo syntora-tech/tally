@@ -71,6 +71,13 @@
       "when": 1790693134683,
       "tag": "20260929144534_person_bench_load",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790694757720,
+      "tag": "20260929151237_legacy_refs",
+      "breakpoints": true
     }
   ]
 }

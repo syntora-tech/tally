@@ -31,6 +31,8 @@ export const contract = pgTable(
   'contract',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     kind: text().notNull(),
     number: text().notNull(),
     signedOn: date({ mode: 'string' }),
@@ -56,6 +58,7 @@ export const contract = pgTable(
     status: text().notNull().default('active'),
   },
   (t) => [
+    unique('contract_legacy_ref_key').on(t.legacyRef),
     check('contract_kind_check', sql`${t.kind} in ('client', 'fop')`),
     check(
       'contract_one_counterparty_check',
@@ -86,6 +89,8 @@ export const assignment = pgTable(
   'assignment',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     personId: uuid()
       .notNull()
       .references(() => person.id),
@@ -98,6 +103,7 @@ export const assignment = pgTable(
     endsOn: date({ mode: 'string' }),
   },
   (t) => [
+    unique('assignment_legacy_ref_key').on(t.legacyRef),
     check('assignment_contract_check', sql`${t.isInternal} or ${t.contractId} is not null`),
     check('assignment_fte_check', sql`${t.fte} > 0 and ${t.fte} <= 1`),
     check('assignment_dates_check', sql`${t.endsOn} is null or ${t.endsOn} >= ${t.startsOn}`),
@@ -112,6 +118,8 @@ export const billingTerms = pgTable(
   'billing_terms',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     assignmentId: uuid()
       .notNull()
       .references(() => assignment.id, { onDelete: 'cascade' }),
@@ -123,6 +131,7 @@ export const billingTerms = pgTable(
     invoiceChannel: payoutMethod().notNull().default('fiat'),
   },
   (t) => [
+    unique('billing_terms_legacy_ref_key').on(t.legacyRef),
     unique('billing_terms_version_key').on(t.assignmentId, t.validFrom),
     check('billing_terms_valid_from_check', firstOfMonth('valid_from')),
     check('billing_terms_rate_check', sql`${t.rate} >= 0`),
@@ -136,6 +145,8 @@ export const payTerms = pgTable(
   'pay_terms',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     assignmentId: uuid()
       .notNull()
       .references(() => assignment.id, { onDelete: 'cascade' }),
@@ -148,6 +159,7 @@ export const payTerms = pgTable(
     graceDays: integer().notNull().default(0),
   },
   (t) => [
+    unique('pay_terms_legacy_ref_key').on(t.legacyRef),
     unique('pay_terms_version_key').on(t.assignmentId, t.validFrom),
     check('pay_terms_valid_from_check', firstOfMonth('valid_from')),
     check('pay_terms_amount_check', sql`${t.amount} >= 0`),

@@ -47,6 +47,8 @@ export const document = pgTable(
   'document',
   {
     ...baseColumns,
+    // Source row of the legacy xlsx import (spec 8); makes re-imports idempotent.
+    legacyRef: text(),
     type: text().notNull(),
     number: text(),
     // Keep in sync with numberKey() in @tally/domain (spec 5.6).
@@ -67,6 +69,7 @@ export const document = pgTable(
     notes: text(),
   },
   (t) => [
+    unique('document_legacy_ref_key').on(t.legacyRef),
     check('document_type_check', sql`${t.type} in (${inList(DOCUMENT_TYPES)})`),
     check('document_version_check', sql`${t.version} >= 1`),
     unique('document_supersedes_key').on(t.supersedesId),

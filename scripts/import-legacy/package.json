@@ -1,0 +1,23 @@
+{
+  "name": "@tally/import-legacy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "test:int": "VITEST_INTEGRATION=1 vitest run"
+  },
+  "dependencies": {
+    "@tally/db": "workspace:*",
+    "@tally/domain": "workspace:*",
+    "drizzle-orm": "0.45.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "vitest": "5.0.2"
+  }
+}

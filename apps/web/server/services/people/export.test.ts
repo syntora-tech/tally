@@ -10,6 +10,7 @@ const base: PersonRow = {
   createdAt: new Date(),
   updatedAt: new Date(),
   createdBy: null,
+  legacyRef: null,
   fullName: 'Andrii Hrytsenko',
   displayName: 'Andrii H.',
   position: 'DevOps Engineer',

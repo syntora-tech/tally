@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - scripts/import-legacy
 allowBuilds:
   esbuild: true
   unrs-resolver: false
