@@ -41,6 +41,8 @@ pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
 - TypeScript: `tsc` is TS 7 (`@typescript/native`); the `typescript` package is aliased to `@typescript/typescript6` for typescript-eslint and Next.js (see assumptions A-001).
 - Drizzle schema: `packages/db/src/schema`. Generated migrations go to `supabase/migrations`; triggers/functions/RLS are hand-written SQL migrations.
 
+Deployment (GitHub environments, Supabase cloud, Vercel with root `apps/web`): `docs/deployment.md`.
+
 ## Workflow
 
 - Small Conventional Commits; every commit green (`pnpm check` + `pnpm db:test` when SQL changes).
