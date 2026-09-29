@@ -26,11 +26,13 @@ Internal back-office for Syntora.Tech: ledger, payroll, invoices, FOP acts, benc
 pnpm install
 pnpm db:start            # supabase start (Postgres :54322, API :54321, Studio :54323, Mailpit :54324)
 pnpm db:reset            # migrations + seed from scratch
+pnpm env:local           # write apps/web/.env.local from the running stack (then set ALLOWED_EMAILS)
 pnpm dev                 # http://localhost:3000
 pnpm lint | pnpm typecheck | pnpm test
 pnpm db:test             # pgTAP (supabase/tests)
 pnpm test:int            # Vitest against local DB (withUser, RLS, audit)
-pnpm e2e                 # Playwright (needs db:start)
+pnpm e2e:install         # once: project-local Chromium for Playwright
+pnpm e2e                 # Playwright (needs db:start + env:local)
 pnpm db:generate         # drizzle-kit → supabase/migrations
 pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
 ```
