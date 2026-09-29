@@ -127,6 +127,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             ctx={ctx}
             entityType="person"
             entityId={p.id}
+            canAdd={isFinance}
             action={isFinance ? <CvUpload personId={p.id} /> : undefined}
           />
           <AuditHistory

@@ -135,7 +135,7 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
               )}
             </CardContent>
           </Card>
-          <LinkedDocuments ctx={ctx} entityType="payee" entityId={p.id} />
+          <LinkedDocuments ctx={ctx} entityType="payee" entityId={p.id} canAdd />
           <AuditHistory ctx={ctx} tableName="payee" rowId={p.id} fieldLabels={FIELD_LABELS} />
         </div>
       </div>

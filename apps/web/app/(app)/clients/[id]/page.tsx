@@ -172,7 +172,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="flex flex-col gap-6">
-          <LinkedDocuments ctx={ctx} entityType="client" entityId={c.id} />
+          <LinkedDocuments ctx={ctx} entityType="client" entityId={c.id} canAdd={isFinance} />
           <AuditHistory ctx={ctx} tableName="client" rowId={c.id} fieldLabels={FIELD_LABELS} />
         </div>
       </div>

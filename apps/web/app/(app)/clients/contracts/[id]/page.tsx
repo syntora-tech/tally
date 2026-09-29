@@ -94,7 +94,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6">
-          <LinkedDocuments ctx={ctx} entityType="contract" entityId={c.id} />
+          <LinkedDocuments ctx={ctx} entityType="contract" entityId={c.id} canAdd />
           <AuditHistory ctx={ctx} tableName="contract" rowId={c.id} fieldLabels={FIELD_LABELS} />
         </div>
       </div>

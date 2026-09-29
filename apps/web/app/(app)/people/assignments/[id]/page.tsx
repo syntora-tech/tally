@@ -217,7 +217,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <LinkedDocuments ctx={ctx} entityType="assignment" entityId={a.id} />
+        <LinkedDocuments ctx={ctx} entityType="assignment" entityId={a.id} canAdd />
         <AuditHistory ctx={ctx} tableName="assignment" rowId={a.id} />
       </div>
     </div>
