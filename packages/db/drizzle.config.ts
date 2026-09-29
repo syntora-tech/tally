@@ -11,6 +11,7 @@ export default defineConfig({
     url:
       process.env.DIRECT_DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
   },
+  casing: 'snake_case',
   strict: true,
   verbose: true,
 });
