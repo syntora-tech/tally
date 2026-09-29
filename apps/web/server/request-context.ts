@@ -1,5 +1,5 @@
 import 'server-only';
-import { appUser } from '@tally/db/schema';
+import { appUser, type AppRole } from '@tally/db/schema';
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
@@ -55,4 +55,14 @@ export async function requireUserContext(): Promise<ServiceContext & { actor: Us
   if (!actor) redirect('/login');
   if (!actor.role) redirect('/login?error=forbidden');
   return { ...baseContext(actor), actor };
+}
+
+/** Page-level gate for role-restricted modules; RLS still enforces data access. */
+export async function requireRole(
+  roles: readonly AppRole[],
+): Promise<ServiceContext & { actor: UserActor & { role: AppRole } }> {
+  const ctx = await requireUserContext();
+  const { role } = ctx.actor;
+  if (!role || !roles.includes(role)) redirect('/dashboard');
+  return { ...ctx, actor: { ...ctx.actor, role } };
 }
