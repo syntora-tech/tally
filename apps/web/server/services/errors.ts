@@ -51,7 +51,9 @@ export function mapDbError(error: unknown): ServiceError | null {
         `Не можна змінювати умови заднім числом у закритому періоді. Нова версія може починатися не раніше ${pg.hint ? formatHint(pg.hint) : 'першого відкритого місяця'}.`,
       );
     case '23505':
-      return serviceError('conflict', 'Такий запис уже існує');
+      return pg.constraint_name?.endsWith('_version_key')
+        ? serviceError('conflict', 'Версія умов з цієї дати вже існує')
+        : serviceError('conflict', 'Такий запис уже існує');
     case '23503':
       return serviceError('conflict', 'Запис пов’язаний з іншими даними');
     case '23514':

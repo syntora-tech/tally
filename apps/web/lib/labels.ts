@@ -70,6 +70,34 @@ export const INVOICE_DATE_TYPES = [
   { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
 ];
 
+export const BILLING_TYPE_LABELS: Record<string, string> = {
+  hourly: 'Погодинно',
+  fixed_monthly: 'Фіксовано за місяць',
+  none: 'Не виставляється',
+};
+
+export const PRORATION_LABELS: Record<string, string> = {
+  full_month: 'Повна сума незалежно від годин',
+  by_hours: 'Пропорційно годинам (ставка / норма × години)',
+  trunc_hourly: 'Ціла погодинна ставка (floor(ставка / норма) × години)',
+};
+
+export const PAY_TYPE_LABELS: Record<string, string> = {
+  fixed: 'Фіксована сума',
+  hourly: 'Погодинно від місячної суми',
+  included: 'Включено (0)',
+};
+
+export const PAYOUT_METHOD_LABELS: Record<string, string> = {
+  fiat: 'Фіат',
+  crypto: 'Крипто',
+};
+
+export const RELEASE_POLICY_LABELS: Record<string, string> = {
+  on_payment_or_due: 'Після оплати клієнтом або в дедлайн',
+  immediate: 'Одразу',
+};
+
 export const ACT_DATE_TYPES = [
   { value: 'last_working_day_of_period', label: 'Останній робочий день періоду' },
   { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },

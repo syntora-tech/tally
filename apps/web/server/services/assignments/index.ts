@@ -1,0 +1,218 @@
+import type { DbTransaction } from '@tally/db';
+import {
+  assignment,
+  billingTerms,
+  client,
+  contract,
+  payTerms,
+  person,
+  type BillingTerms,
+  type PayTerms,
+} from '@tally/db/schema';
+import {
+  effectiveVersion,
+  marginByTerms,
+  startOfMonth,
+  weekdayHoursInMonth,
+  type LocalDate,
+} from '@tally/domain';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { err, ok } from 'neverthrow';
+import { z } from 'zod';
+import { inActorScope } from '../context';
+import { defineService } from '../define-service';
+import { serviceError } from '../errors';
+import {
+  addBillingVersionInput,
+  addPayVersionInput,
+  createAssignmentInput,
+  updateAssignmentInput,
+} from './schema';
+
+type Versioned<T> = T & { validFrom: LocalDate };
+
+export type TermsMarginView = {
+  month: LocalDate;
+  workHours: number;
+  billing: string;
+  pay: string;
+  margin: string;
+  currency: string;
+} | null;
+
+/** "Margin by terms" for the month of `today` (assumptions A-015). */
+export function assignmentMargin(
+  billing: BillingTerms[],
+  pay: PayTerms[],
+  today: LocalDate,
+): TermsMarginView {
+  const month = startOfMonth(today);
+  const b = effectiveVersion(billing as Versioned<BillingTerms>[], month);
+  const p = effectiveVersion(pay as Versioned<PayTerms>[], month);
+  if (!b && !p) return null;
+  const workHours = weekdayHoursInMonth(month);
+  const margin = marginByTerms(
+    b && { type: b.type, rate: b.rate, prorationPolicy: b.prorationPolicy, currency: b.currency },
+    p && { type: p.type, amount: p.amount, currency: p.currency },
+    String(workHours),
+  );
+  if (!margin) return null;
+  return {
+    month,
+    workHours,
+    billing: margin.billing.toFixed(2),
+    pay: margin.pay.toFixed(2),
+    margin: margin.margin.toFixed(2),
+    currency: b?.currency ?? p?.currency ?? 'USD',
+  };
+}
+
+const clientLabel = sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`;
+
+async function loadTerms(tx: DbTransaction, assignmentIds: string[]) {
+  if (assignmentIds.length === 0) return { billing: [], pay: [] };
+  const [billing, pay] = await Promise.all([
+    tx
+      .select()
+      .from(billingTerms)
+      .where(inArray(billingTerms.assignmentId, assignmentIds))
+      .orderBy(desc(billingTerms.validFrom)),
+    tx
+      .select()
+      .from(payTerms)
+      .where(inArray(payTerms.assignmentId, assignmentIds))
+      .orderBy(desc(payTerms.validFrom)),
+  ]);
+  return { billing, pay };
+}
+
+const assignmentSelect = {
+  assignment,
+  personName: person.fullName,
+  contractNumber: contract.number,
+  clientId: client.id,
+  clientName: clientLabel,
+};
+
+/** Assignments of a person with current terms and margin (finance+, RLS). */
+export const listPersonAssignments = defineService({
+  name: 'assignments.forPerson',
+  input: z.object({ personId: z.uuid() }),
+  handler: async (ctx, { personId }) => {
+    const rows = await inActorScope(ctx, async (tx) => {
+      const list = await tx
+        .select(assignmentSelect)
+        .from(assignment)
+        .innerJoin(person, eq(person.id, assignment.personId))
+        .leftJoin(contract, eq(contract.id, assignment.contractId))
+        .leftJoin(client, eq(client.id, contract.clientId))
+        .where(eq(assignment.personId, personId))
+        .orderBy(desc(assignment.startsOn));
+      const terms = await loadTerms(
+        tx,
+        list.map((r) => r.assignment.id),
+      );
+      return list.map((r) => {
+        const billing = terms.billing.filter((t) => t.assignmentId === r.assignment.id);
+        const pay = terms.pay.filter((t) => t.assignmentId === r.assignment.id);
+        return { ...r, margin: assignmentMargin(billing, pay, ctx.today) };
+      });
+    });
+    return ok(rows);
+  },
+});
+
+export const getAssignment = defineService({
+  name: 'assignments.get',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) => {
+    const card = await inActorScope(ctx, async (tx) => {
+      const [row] = await tx
+        .select(assignmentSelect)
+        .from(assignment)
+        .innerJoin(person, eq(person.id, assignment.personId))
+        .leftJoin(contract, eq(contract.id, assignment.contractId))
+        .leftJoin(client, eq(client.id, contract.clientId))
+        .where(eq(assignment.id, id));
+      if (!row) return null;
+      const { billing, pay } = await loadTerms(tx, [id]);
+      return { ...row, billing, pay, margin: assignmentMargin(billing, pay, ctx.today) };
+    });
+    return card ? ok(card) : err(serviceError('not_found', 'Залучення не знайдено'));
+  },
+});
+
+/** Active client contracts for the assignment form. */
+export const contractOptions = defineService({
+  name: 'assignments.contractOptions',
+  input: z.object({}),
+  handler: async (ctx) => {
+    const rows = await inActorScope(ctx, (tx) =>
+      tx
+        .select({ id: contract.id, number: contract.number, clientName: clientLabel })
+        .from(contract)
+        .innerJoin(client, eq(client.id, contract.clientId))
+        .where(and(eq(contract.kind, 'client'), eq(contract.status, 'active')))
+        .orderBy(asc(clientLabel), asc(contract.number)),
+    );
+    return ok(rows.map((r) => ({ value: r.id, label: `${r.clientName ?? ''} · ${r.number}` })));
+  },
+});
+
+/**
+ * New assignment with the first versions of both term blocks (spec 6.3). Versions start on the
+ * first day of the start month, since terms change only at month boundaries (A-018).
+ */
+export const createAssignment = defineService({
+  name: 'assignments.create',
+  input: createAssignmentInput,
+  handler: async (ctx, { billing, pay, ...core }) => {
+    const validFrom = startOfMonth(core.startsOn);
+    const created = await inActorScope(ctx, async (tx) => {
+      const [row] = await tx.insert(assignment).values(core).returning({ id: assignment.id });
+      if (!row) throw new Error('Assignment insert returned no row');
+      await tx.insert(billingTerms).values({ ...billing, assignmentId: row.id, validFrom });
+      await tx.insert(payTerms).values({ ...pay, assignmentId: row.id, validFrom });
+      return row;
+    });
+    return ok(created);
+  },
+});
+
+export const updateAssignment = defineService({
+  name: 'assignments.update',
+  input: updateAssignmentInput,
+  handler: async (ctx, { id, ...core }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx.update(assignment).set(core).where(eq(assignment.id, id)).returning({ id: assignment.id }),
+    );
+    return row ? ok(row) : err(serviceError('not_found', 'Залучення не знайдено'));
+  },
+});
+
+/** A change of client terms is always a new version; closed periods are guarded by I10. */
+export const addBillingVersion = defineService({
+  name: 'assignments.addBillingVersion',
+  input: addBillingVersionInput,
+  handler: async (ctx, input) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx.insert(billingTerms).values(input).returning({ id: billingTerms.id }),
+    );
+    return row
+      ? ok({ id: input.assignmentId })
+      : err(serviceError('internal_error', 'Не вдалося зберегти'));
+  },
+});
+
+export const addPayVersion = defineService({
+  name: 'assignments.addPayVersion',
+  input: addPayVersionInput,
+  handler: async (ctx, input) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx.insert(payTerms).values(input).returning({ id: payTerms.id }),
+    );
+    return row
+      ? ok({ id: input.assignmentId })
+      : err(serviceError('internal_error', 'Не вдалося зберегти'));
+  },
+});

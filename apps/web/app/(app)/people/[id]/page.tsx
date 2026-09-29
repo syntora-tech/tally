@@ -12,6 +12,7 @@ import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPerson } from '@/server/services/people';
 import { listPayees } from '@/server/services/payees';
+import { AssignmentsCard } from './assignments-card';
 import { CvUpload } from './cv-upload';
 import { DefaultPayeeForm } from './default-payee-form';
 
@@ -121,6 +122,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         </Card>
 
         <div className="flex flex-col gap-6">
+          {isFinance && <AssignmentsCard ctx={ctx} personId={p.id} />}
           <LinkedDocuments
             ctx={ctx}
             entityType="person"

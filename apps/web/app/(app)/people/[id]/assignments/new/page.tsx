@@ -1,0 +1,37 @@
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { FINANCE_ROLES } from '@/lib/navigation';
+import { requireRole } from '@/server/request-context';
+import { contractOptions } from '@/server/services/assignments';
+import { getPerson } from '@/server/services/people';
+import { AssignmentForm } from '../../../assignments/assignment-form';
+
+export const metadata: Metadata = { title: 'Нове залучення · Tally' };
+
+export default async function NewAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireRole(FINANCE_ROLES);
+  const { id } = await params;
+  const person = await getPerson.run(ctx, { id });
+  if (person.isErr()) notFound();
+  const contracts = (await contractOptions.run(ctx, {})).unwrapOr([]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-semibold">Нове залучення</h1>
+      <AssignmentForm
+        personName={person.value.fullName}
+        contracts={contracts}
+        assignment={{
+          personId: id,
+          isInternal: false,
+          contractId: null,
+          sowRef: null,
+          roleTitle: person.value.position,
+          fte: '1',
+          startsOn: ctx.today,
+          endsOn: null,
+        }}
+      />
+    </div>
+  );
+}

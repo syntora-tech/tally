@@ -38,10 +38,10 @@ export const optionalLocalDate = z
   .preprocess(emptyToNull, localDateString.nullable().optional())
   .transform((v) => v ?? null);
 
-/** First day of a month, as required for term versions (assumptions A-018). */
-export const monthStart = localDateString.refine(
-  (v) => v.endsWith('-01'),
-  'Дата має бути першим числом місяця',
+/** First day of a month, as required for term versions (A-018); also accepts `YYYY-MM`. */
+export const monthStart = z.preprocess(
+  (v) => (typeof v === 'string' && /^\d{4}-\d{2}$/.test(v.trim()) ? `${v.trim()}-01` : v),
+  localDateString.refine((v) => v.endsWith('-01'), 'Дата має бути першим числом місяця'),
 );
 
 export const currencyCode = z

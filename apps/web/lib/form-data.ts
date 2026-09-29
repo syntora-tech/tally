@@ -13,3 +13,23 @@ export function formDataToObject(
   }
   return out;
 }
+
+/** Groups `prefix.field` keys into nested objects: `{ 'pay.type': 'fixed' }` → `{ pay: { type } }`. */
+export function nestPrefixed(
+  flat: Record<string, unknown>,
+  prefixes: readonly string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const nested: Record<string, Record<string, unknown>> = {};
+  for (const [key, value] of Object.entries(flat)) {
+    const dot = key.indexOf('.');
+    const prefix = dot > 0 ? key.slice(0, dot) : '';
+    if (prefixes.includes(prefix)) {
+      nested[prefix] ??= {};
+      nested[prefix][key.slice(dot + 1)] = value;
+    } else {
+      out[key] = value;
+    }
+  }
+  return { ...out, ...nested };
+}
