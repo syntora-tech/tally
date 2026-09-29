@@ -22,6 +22,7 @@ import {
   prorationPolicy,
   releasePolicy,
 } from './enums';
+import { numberSequence } from './numbering';
 import { client, company, payee, person } from './parties';
 
 const firstOfMonth = (column: string) => sql.raw(`extract(day from ${column}) = 1`);
@@ -53,8 +54,7 @@ export const contract = pgTable(
       .default(sql`'{"type":"last_working_day_of_period"}'::jsonb`),
     invoiceTemplateFileId: text(),
     actTemplateFileId: text(),
-    // FK to number_sequence is added with that table in stage 2.
-    numberSequenceKey: text(),
+    numberSequenceKey: text().references(() => numberSequence.key),
     status: text().notNull().default('active'),
   },
   (t) => [
