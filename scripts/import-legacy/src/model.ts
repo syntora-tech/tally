@@ -1,4 +1,4 @@
-import { endOfMonth, slugify, toDecimal, type LocalDate } from '@tally/domain';
+import { endOfMonth, slugify, toDecimal, weekdayHoursInMonth, type LocalDate } from '@tally/domain';
 import { lookup, type Aliases } from './aliases';
 import { nameKey } from './cells';
 import type { BenchRow } from './sources/bench';
@@ -116,8 +116,18 @@ export type Model = {
   billing: BillingRec[];
   pay: PayRec[];
   documents: DocumentRec[];
+  periods: PeriodRec[];
+  timesheets: TimesheetRec[];
   anomalies: Anomaly[];
   unmapped: { people: string[]; partners: string[]; actSheets: string[]; invoiceSheets: string[] };
+};
+
+export type PeriodRec = { month: LocalDate; workHours: string; referenceFxUsdUah: string | null };
+export type TimesheetRec = { ref: string; assignmentRef: string; month: LocalDate; hours: string };
+
+export type BuildOptions = {
+  /** Months whose hours are imported (owner decision: only the current and previous month). */
+  hoursMonths?: readonly LocalDate[];
 };
 
 export type Sources = {
@@ -138,7 +148,9 @@ function sowRefOf(basedOn: string): string | null {
   return `SOW #${m[1] ?? m[2] ?? ''}`;
 }
 
-export function buildModel(src: Sources, aliases: Aliases): Model {
+export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions = {}): Model {
+  const hoursMonths = new Set(options.hoursMonths ?? []);
+  const assignmentOfRow = new Map<string, string>();
   const find = lookup(aliases);
   const anomalies: Anomaly[] = [];
   const unmapped = {
@@ -318,6 +330,7 @@ export function buildModel(src: Sources, aliases: Aliases): Model {
     const key = `calc:${personKey}:${clientKey ?? 'internal'}:${slugify(role)}`;
     const g = groups.get(key) ?? { personKey, clientKey, role, rows: [] };
     g.rows.push(row);
+    assignmentOfRow.set(row.ref, key);
     groups.set(key, g);
   }
 
@@ -407,6 +420,50 @@ export function buildModel(src: Sources, aliases: Aliases): Model {
     }
   }
 
+  // Hours only where an invoice line exists (billing Fix/Hours and h > 0), for the chosen months.
+  const periods: PeriodRec[] = [];
+  const timesheets: TimesheetRec[] = [];
+  for (const month of [...hoursMonths].sort()) {
+    const rows = src.calc.filter((r) => r.month === month);
+    const first = rows[0];
+    if (!first?.workHoursInMonth) {
+      anomalies.push({
+        code: 'no_work_hours',
+        ref: month,
+        message: `Немає норми годин для ${month.slice(0, 7)} — години не імпортовано`,
+      });
+      continue;
+    }
+    periods.push({
+      month,
+      workHours: first.workHoursInMonth,
+      referenceFxUsdUah: first.exchangeRate,
+    });
+    const weekdays = String(weekdayHoursInMonth(month));
+    if (!toDecimal(first.workHoursInMonth).eq(weekdays)) {
+      anomalies.push({
+        code: 'work_hours',
+        ref: first.ref,
+        message: `Норма ${month.slice(0, 7)} у файлі ${first.workHoursInMonth} год, а робочих днів × 8 = ${weekdays}; взято значення з файлу`,
+      });
+    }
+    for (const r of rows) {
+      const assignmentRef = assignmentOfRow.get(r.ref);
+      const billable = ['fix', 'hours'].includes(r.invoiceType.toLowerCase());
+      if (!assignmentRef || !billable || !r.hours || toDecimal(r.hours).lte(0)) continue;
+      const ref = `${assignmentRef}:hours:${month}`;
+      if (timesheets.some((t) => t.ref === ref)) {
+        anomalies.push({
+          code: 'duplicate_hours',
+          ref: r.ref,
+          message: 'Другий рядок годин для того самого залучення в місяці — пропущено',
+        });
+        continue;
+      }
+      timesheets.push({ ref, assignmentRef, month, hours: r.hours });
+    }
+  }
+
   const supplier = src.invoices.find((i) => i.supplier.nameEn)?.supplier;
   return {
     company:
@@ -431,6 +488,8 @@ export function buildModel(src: Sources, aliases: Aliases): Model {
     billing,
     pay,
     documents,
+    periods,
+    timesheets,
     anomalies,
     unmapped: {
       people: [...unmapped.people].sort(),

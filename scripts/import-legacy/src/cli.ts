@@ -2,6 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createDb } from '@tally/db';
+import {
+  addMonths,
+  localDateInZone,
+  parseLocalDate,
+  startOfMonth,
+  type LocalDate,
+} from '@tally/domain';
 import { aliasesSchema, draftAliases } from './aliases';
 import { buildModel } from './model';
 import { renderReport } from './report';
@@ -16,6 +23,8 @@ const { values } = parseArgs({
     dir: { type: 'string', default: 'data/legacy' },
     'dry-run': { type: 'boolean', default: false },
     'write-aliases-draft': { type: 'boolean', default: false },
+    /** Comma-separated YYYY-MM; default is the current and previous month (Europe/Kyiv). */
+    'hours-months': { type: 'string' },
   },
 });
 
@@ -23,6 +32,19 @@ const { values } = parseArgs({
 const cwd = process.env.INIT_CWD ?? process.cwd();
 const dir = isAbsolute(values.dir) ? values.dir : resolve(cwd, values.dir);
 const dryRun = values['dry-run'];
+
+function hoursMonths(): LocalDate[] {
+  if (values['hours-months']) {
+    return values['hours-months']
+      .split(',')
+      .map((m) => parseLocalDate(`${m.trim()}-01`)._unsafeUnwrap());
+  }
+  const today = process.env.APP_TODAY
+    ? parseLocalDate(process.env.APP_TODAY)._unsafeUnwrap()
+    : localDateInZone(new Date());
+  const current = startOfMonth(today);
+  return [addMonths(current, -1), current];
+}
 
 async function main(): Promise<number> {
   const books = loadBooks(dir);
@@ -52,7 +74,9 @@ async function main(): Promise<number> {
     return 1;
   }
   const aliases = aliasesSchema.parse(JSON.parse(readFileSync(aliasesPath, 'utf8')));
-  const model = buildModel(sources, aliases);
+  const months = hoursMonths();
+  console.log(`Години за: ${months.map((m) => m.slice(0, 7)).join(', ')}`);
+  const model = buildModel(sources, aliases, { hoursMonths: months });
   const problems = [...bench.problems, ...calc.problems];
   const unmapped = Object.values(model.unmapped).flat();
 

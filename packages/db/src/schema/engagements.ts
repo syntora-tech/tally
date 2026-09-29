@@ -188,7 +188,32 @@ export const period = pgTable(
   ],
 );
 
+/** Hours per assignment × period (spec 4.2); editing and I6 arrive with the period wizard. */
+export const timesheet = pgTable(
+  'timesheet',
+  {
+    ...baseColumns,
+    legacyRef: text(),
+    assignmentId: uuid()
+      .notNull()
+      .references(() => assignment.id, { onDelete: 'cascade' }),
+    periodId: uuid()
+      .notNull()
+      .references(() => period.id),
+    hours: numeric({ precision: 6, scale: 2 }).notNull(),
+    source: text().notNull().default('manual'),
+  },
+  (t) => [
+    unique('timesheet_legacy_ref_key').on(t.legacyRef),
+    unique('timesheet_assignment_period_key').on(t.assignmentId, t.periodId),
+    check('timesheet_hours_check', sql`${t.hours} >= 0`),
+    check('timesheet_source_check', sql`${t.source} in ('manual', 'import')`),
+    ...rolePolicies('timesheet', { read: 'finance', write: 'finance' }),
+  ],
+);
+
 export type Contract = typeof contract.$inferSelect;
+export type Timesheet = typeof timesheet.$inferSelect;
 export type Assignment = typeof assignment.$inferSelect;
 export type BillingTerms = typeof billingTerms.$inferSelect;
 export type PayTerms = typeof payTerms.$inferSelect;

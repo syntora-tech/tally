@@ -44,6 +44,9 @@ export function calcRow(r: {
   payType: string;
   fixSalary?: number | string;
   prepayment?: string;
+  /** Month-level values; the parser reads them from the first data row. */
+  fx?: number;
+  workHours?: number;
 }): Row {
   return [
     r.employee,
@@ -67,8 +70,8 @@ export function calcRow(r: {
     '',
     '',
     null,
-    null,
-    null,
+    r.fx ?? null,
+    r.workHours ?? null,
   ];
 }
 

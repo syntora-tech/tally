@@ -49,6 +49,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     contractNumber,
     billing,
     pay,
+    hours,
     margin,
   } = result.value;
   const nextMonth = addMonths(ctx.today, 1).slice(0, 7);
@@ -215,6 +216,43 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Години</CardTitle>
+          <CardDescription>Редагування годин з’явиться в майстрі періоду (Етап 2).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hours.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Годин ще немає</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Місяць</TableHead>
+                  <TableHead>Години</TableHead>
+                  <TableHead>Норма</TableHead>
+                  <TableHead>Джерело</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {hours.map((h) => (
+                  <TableRow key={h.month}>
+                    <TableCell>{month(h.month)}</TableCell>
+                    <TableCell>{formatAmount(h.hours)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatAmount(h.workHours)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {h.source === 'import' ? 'імпорт' : 'вручну'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <LinkedDocuments ctx={ctx} entityType="assignment" entityId={a.id} canAdd />

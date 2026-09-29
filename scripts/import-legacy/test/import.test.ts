@@ -1,3 +1,4 @@
+import { parseLocalDate } from '@tally/domain';
 import { describe, expect, it } from 'vitest';
 import { aliasesSchema, draftAliases, type Aliases } from '../src/aliases';
 import { decimal, uaDateIn } from '../src/cells';
@@ -358,6 +359,97 @@ describe('buildModel', () => {
       generatedAt: 'now',
     });
     expect(report).toContain('«Vlad Sklyarov»');
+  });
+});
+
+describe('hours import (current and previous month only)', () => {
+  it('creates the period from the sheet norm and exchange rate and flags a mismatch', () => {
+    const book = calcBook({
+      'Копія аркуша Current': [
+        calcRow({
+          employee: 'Vlad Sklyarov',
+          partner: 'Boosty',
+          role: 'Senior Java Developer',
+          hours: 32,
+          invoiceType: 'Hours',
+          monthPayment: 45,
+          payType: 'Hours',
+          fixSalary: 7360,
+          fx: 44.36,
+          workHours: 160,
+        }),
+      ],
+    });
+    const model = buildModel(
+      { bench: [], calc: parseCalc(book).rows, invoices: [], acts: [] },
+      aliases,
+      {
+        hoursMonths: [parseLocalDate('2026-08-01')._unsafeUnwrap()],
+      },
+    );
+    expect(model.periods).toEqual([
+      { month: '2026-08-01', workHours: '160', referenceFxUsdUah: '44.36' },
+    ]);
+    // August 2026 has 21 weekdays = 168 h; the file says 160.
+    expect(model.anomalies.some((a) => a.code === 'work_hours' && a.message.includes('168'))).toBe(
+      true,
+    );
+  });
+
+  it('skips non-billable, zero-hour rows and months outside the selection', () => {
+    const book = calcBook({
+      July: [
+        calcRow({
+          employee: 'Dolina Maksym',
+          partner: 'Syntora.Tech',
+          role: 'CEO',
+          hours: 0,
+          invoiceType: 'Skip',
+          payType: 'Fix',
+          fixSalary: 2020,
+        }),
+        calcRow({
+          employee: 'Vlad Sklyarov',
+          partner: 'Boosty',
+          role: 'Senior Java Developer',
+          hours: 5,
+          invoiceType: 'Hours',
+          monthPayment: 45,
+          payType: 'Hours',
+          fixSalary: 7360,
+          workHours: 184,
+        }),
+      ],
+      'Копія аркуша Current': [
+        calcRow({
+          employee: 'Vlad Sklyarov',
+          partner: 'Boosty',
+          role: 'Senior Java Developer',
+          hours: 32,
+          invoiceType: 'Hours',
+          monthPayment: 45,
+          payType: 'Hours',
+          fixSalary: 7360,
+          workHours: 160,
+        }),
+        calcRow({
+          employee: 'Vladyslav',
+          partner: 'Trady',
+          role: 'Dev',
+          hours: 0,
+          invoiceType: 'Fix',
+          monthPayment: 5500,
+          payType: 'Hours',
+          fixSalary: 5000,
+        }),
+      ],
+    });
+    const calc = parseCalc(book);
+    const model = buildModel({ bench: [], calc: calc.rows, invoices: [], acts: [] }, aliases, {
+      hoursMonths: [parseLocalDate('2026-08-01')._unsafeUnwrap()],
+    });
+    expect(model.timesheets.map((t) => [t.month, t.hours])).toEqual([['2026-08-01', '32']]);
+    expect(model.periods.map((p) => p.month)).toEqual(['2026-08-01']);
   });
 });
 

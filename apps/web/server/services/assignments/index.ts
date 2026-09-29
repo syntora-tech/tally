@@ -5,7 +5,9 @@ import {
   client,
   contract,
   payTerms,
+  period,
   person,
+  timesheet,
   type BillingTerms,
   type PayTerms,
 } from '@tally/db/schema';
@@ -136,7 +138,18 @@ export const getAssignment = defineService({
         .where(eq(assignment.id, id));
       if (!row) return null;
       const { billing, pay } = await loadTerms(tx, [id]);
-      return { ...row, billing, pay, margin: assignmentMargin(billing, pay, ctx.today) };
+      const hours = await tx
+        .select({
+          month: period.month,
+          hours: timesheet.hours,
+          workHours: period.workHours,
+          source: timesheet.source,
+        })
+        .from(timesheet)
+        .innerJoin(period, eq(period.id, timesheet.periodId))
+        .where(eq(timesheet.assignmentId, id))
+        .orderBy(desc(period.month));
+      return { ...row, billing, pay, hours, margin: assignmentMargin(billing, pay, ctx.today) };
     });
     return card ? ok(card) : err(serviceError('not_found', 'Залучення не знайдено'));
   },

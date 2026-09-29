@@ -9,7 +9,9 @@ import {
   documentLink,
   payee,
   payTerms,
+  period,
   person,
+  timesheet,
 } from '@tally/db/schema';
 import { parseDecimal } from '@tally/domain';
 import { asc, eq, sql } from 'drizzle-orm';
@@ -20,6 +22,10 @@ export type TableStats = { inserted: number; updated: number; unchanged: number 
 export type WriteStats = Record<string, TableStats>;
 
 class DryRunRollback extends Error {}
+
+function statFor(stats: WriteStats, name: string): TableStats {
+  return (stats[name] ??= { inserted: 0, updated: 0, unchanged: 0 });
+}
 
 /** DB values vs model values: decimals by value, arrays/objects by JSON, the rest as strings. */
 export function same(dbValue: unknown, value: unknown): boolean {
@@ -47,7 +53,7 @@ async function upsert(
   values: Record<string, unknown>,
   stats: WriteStats,
 ): Promise<string> {
-  const s = (stats[name] ??= { inserted: 0, updated: 0, unchanged: 0 });
+  const s = statFor(stats, name);
   const [existing] = (await tx
     .select()
     .from(table)
@@ -206,6 +212,55 @@ export async function writeModel(
           'pay_terms',
           ref,
           { ...values, assignmentId: need(assignmentIds, assignmentRef, 'assignment') },
+          stats,
+        );
+      }
+
+      // Periods are keyed by month (unique), not legacy_ref; closing stays with the stage-2 wizard.
+      const periodIds = new Map<string, string>();
+      for (const p of model.periods) {
+        const st = statFor(stats, 'period');
+        const [existing] = await tx.select().from(period).where(eq(period.month, p.month));
+        if (!existing) {
+          const [row] = await tx
+            .insert(period)
+            .values({
+              month: p.month,
+              workHours: p.workHours,
+              referenceFxUsdUah: p.referenceFxUsdUah,
+            })
+            .returning({ id: period.id });
+          if (!row) throw new Error('Period insert returned no row');
+          periodIds.set(p.month, row.id);
+          st.inserted++;
+        } else {
+          periodIds.set(p.month, existing.id);
+          const changed =
+            !same(existing.workHours, p.workHours) ||
+            !same(existing.referenceFxUsdUah, p.referenceFxUsdUah);
+          if (changed && existing.status === 'open') {
+            await tx
+              .update(period)
+              .set({ workHours: p.workHours, referenceFxUsdUah: p.referenceFxUsdUah })
+              .where(eq(period.id, existing.id));
+            st.updated++;
+          } else {
+            st.unchanged++;
+          }
+        }
+      }
+      for (const t of model.timesheets) {
+        await upsert(
+          tx,
+          timesheet,
+          'timesheet',
+          t.ref,
+          {
+            assignmentId: need(assignmentIds, t.assignmentRef, 'assignment'),
+            periodId: need(periodIds, t.month, 'period'),
+            hours: t.hours,
+            source: 'import',
+          },
           stats,
         );
       }

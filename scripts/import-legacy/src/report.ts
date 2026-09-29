@@ -11,6 +11,8 @@ const TABLE_LABELS: Record<string, string> = {
   billing_terms: 'Версії умов клієнту',
   pay_terms: 'Версії умов людині',
   document: 'Документи (CV)',
+  period: 'Періоди',
+  timesheet: 'Години',
 };
 
 /** import-report.md (spec 8): counts, unmapped names, anomalies with source rows, assignments. */
@@ -66,6 +68,15 @@ export function renderReport(input: {
   if (model.anomalies.length === 0) out.push('Немає.');
   for (const a of model.anomalies) out.push(`- \`${a.code}\` · ${a.ref} — ${a.message}`);
   out.push('');
+
+  if (model.timesheets.length) {
+    out.push('## Години', '', '| Місяць | Залучення | Години |', '| --- | --- | --- |');
+    for (const t of model.timesheets)
+      out.push(
+        `| ${t.month.slice(0, 7)} | ${t.assignmentRef.replace(/^calc:/, '')} | ${t.hours} |`,
+      );
+    out.push('');
+  }
 
   out.push(
     '## Залучення та версії умов',
