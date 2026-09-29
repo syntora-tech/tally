@@ -35,6 +35,7 @@ pnpm e2e:install         # once: project-local Chromium for Playwright
 pnpm e2e                 # Playwright (needs db:start + env:local)
 pnpm db:generate         # drizzle-kit → supabase/migrations
 pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
+pnpm import:legacy --dry-run [--write-aliases-draft]  # legacy xlsx from data/legacy (needs aliases.json)
 ```
 
 - Supabase CLI is a devDependency — run it via `pnpm sb …` (`scripts/supabase.sh` loads `supabase/.env` and defaults Google OAuth to off), never a global install.

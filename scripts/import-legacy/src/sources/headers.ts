@@ -60,8 +60,10 @@ export function parseInvoiceHeader(sheet: Sheet): InvoiceHeader | null {
   const bank = bankCell ? lines(bankCell.v).slice(1) : [];
   const supplierCell = find(/^Supplier:/i);
   const supEn = supplierCell ? lines(supplierCell.v) : [];
-  const supUa = supplierCell ? lines(cellAt(sheet, supplierCell.r, 1).v) : [];
-  const supBank = bankCell ? lines(cellAt(sheet, bankCell.r, 1).v).slice(1) : [];
+  // Ukrainian halves sit in merged cells, so their column varies; search the whole row.
+  const inRow = (r: number, re: RegExp) => (sheet.rows[r] ?? []).find((c) => re.test(text(c.v)))?.v;
+  const supUa = supplierCell ? lines(inRow(supplierCell.r, /^Постачальник:/i)) : [];
+  const supBank = bankCell ? lines(inRow(bankCell.r, /^Supplier Bank information:/i)).slice(1) : [];
   const after = (arr: string[], re: RegExp) =>
     arr
       .find((l) => re.test(l))

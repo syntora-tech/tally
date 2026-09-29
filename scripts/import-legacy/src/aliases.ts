@@ -194,6 +194,12 @@ export function draftAliases(input: {
       input.calc.filter((r) => r.fte !== null && toDecimal(r.fte).gt(1)).map((r) => r.employee),
     ),
   ];
+  // Non-person rows (a team with FTE > 1) are skipped, so they must not become people either.
+  for (const [key, p] of Object.entries(people)) {
+    if (p.names.some((n) => skipEmployees.some((s) => nameKey(s) === nameKey(n)))) {
+      Reflect.deleteProperty(people, key);
+    }
+  }
   // A2/A3 from the spec as a starting point: Trady bills the full month, Pavlo × Boosty truncates.
   const clientByPartner = (partner: string) =>
     Object.entries(clients).find(([, c]) =>
