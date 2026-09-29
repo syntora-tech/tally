@@ -14,3 +14,12 @@ export const releasePolicy = pgEnum('release_policy', ['immediate', 'on_payment_
 export const payoutMethod = pgEnum('payout_method', ['fiat', 'crypto']);
 export const periodStatus = pgEnum('period_status', ['open', 'closed']);
 export const docStatus = pgEnum('doc_status', ['draft', 'issued', 'void']);
+export const invoiceStatus = pgEnum('invoice_status', [
+  'draft',
+  'issued',
+  'partially_paid',
+  'paid',
+  'void',
+  'written_off',
+]);
+export type InvoiceStatus = (typeof invoiceStatus.enumValues)[number];

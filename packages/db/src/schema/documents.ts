@@ -66,6 +66,8 @@ export const document = pgTable(
     status: docStatus().notNull().default('issued'),
     version: integer().notNull().default(1),
     supersedesId: uuid().references((): AnyPgColumn => document.id),
+    /** Set on the signed copy that replaces a generated invoice/act (e.g. from Vchasno). */
+    signedAt: timestamp({ withTimezone: true }),
     notes: text(),
   },
   (t) => [

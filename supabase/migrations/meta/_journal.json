@@ -106,6 +106,20 @@
       "when": 1790706270871,
       "tag": "20260929182430_numbering_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790706401731,
+      "tag": "20260929182641_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790706408759,
+      "tag": "20260929182648_invoice_invariants",
+      "breakpoints": true
     }
   ]
 }

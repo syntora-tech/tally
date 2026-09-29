@@ -27,6 +27,8 @@ export const auditLog = pgTable(
     actorLabel: text(),
     via: text(),
     clientId: text(),
+    /** Why a guarded change was made, e.g. reopening a closed period (spec I6). */
+    reason: text(),
     at: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
