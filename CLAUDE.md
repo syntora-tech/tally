@@ -40,6 +40,6 @@ pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
 
 ## Workflow
 
-- Small Conventional Commits; every commit green (`pnpm ci` + `pnpm db:test` when SQL changes).
+- Small Conventional Commits; every commit green (`pnpm check` + `pnpm db:test` when SQL changes).
 - Stages from spec §11 strictly in order; the next starts only after the previous DoD.
 - Never commit real xlsx or `.env*` (except `.env.example`). No push until a remote exists.
