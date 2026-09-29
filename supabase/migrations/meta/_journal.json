@@ -36,6 +36,20 @@
       "when": 1790692452122,
       "tag": "20260929143412_parties_access",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790692560009,
+      "tag": "20260929143600_engagements",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790692561475,
+      "tag": "20260929143601_engagements_invariants",
+      "breakpoints": true
     }
   ]
 }
