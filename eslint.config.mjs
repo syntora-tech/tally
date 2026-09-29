@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import nextVitals from 'eslint-config-next/core-web-vitals';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
@@ -15,8 +16,17 @@ export default tseslint.config(
       '**/test-results/**',
       'supabase/**',
       'data/**',
+      // Vendored shadcn/ui sources; still type-checked by tsc.
+      'apps/web/components/ui/**',
+      'apps/web/hooks/use-mobile.ts',
     ],
   },
+  ...nextVitals.map((config) => ({
+    ...config,
+    files: ['apps/web/**/*.{ts,tsx,js,jsx,mjs}'],
+    // Explicit React version: eslint-plugin-react's auto-detect calls an API removed in ESLint 10.
+    settings: { ...config.settings, next: { rootDir: 'apps/web/' }, react: { version: '19.3' } },
+  })),
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
