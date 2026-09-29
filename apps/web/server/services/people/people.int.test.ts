@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { assignment, client, company, contract, person } from '@tally/db/schema';
-import { inArray, like } from 'drizzle-orm';
+import { eq, inArray, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { createPerson, getPerson, searchPeople, updatePerson } from '.';
@@ -9,6 +9,7 @@ const h = intHarness('2026-09-29');
 const tag = `int-${randomUUID().slice(0, 8)}`;
 let owner: Awaited<ReturnType<typeof h.user>>;
 let viewer: Awaited<ReturnType<typeof h.user>>;
+let companyId = '';
 const ids: Record<string, string> = {};
 
 function must<T>(value: T | undefined): T {
@@ -40,6 +41,7 @@ beforeAll(async () => {
   await make('rust', { stack: 'Rust', marketRateUsd: '30', allocation: 'part_time' });
 
   const [co] = await h.db.insert(company).values({ nameEn: 'S', nameUa: 'С' }).returning();
+  companyId = must(co).id;
   const [cl] = await h.db
     .insert(client)
     .values({ legalName: `${tag} client` })
@@ -61,6 +63,7 @@ afterAll(() =>
     await db.delete(person).where(inArray(person.id, personIds));
     await db.delete(contract).where(like(contract.number, tag));
     await db.delete(client).where(like(client.legalName, `${tag}%`));
+    await db.delete(company).where(eq(company.id, companyId));
   }),
 );
 
