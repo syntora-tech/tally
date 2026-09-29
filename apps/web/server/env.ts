@@ -32,12 +32,37 @@ export const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   ALLOWED_EMAILS: emailList,
   STORAGE_DRIVER: z.enum(['drive', 'local']).default('local'),
+  STORAGE_LOCAL_DIR: z.string().min(1).default('.storage'),
+  GOOGLE_SA_EMAIL: z.string().optional(),
+  // Vercel/.env store the PEM on one line with literal \n.
+  GOOGLE_SA_PRIVATE_KEY: z
+    .string()
+    .optional()
+    .transform((key) => key?.replaceAll('\\n', '\n')),
+  GOOGLE_DRIVE_ROOT_ID: z.string().optional(),
   CRON_SECRET: z.string().min(16).optional(),
   APP_TODAY: optionalLocalDate,
   VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export type DriveConfig = { email: string; privateKey: string; rootId: string };
+
+/** Drive settings, or an error naming what is missing when STORAGE_DRIVER=drive. */
+export function driveConfig(env: ServerEnv): DriveConfig {
+  const {
+    GOOGLE_SA_EMAIL: email,
+    GOOGLE_SA_PRIVATE_KEY: privateKey,
+    GOOGLE_DRIVE_ROOT_ID: rootId,
+  } = env;
+  if (!email || !privateKey || !rootId) {
+    throw new Error(
+      'STORAGE_DRIVER=drive requires GOOGLE_SA_EMAIL, GOOGLE_SA_PRIVATE_KEY and GOOGLE_DRIVE_ROOT_ID',
+    );
+  }
+  return { email, privateKey, rootId };
+}
 
 let cached: ServerEnv | undefined;
 
