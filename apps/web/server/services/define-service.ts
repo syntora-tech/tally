@@ -1,7 +1,7 @@
 import { err, type Result } from 'neverthrow';
 import { z } from 'zod';
 import type { ServiceContext } from './context';
-import { serviceError, type ServiceError } from './errors';
+import { mapDbError, serviceError, type ServiceError } from './errors';
 
 export type ServiceResult<T> = Result<T, ServiceError>;
 
@@ -18,7 +18,8 @@ export type Service<S extends z.ZodType, T> = ServiceDefinition<S, T> & {
 
 /**
  * The single mutation entry point for UI and MCP (spec 13.1): input is always validated by the
- * service's own Zod schema, so adapters stay thin and cannot skip validation.
+ * service's own Zod schema, so adapters stay thin and cannot skip validation. Database
+ * invariant violations are returned as `ServiceError` rather than thrown.
  */
 export function defineService<S extends z.ZodType, T>(
   definition: ServiceDefinition<S, T>,
@@ -36,7 +37,14 @@ export function defineService<S extends z.ZodType, T>(
           ),
         );
       }
-      return definition.handler(ctx, parsed.data);
+      try {
+        return await definition.handler(ctx, parsed.data);
+      } catch (error) {
+        // DB invariants (checks, RLS, I10…) surface as typed errors; anything else is a bug.
+        const mapped = mapDbError(error);
+        if (mapped) return err(mapped);
+        throw error;
+      }
     },
   };
 }

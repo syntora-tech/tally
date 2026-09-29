@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
+import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import './globals.css';
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="uk" className={cn('font-sans', geist.variable)}>
       <body className="min-h-screen antialiased">
         <TooltipProvider>{children}</TooltipProvider>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
