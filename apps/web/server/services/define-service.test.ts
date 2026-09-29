@@ -10,6 +10,7 @@ const ctx: ServiceContext = {
   actor: { kind: 'anonymous' },
   today: parseLocalDate('2026-09-29')._unsafeUnwrap(),
   db: {} as Db,
+  config: { allowedEmails: [] },
 };
 
 const echo = defineService({

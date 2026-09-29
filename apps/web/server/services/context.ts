@@ -17,10 +17,15 @@ export type Actor =
   | { kind: 'system'; label: SystemActor }
   | { kind: 'anonymous' };
 
+export type ServiceConfig = {
+  allowedEmails: readonly string[];
+};
+
 export type ServiceContext = {
   actor: Actor;
   today: LocalDate;
   db: Db;
+  config: ServiceConfig;
 };
 
 /** Opens the DB scope matching the actor: RLS-bound for users, privileged for system jobs. */

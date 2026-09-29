@@ -23,7 +23,8 @@
     "db:test": "./scripts/supabase.sh test db",
     "db:generate": "pnpm --filter @tally/db generate",
     "db:migration": "pnpm --filter @tally/db migration",
-    "test:int": "pnpm --filter @tally/web test:int"
+    "test:int": "pnpm --filter @tally/web test:int",
+    "env:local": "node scripts/setup-env.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
