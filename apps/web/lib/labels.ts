@@ -49,3 +49,29 @@ export const PAYEE_KIND_LABELS: Record<string, string> = {
   crypto: 'Крипто-гаманець',
   other: 'Інше',
 };
+
+export const CONTRACT_STATUS_LABELS: Record<string, string> = {
+  active: 'Діючий',
+  ended: 'Завершений',
+};
+
+export const CONTRACT_KIND_LABELS: Record<string, string> = {
+  client: 'Договір з клієнтом',
+  fop: 'Договір з ФОП',
+};
+
+export const PAYMENT_DUE_TYPES = [
+  { value: 'day_of_month', label: 'До числа місяця' },
+  { value: 'net_days', label: 'Через N днів після інвойсу' },
+];
+
+export const INVOICE_DATE_TYPES = [
+  { value: 'first_working_day_after_period', label: 'Перший робочий день після періоду' },
+  { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
+];
+
+export const ACT_DATE_TYPES = [
+  { value: 'last_working_day_of_period', label: 'Останній робочий день періоду' },
+  { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
+  { value: 'manual', label: 'Лише вручну' },
+];
