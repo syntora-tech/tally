@@ -23,7 +23,7 @@
     "db:test": "./scripts/supabase.sh test db",
     "db:generate": "pnpm --filter @tally/db generate",
     "db:migration": "pnpm --filter @tally/db migration",
-    "test:int": "pnpm -r --if-present test:int",
+    "test:int": "pnpm -r --workspace-concurrency=1 --if-present test:int",
     "env:local": "node scripts/setup-env.mjs",
     "e2e:install": "pnpm --filter @tally/web e2e:install",
     "import:legacy": "pnpm --filter @tally/import-legacy start"
