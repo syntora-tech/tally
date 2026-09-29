@@ -11,6 +11,7 @@ import { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS } from '@/lib/lab
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPerson } from '@/server/services/people';
+import { CvUpload } from './cv-upload';
 
 export const metadata: Metadata = { title: 'Людина · Tally' };
 
@@ -106,7 +107,12 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         </Card>
 
         <div className="flex flex-col gap-6">
-          <LinkedDocuments ctx={ctx} entityType="person" entityId={p.id} />
+          <LinkedDocuments
+            ctx={ctx}
+            entityType="person"
+            entityId={p.id}
+            action={isFinance ? <CvUpload personId={p.id} /> : undefined}
+          />
           <AuditHistory
             ctx={ctx}
             tableName="person"

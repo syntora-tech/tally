@@ -56,6 +56,12 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
           <p className="text-muted-foreground">Пул спеціалістів (Bench)</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            render={<a href={`/api/people/export?${new URLSearchParams(filters).toString()}`} />}
+          >
+            Експорт CSV
+          </Button>
           {canWrite && <Button render={<Link href="/people/new" />}>Додати людину</Button>}
         </div>
       </div>
