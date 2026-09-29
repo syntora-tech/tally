@@ -13,6 +13,7 @@ const TABLE_LABELS: Record<string, string> = {
   document: 'Документи (CV)',
   period: 'Періоди',
   timesheet: 'Години',
+  invoice: 'Інвойси (legacy)',
 };
 
 /** import-report.md (spec 8): counts, unmapped names, anomalies with source rows, assignments. */
@@ -68,6 +69,20 @@ export function renderReport(input: {
   if (model.anomalies.length === 0) out.push('Немає.');
   for (const a of model.anomalies) out.push(`- \`${a.code}\` · ${a.ref} — ${a.message}`);
   out.push('');
+
+  if (model.invoices.length) {
+    out.push(
+      '## Legacy-інвойси',
+      '',
+      '| Номер | Клієнт | Дата | Сума | Рядків |',
+      '| --- | --- | --- | --- | --- |',
+    );
+    for (const i of model.invoices)
+      out.push(
+        `| ${i.number} | ${i.clientKey} | ${i.issueDate} | ${i.total} ${i.currency} | ${i.lines.length} |`,
+      );
+    out.push('');
+  }
 
   if (model.timesheets.length) {
     out.push('## Години', '', '| Місяць | Залучення | Години |', '| --- | --- | --- |');

@@ -1,5 +1,5 @@
 import { parseUaDate, type LocalDate } from '@tally/domain';
-import { text } from '../cells';
+import { decimal, text } from '../cells';
 import { cellAt, ref, type Book, type Sheet } from '../workbook';
 
 const lines = (v: unknown) =>
@@ -14,9 +14,23 @@ const date = (s: string | undefined): LocalDate | null => {
   return d.isOk() ? d.value : null;
 };
 
+export type InvoiceTableLine = {
+  ref: string;
+  description: string;
+  quantity: string | null;
+  price: string | null;
+  amount: string | null;
+  /** The price column is a monthly fee: the line is one unit at that fee (spec 5.1). */
+  monthlyFee: boolean;
+};
+
 export type InvoiceHeader = {
   sheet: string;
   ref: string;
+  /** "22/26" from the title row; stale numbers of unused sheets are filtered by the model. */
+  number: string | null;
+  total: string | null;
+  lines: InvoiceTableLine[];
   contractNumber: string | null;
   contractDate: LocalDate | null;
   /** "SOW #1", "Annex 3" — maps calc rows to this client. */
@@ -73,6 +87,7 @@ export function parseInvoiceHeader(sheet: Sheet): InvoiceHeader | null {
   return {
     sheet: sheet.name,
     ref: ref(sheet, customerCell.r),
+    ...parseInvoiceTable(sheet),
     contractNumber: contract?.[1] ?? null,
     contractDate: date(contract?.[2]),
     sowRef: sow ? `SOW #${sow[1] ?? ''}` : annex ? `Annex ${annex[1] ?? ''}` : null,
@@ -96,6 +111,48 @@ export function parseInvoiceHeader(sheet: Sheet): InvoiceHeader | null {
       bankDetailsEn: supBank.join('\n') || null,
     },
   };
+}
+
+/** Title number, line table (header row starts with "№") and the "Total to pay" amount. */
+function parseInvoiceTable(sheet: Sheet): Pick<InvoiceHeader, 'number' | 'total' | 'lines'> {
+  let number: string | null = null;
+  for (let r = 0; r < 3 && !number; r++) {
+    number = /№\s*(\S+)/.exec(text(cellAt(sheet, r, 0).v))?.[1] ?? null;
+  }
+  const headerRow = sheet.rows.findIndex((row) => text(row[0]?.v) === '№');
+  if (headerRow < 0) return { number, total: null, lines: [] };
+  const headers = (sheet.rows[headerRow] ?? []).map((c) => text(c.v));
+  const col = (re: RegExp) => headers.findIndex((h) => re.test(h));
+  const amountCol = col(/^Amount, USD/i);
+  const qtyCol = col(/^(Amount, (hours|completed)|Completion)/i);
+  const priceCol = col(/^(Price|Monthly Fee|Fee per)/i);
+  const monthlyFee = /^Monthly Fee/i.test(headers[priceCol] ?? '');
+
+  const lines: InvoiceTableLine[] = [];
+  let total: string | null = null;
+  for (let r = headerRow + 1; r < sheet.rows.length; r++) {
+    const row = sheet.rows[r] ?? [];
+    const first = text(row[0]?.v);
+    if (/^Total to pay/i.test(first)) {
+      total =
+        [...row]
+          .reverse()
+          .map((c) => decimal(c.v))
+          .find((v) => v !== null) ?? null;
+      break;
+    }
+    if (typeof row[0]?.v !== 'number') continue;
+    const at = (c: number) => (c >= 0 ? decimal(row[c]?.v) : null);
+    lines.push({
+      ref: ref(sheet, r),
+      description: text(row[1]?.v),
+      quantity: at(qtyCol),
+      price: at(priceCol),
+      amount: at(amountCol),
+      monthlyFee,
+    });
+  }
+  return { number, total, lines };
 }
 
 export type ActHeader = {

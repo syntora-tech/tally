@@ -1,4 +1,11 @@
-import { endOfMonth, slugify, toDecimal, weekdayHoursInMonth, type LocalDate } from '@tally/domain';
+import {
+  dueDate,
+  endOfMonth,
+  slugify,
+  toDecimal,
+  weekdayHoursInMonth,
+  type LocalDate,
+} from '@tally/domain';
 import { lookup, type Aliases } from './aliases';
 import { nameKey } from './cells';
 import type { BenchRow } from './sources/bench';
@@ -118,8 +125,29 @@ export type Model = {
   documents: DocumentRec[];
   periods: PeriodRec[];
   timesheets: TimesheetRec[];
+  invoices: InvoiceRec[];
   anomalies: Anomaly[];
   unmapped: { people: string[]; partners: string[]; actSheets: string[]; invoiceSheets: string[] };
+};
+
+export type InvoiceLineRec = {
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  amount: string;
+};
+
+/** Historic client invoice (spec 8.1): issued, `is_legacy`, no snapshot. */
+export type InvoiceRec = {
+  ref: string;
+  number: string;
+  clientKey: string;
+  contractRef: string;
+  issueDate: LocalDate;
+  dueDate: LocalDate;
+  currency: string;
+  total: string;
+  lines: InvoiceLineRec[];
 };
 
 export type PeriodRec = { month: LocalDate; workHours: string; referenceFxUsdUah: string | null };
@@ -128,7 +156,12 @@ export type TimesheetRec = { ref: string; assignmentRef: string; month: LocalDat
 export type BuildOptions = {
   /** Months whose hours are imported (owner decision: only the current and previous month). */
   hoursMonths?: readonly LocalDate[];
+  /** Legacy invoice sheets date themselves with TODAY() (A6); this date is used instead. */
+  legacyInvoiceDate?: LocalDate;
 };
+
+/** Only these numbers are real historic invoices; other sheets hold stale drafts (spec 8.1). */
+export const LEGACY_INVOICE_NUMBERS: readonly string[] = ['21/26', '22/26', '24/26'];
 
 export type Sources = {
   bench: BenchRow[];
@@ -252,6 +285,37 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
         });
       }
       if (!clientContract.has(key)) clientContract.set(key, ref);
+    }
+  }
+
+  const invoiceRecs: InvoiceRec[] = [];
+  for (const [key, c] of Object.entries(aliases.clients)) {
+    for (const sheet of c.invoiceSheets) {
+      const inv = invoiceBySheet.get(sheet);
+      if (!inv?.number || !LEGACY_INVOICE_NUMBERS.includes(inv.number)) continue;
+      let contractRef = inv.contractNumber
+        ? `contract:client:${key}:${slugify(inv.contractNumber)}`
+        : clientContract.get(key);
+      if (!contractRef) {
+        contractRef = `contract:client:${key}:no-number`;
+        contracts.set(contractRef, {
+          ref: contractRef,
+          kind: 'client',
+          number: 'б/н',
+          signedOn: null,
+          clientKey: key,
+          payeeKey: null,
+          currency: 'USD',
+        });
+        clientContract.set(key, contractRef);
+        anomalies.push({
+          code: 'contract_without_number',
+          ref: inv.ref,
+          message: `В аркуші ${sheet} немає договору — створено договір «б/н», уточніть номер і дату`,
+        });
+      }
+      const rec = legacyInvoice(inv, key, contractRef, options.legacyInvoiceDate, anomalies);
+      if (rec) invoiceRecs.push(rec);
     }
   }
 
@@ -490,6 +554,7 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
     documents,
     periods,
     timesheets,
+    invoices: invoiceRecs,
     anomalies,
     unmapped: {
       people: [...unmapped.people].sort(),
@@ -598,4 +663,66 @@ function toPay(
       message: `Невідомий тип виплати «${r.payType}»`,
     });
   return null;
+}
+
+function legacyInvoice(
+  inv: InvoiceHeader,
+  clientKey: string,
+  contractRef: string,
+  date: LocalDate | undefined,
+  anomalies: Anomaly[],
+): InvoiceRec | null {
+  const number = inv.number ?? '';
+  if (!date) {
+    anomalies.push({
+      code: 'legacy_invoice_no_date',
+      ref: inv.ref,
+      message: `Інвойс ${number}: немає дати — пропущено`,
+    });
+    return null;
+  }
+  const lines: InvoiceLineRec[] = [];
+  for (const l of inv.lines) {
+    if (!l.amount) {
+      anomalies.push({
+        code: 'legacy_invoice_line',
+        ref: l.ref,
+        message: `Інвойс ${number}: рядок без суми (#REF!?) — пропущено`,
+      });
+      continue;
+    }
+    const exact =
+      !l.monthlyFee && l.quantity && l.price && toDecimal(l.quantity).times(l.price).eq(l.amount);
+    lines.push({
+      description: l.description,
+      quantity: exact ? (l.quantity ?? '1') : '1',
+      unitPrice: exact ? (l.price ?? l.amount) : l.amount,
+      amount: l.amount,
+    });
+  }
+  const linesTotal = lines.reduce((acc, l) => acc.plus(l.amount), toDecimal('0'));
+  const total = inv.total ?? linesTotal.toString();
+  if (!linesTotal.eq(total)) {
+    anomalies.push({
+      code: 'legacy_invoice_total',
+      ref: inv.ref,
+      message: `Інвойс ${number}: Total ${total} ≠ сума рядків ${linesTotal.toString()} (A6); імпортовано Total`,
+    });
+  }
+  anomalies.push({
+    code: 'legacy_invoice_date',
+    ref: inv.ref,
+    message: `Інвойс ${number}: дата в аркуші — TODAY() (A6); поставлено ${date}, уточніть за Ledger`,
+  });
+  return {
+    ref: `invoice:legacy:${number}`,
+    number,
+    clientKey,
+    contractRef,
+    issueDate: date,
+    dueDate: dueDate({ type: 'day_of_month', day: 20 }, date),
+    currency: 'USD',
+    total,
+    lines,
+  };
 }

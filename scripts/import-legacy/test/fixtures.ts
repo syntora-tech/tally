@@ -137,7 +137,40 @@ export const SOW_SHEET: Row[] = [
     null,
     'Supplier Bank information:\nIBAN code : UA833052990000026004024931648',
   ],
+  [],
+  [
+    '№',
+    'Description/\nОпис',
+    'Amount, hours/\nКількість, години',
+    'Monthly Fee USD /\nЩомісячна оплата',
+    'Amount, USD /\nЗагальна вартість',
+  ],
+  [2, 'Software Development / Розробка - Vladislav', 176, 5500, 5500],
+  ['Total to pay/ One thousand one hundred U.S. dollars', null, null, null, 1100],
 ];
+
+/** No agreement line and a single amount column, like the `Switzerland` sheet. */
+export const SWISS_SHEET: Row[] = [
+  [],
+  ['Invoice (offer) / Інвойс (оферта) № 21/26'],
+  [],
+  ['Date and Place: 29.09.2026, Odesa'],
+  ['Supplier: LLC "SYNTORA"'],
+  ['Customer: DPH International GmbH\nZugerstrasse 76B\n6340 Baar'],
+  [],
+  [],
+  [],
+  ['Customer Bank information:\nBeneficiary: DPH International GmbH'],
+  [],
+  ['№', 'Description/\nОпис', 'Amount, USD /\nЗагальна вартість'],
+  [1, 'Software Development and Consulting Services', 1000],
+  ['Total to pay/ One thousand U.S. dollars 00 cents', null, null, null, 1000],
+];
+
+/** A stale sheet whose number is not a real invoice (spec 8.1 lists 21, 22, 24/26 only). */
+export const STALE_SOW_SHEET: Row[] = SOW_SHEET.map((row, i) =>
+  i === 0 ? ['Invoice (offer) / Інвойс (оферта) № 10/26'] : row,
+);
 
 export const ACT_SHEET: Row[] = [
   [],

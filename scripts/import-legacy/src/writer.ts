@@ -7,6 +7,8 @@ import {
   contract,
   document,
   documentLink,
+  invoice,
+  invoiceLine,
   payee,
   payTerms,
   period,
@@ -282,6 +284,52 @@ export async function writeModel(
             entityId: need(personIds, d.personKey, 'person') ?? '',
           })
           .onConflictDoNothing();
+      }
+
+      // Issued invoices are immutable (I1): an existing legacy invoice is never touched again.
+      // New ones go in as drafts with their lines, then are issued with the historic number.
+      for (const inv of model.invoices) {
+        const st = statFor(stats, 'invoice');
+        const [existing] = await tx
+          .select({ id: invoice.id })
+          .from(invoice)
+          .where(eq(invoice.legacyRef, inv.ref));
+        if (existing) {
+          st.unchanged++;
+          continue;
+        }
+        const [row] = await tx
+          .insert(invoice)
+          .values({
+            legacyRef: inv.ref,
+            isLegacy: true,
+            clientId: need(clientIds, inv.clientKey, 'client') ?? '',
+            contractId: need(contractIds, inv.contractRef, 'contract') ?? '',
+            issueDate: inv.issueDate,
+            dueDate: inv.dueDate,
+            currency: inv.currency,
+            total: inv.total,
+          })
+          .returning({ id: invoice.id });
+        if (!row) throw new Error('Invoice insert returned no row');
+        if (inv.lines.length) {
+          await tx.insert(invoiceLine).values(
+            inv.lines.map((l, i) => ({
+              invoiceId: row.id,
+              position: i + 1,
+              descriptionEn: l.description,
+              descriptionUa: l.description,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              amount: l.amount,
+            })),
+          );
+        }
+        await tx
+          .update(invoice)
+          .set({ status: 'issued', number: inv.number })
+          .where(eq(invoice.id, row.id));
+        st.inserted++;
       }
 
       if (options.dryRun) throw new DryRunRollback();

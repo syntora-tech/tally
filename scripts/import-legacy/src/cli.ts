@@ -4,10 +4,12 @@ import { parseArgs } from 'node:util';
 import { createDb } from '@tally/db';
 import {
   addMonths,
+  defaultInvoiceDate,
   localDateInZone,
   parseLocalDate,
   startOfMonth,
   type LocalDate,
+  WorkCalendar,
 } from '@tally/domain';
 import { aliasesSchema, draftAliases } from './aliases';
 import { buildModel } from './model';
@@ -25,6 +27,8 @@ const { values } = parseArgs({
     'write-aliases-draft': { type: 'boolean', default: false },
     /** Comma-separated YYYY-MM; default is the current and previous month (Europe/Kyiv). */
     'hours-months': { type: 'string' },
+    /** YYYY-MM-DD for legacy invoices (A-046); default: first working day of the current month. */
+    'legacy-invoice-date': { type: 'string' },
   },
 });
 
@@ -76,7 +80,14 @@ async function main(): Promise<number> {
   const aliases = aliasesSchema.parse(JSON.parse(readFileSync(aliasesPath, 'utf8')));
   const months = hoursMonths();
   console.log(`Години за: ${months.map((m) => m.slice(0, 7)).join(', ')}`);
-  const model = buildModel(sources, aliases, { hoursMonths: months });
+  const legacyInvoiceDate = values['legacy-invoice-date']
+    ? parseLocalDate(values['legacy-invoice-date'])._unsafeUnwrap()
+    : defaultInvoiceDate(
+        { type: 'first_working_day_after_period' },
+        months[0] ?? startOfMonth(localDateInZone(new Date())),
+        new WorkCalendar([]),
+      );
+  const model = buildModel(sources, aliases, { hoursMonths: months, legacyInvoiceDate });
   const problems = [...bench.problems, ...calc.problems];
   const unmapped = Object.values(model.unmapped).flat();
 

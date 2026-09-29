@@ -1,4 +1,4 @@
-import { parseLocalDate } from '@tally/domain';
+import { parseLocalDate, type LocalDate } from '@tally/domain';
 import { describe, expect, it } from 'vitest';
 import { aliasesSchema, draftAliases, type Aliases } from '../src/aliases';
 import { decimal, uaDateIn } from '../src/cells';
@@ -8,7 +8,15 @@ import { parseBench, splitLocation } from '../src/sources/bench';
 import { parseCalc } from '../src/sources/calc';
 import { parseHeaders } from '../src/sources/headers';
 import { same } from '../src/writer';
-import { ACT_SHEET, benchBook, calcBook, calcRow, SOW_SHEET } from './fixtures';
+import {
+  ACT_SHEET,
+  benchBook,
+  calcBook,
+  calcRow,
+  SOW_SHEET,
+  STALE_SOW_SHEET,
+  SWISS_SHEET,
+} from './fixtures';
 
 describe('cells', () => {
   it('keeps money as decimal strings', () => {
@@ -479,5 +487,50 @@ describe('same (re-import comparison)', () => {
     expect(same(null, undefined)).toBe(true);
     expect(same(['AWS'], ['AWS'])).toBe(true);
     expect(same('OD-1001', 'OD-1001')).toBe(true);
+  });
+});
+
+describe('legacy invoices (spec 8.1, A6)', () => {
+  const headers = parseHeaders(
+    calcBook({}, { 'SOW #1': SOW_SHEET, 'SOW #2': STALE_SOW_SHEET, Switzerland: SWISS_SHEET }),
+  );
+  const legacyAliases = aliasesSchema.parse({
+    people: {},
+    payees: {},
+    clients: {
+      creditor: { legalName: 'Creditor Group Corp.', invoiceSheets: ['SOW #1', 'SOW #2'] },
+      dph: { legalName: 'DPH International GmbH', invoiceSheets: ['Switzerland'] },
+    },
+  });
+  const model = buildModel(
+    { bench: [], calc: [], invoices: headers.invoices, acts: [] },
+    legacyAliases,
+    { legacyInvoiceDate: '2026-09-01' as LocalDate },
+  );
+
+  it('parses the number, the line table and the total', () => {
+    expect(headers.invoices.find((i) => i.sheet === 'SOW #1')).toMatchObject({
+      number: '22/26',
+      total: '1100',
+      lines: [{ quantity: '176', price: '5500', amount: '5500', monthlyFee: true }],
+    });
+  });
+
+  it('imports only the listed numbers, with the sheet total and a report entry', () => {
+    expect(model.invoices.map((i) => i.number).sort()).toEqual(['21/26', '22/26']);
+    const sow = model.invoices.find((i) => i.number === '22/26');
+    expect(sow).toMatchObject({
+      total: '1100',
+      issueDate: '2026-09-01',
+      dueDate: '2026-09-20',
+      lines: [{ quantity: '1', unitPrice: '5500', amount: '5500' }],
+    });
+    expect(model.anomalies.map((a) => a.code)).toContain('legacy_invoice_total');
+  });
+
+  it('creates a numberless contract for a client without an agreement line', () => {
+    const swiss = model.invoices.find((i) => i.number === '21/26');
+    expect(swiss?.contractRef).toBe('contract:client:dph:no-number');
+    expect(model.contracts.find((c) => c.ref === swiss?.contractRef)?.number).toBe('б/н');
   });
 });
