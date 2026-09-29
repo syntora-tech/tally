@@ -4,6 +4,9 @@ set search_path = public, extensions;
 
 select plan(24);
 
+-- Count only audit rows written by this test; the shared DB may hold older ones.
+create temp table audit_start on commit drop as select coalesce(max(id), 0) as id from public.audit_log;
+
 -- Fixtures (as postgres, i.e. "Studio"): three users with different roles.
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner@test.local'),
@@ -35,10 +38,10 @@ end $$;
 
 -- I8: direct SQL (Studio) is audited with a null actor.
 select is(
-  (select count(*)::int from public.audit_log where table_name = 'app_user' and action = 'INSERT'),
+  (select count(*)::int from public.audit_log where table_name = 'app_user' and action = 'INSERT' and id > (select id from audit_start)),
   4, 'direct inserts are audited');
 select ok(
-  (select bool_and(actor is null) from public.audit_log where table_name = 'app_user'),
+  (select bool_and(actor is null) from public.audit_log where table_name = 'app_user' and id > (select id from audit_start)),
   'Studio changes have actor = null');
 
 update public.app_user set role = 'finance' where email = 'viewer@test.local';
@@ -55,7 +58,7 @@ select lives_ok(
   $$ update public.app_user set role = role where email = 'viewer@test.local' $$,
   'no-op update succeeds');
 select is(
-  (select count(*)::int from public.audit_log where action = 'UPDATE'),
+  (select count(*)::int from public.audit_log where action = 'UPDATE' and id > (select id from audit_start)),
   2, 'no-op updates are not audited');
 
 -- System jobs and MCP identify themselves through app.* settings.

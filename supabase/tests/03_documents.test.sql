@@ -4,6 +4,9 @@ set search_path = public, extensions;
 
 select plan(14);
 
+-- Count only audit rows written by this test; the shared DB may hold older ones.
+create temp table audit_start on commit drop as select coalesce(max(id), 0) as id from public.audit_log;
+
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000b3', 'finance3@t.local'),
   ('00000000-0000-0000-0000-0000000000c3', 'viewer3@t.local');
@@ -67,7 +70,7 @@ select lives_ok($$ insert into public.document (type, title, url) values ('other
   'finance adds a link-only document');
 select pg_temp.reset_actor();
 
-select is((select count(*)::int from public.audit_log where table_name = 'document_link'), 3, 'links are audited');
+select is((select count(*)::int from public.audit_log where table_name = 'document_link' and id > (select id from audit_start)), 3, 'links are audited');
 
 select * from finish();
 rollback;

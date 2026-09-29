@@ -4,6 +4,9 @@ set search_path = public, extensions;
 
 select plan(22);
 
+-- Count only audit rows written by this test; the shared DB may hold older ones.
+create temp table audit_start on commit drop as select coalesce(max(id), 0) as id from public.audit_log;
+
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'owner@t.local'),
   ('00000000-0000-0000-0000-0000000000b1', 'finance@t.local'),
@@ -51,7 +54,7 @@ select lives_ok($$ update public.person set default_payee_id = '30000000-0000-00
   where id = '20000000-0000-0000-0000-000000000001' $$, 'person ↔ payee circular references work');
 
 -- Audit and updated_at are wired.
-select is((select count(*)::int from public.audit_log where table_name in ('company', 'person', 'payee', 'client')),
+select is((select count(*)::int from public.audit_log where table_name in ('company', 'person', 'payee', 'client') and id > (select id from audit_start)),
   6, 'inserts and updates on parties are audited');
 
 -- viewer: reads person and client, never payee or company; cannot write.
