@@ -75,7 +75,7 @@ select throws_ok($$ insert into public.billing_terms (assignment_id, valid_from,
   '23514', null, 'versions start on the first day of a month');
 select lives_ok($$ insert into public.pay_terms (assignment_id, valid_from, type, amount)
   values ('60000000-0000-0000-0000-000000000002', '2026-01-01', 'fixed', 3000) $$, 'first pay version');
-select is((select release_policy::text || '/' || grace_days from public.pay_terms), 'on_payment_or_due/0',
+select is((select release_policy::text || '/' || grace_days from public.pay_terms where assignment_id = '60000000-0000-0000-0000-000000000002'), 'on_payment_or_due/0',
   'pay terms default to pay-when-paid without grace days');
 
 -- I10: close July 2026.
@@ -107,7 +107,7 @@ select is((select count(*)::int from public.contract) + (select count(*)::int fr
 select pg_temp.reset_actor();
 
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000a2');
-select is((select count(*)::int from public.billing_terms), 2, 'owner sees billing terms');
+select is((select count(*)::int from public.billing_terms where assignment_id = '60000000-0000-0000-0000-000000000002'), 2, 'owner sees billing terms');
 select pg_temp.reset_actor();
 
 select * from finish();

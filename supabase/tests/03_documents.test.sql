@@ -30,8 +30,8 @@ insert into public.document (id, type, number, title) values
   ('70000000-0000-0000-0000-000000000001', 'act', '1003  -А4', 'Act A'),
   ('70000000-0000-0000-0000-000000000002', 'act', '1003 - А4', 'Act B'),
   ('70000000-0000-0000-0000-000000000003', 'act', '1003-A4', 'Act C');
-select is((select count(distinct number_key)::int from public.document), 1, 'number_key unifies spacing, dashes, Latin A');
-select is((select number_key from public.document limit 1), '1003А4', 'number_key value matches the domain function');
+select is((select count(distinct number_key)::int from public.document where id::text like '70000000-0000-0000-0000-00000000000_'), 1, 'number_key unifies spacing, dashes, Latin A');
+select is((select number_key from public.document where id = '70000000-0000-0000-0000-000000000001'), '1003А4', 'number_key value matches the domain function');
 select throws_ok($$ update public.document set number_key = 'x' $$, '428C9', null, 'number_key is generated');
 
 select throws_ok($$ insert into public.document (type, title) values ('receipt', 'X') $$,
@@ -59,7 +59,7 @@ select throws_ok($$ insert into public.document_link (document_id, entity_type, 
 
 -- RLS.
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000c3');
-select is((select count(*)::int from public.document), 6, 'viewer reads documents');
+select is((select count(*)::int from public.document where id::text like '70000000-%' or title = 'CV v2'), 6, 'viewer reads documents');
 select throws_ok($$ insert into public.document (type, title) values ('other', 'X') $$,
   '42501', null, 'viewer cannot add documents');
 select throws_ok($$ select * from public.drive_folder $$, '42501', null, 'drive_folder is not exposed to users');

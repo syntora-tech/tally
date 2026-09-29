@@ -120,7 +120,7 @@ select is((select count(*)::int from public.app_user), 1, 'finance sees only own
 select pg_temp.reset_actor();
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
-select is((select count(*)::int from public.app_user), 4, 'owner sees all users');
+select is((select count(*)::int from public.app_user where email like '%@test.local'), 4, 'owner sees all users');
 select lives_ok(
   $$ update public.app_user set role = 'finance' where id = '00000000-0000-0000-0000-00000000000c' $$,
   'owner can change roles');

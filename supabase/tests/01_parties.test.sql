@@ -59,8 +59,9 @@ select is((select count(*)::int from public.audit_log where table_name in ('comp
 
 -- viewer: reads person and client, never payee or company; cannot write.
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000c1');
-select is((select count(*)::int from public.person), 1, 'viewer reads person');
-select is((select count(*)::int from public.client), 2, 'viewer reads client');
+-- Positive counts are scoped to fixture rows: the local DB is shared with e2e and import data.
+select is((select count(*)::int from public.person where id = '20000000-0000-0000-0000-000000000001'), 1, 'viewer reads person');
+select is((select count(*)::int from public.client where id = '40000000-0000-0000-0000-000000000001' or (legal_name = 'Y' and default_currency = 'USDT')), 2, 'viewer reads client');
 select is((select count(*)::int from public.payee), 0, 'viewer does not see payee (6.2 AC)');
 select is((select count(*)::int from public.company), 0, 'viewer does not see company');
 select throws_ok($$ insert into public.person (full_name) values ('Z') $$,
@@ -69,23 +70,23 @@ select pg_temp.reset_actor();
 
 -- finance: reads/writes person, client, payee; reads company but cannot change it.
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000b1');
-select is((select count(*)::int from public.payee), 1, 'finance reads payee');
+select is((select count(*)::int from public.payee where id = '30000000-0000-0000-0000-000000000001'), 1, 'finance reads payee');
 select lives_ok($$ insert into public.payee (kind, legal_name_en) values ('crypto', 'Wallet') $$,
   'finance creates payee');
 select lives_ok($$ update public.client set short_name = 'Creditor' where legal_name = 'Creditor Group Corp.' $$,
   'finance edits client');
-select is((select count(*)::int from public.company), 1, 'finance reads company');
+select is((select count(*)::int from public.company where id = '10000000-0000-0000-0000-000000000001'), 1, 'finance reads company');
 select throws_ok($$ insert into public.company (name_en, name_ua) values ('X', 'X') $$,
   '42501', null, 'finance cannot create company');
-update public.company set name_en = 'hacked';
+update public.company set name_en = 'hacked' where id = '10000000-0000-0000-0000-000000000001';
 select pg_temp.reset_actor();
-select is((select name_en from public.company), 'LLC "SYNTORA"', 'finance cannot update company');
+select is((select name_en from public.company where id = '10000000-0000-0000-0000-000000000001'), 'LLC "SYNTORA"', 'finance cannot update company');
 
 -- owner edits company.
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000a1');
-select lives_ok($$ update public.company set legal_code = '46140580' $$, 'owner edits company');
+select lives_ok($$ update public.company set legal_code = '46140580' where id = '10000000-0000-0000-0000-000000000001' $$, 'owner edits company');
 select pg_temp.reset_actor();
-select is((select legal_code from public.company), '46140580', 'owner change persisted');
+select is((select legal_code from public.company where id = '10000000-0000-0000-0000-000000000001'), '46140580', 'owner change persisted');
 
 -- anon.
 set local role anon;

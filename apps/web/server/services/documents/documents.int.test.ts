@@ -139,6 +139,19 @@ describe('createDocument (spec 6.9)', () => {
     expect(links).toHaveLength(1);
   });
 
+  it('treats an untouched file input (empty File) as no file when a link is given', async () => {
+    const res = await services.createDocument.run(h.ctxFor(owner), {
+      type: 'other',
+      title: 'Link only via form',
+      url: 'https://example.com/x',
+      file: new File([], 'blank.bin', { type: 'application/octet-stream' }),
+    });
+    const { id } = res._unsafeUnwrap();
+    docIds.push(id);
+    const [doc] = await h.db.select().from(document).where(eq(document.id, id));
+    expect(doc?.driveFileId).toBeNull();
+  });
+
   it('rejects non-http links', async () => {
     const res = await services.createDocument.run(h.ctxFor(owner), {
       type: 'other',

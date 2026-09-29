@@ -30,7 +30,8 @@ export const uploadFile = z
   .refine((f) => f.size <= MAX_UPLOAD_BYTES, 'Файл більший за 4 МБ');
 
 const optionalFile = z.preprocess(
-  (v) => (v instanceof File && v.size === 0 && v.name === '' ? undefined : v),
+  // An untouched file input still posts an empty File; treat it as "no file".
+  (v) => (v instanceof File && v.size === 0 ? undefined : v),
   uploadFile.optional(),
 );
 
