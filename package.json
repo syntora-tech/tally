@@ -22,7 +22,8 @@
     "db:reset": "./scripts/supabase.sh db reset",
     "db:test": "./scripts/supabase.sh test db",
     "db:generate": "pnpm --filter @tally/db generate",
-    "db:migration": "pnpm --filter @tally/db migration"
+    "db:migration": "pnpm --filter @tally/db migration",
+    "test:int": "pnpm --filter @tally/web test:int"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

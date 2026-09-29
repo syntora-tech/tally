@@ -9,7 +9,8 @@
     "start": "next start",
     "typecheck": "tsc -p .",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "test:int": "VITEST_INTEGRATION=1 vitest run"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -19,6 +20,7 @@
     "@tally/domain": "workspace:*",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
+    "drizzle-orm": "0.45.3",
     "lucide-react": "1.48.0",
     "neverthrow": "8.2.0",
     "next": "16.3.7",

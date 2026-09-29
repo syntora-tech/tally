@@ -29,6 +29,7 @@ pnpm db:reset            # migrations + seed from scratch
 pnpm dev                 # http://localhost:3000
 pnpm lint | pnpm typecheck | pnpm test
 pnpm db:test             # pgTAP (supabase/tests)
+pnpm test:int            # Vitest against local DB (withUser, RLS, audit)
 pnpm e2e                 # Playwright (needs db:start)
 pnpm db:generate         # drizzle-kit → supabase/migrations
 pnpm db:migration <name> # empty SQL migration for triggers/functions/RLS
