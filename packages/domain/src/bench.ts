@@ -1,5 +1,5 @@
 import { compareLocalDate, type LocalDate } from './local-date';
-import { sum, type Decimal, type DecimalInput } from './money';
+import { sum, toDecimal, type Decimal, type DecimalInput } from './money';
 
 export type AssignmentLoad = {
   fte: DecimalInput;
@@ -27,6 +27,10 @@ export function benchStatus(
   const load = sum(
     assignments.filter((a) => !a.isInternal && isAssignmentActive(a, on)).map((a) => a.fte),
   );
-  const status: BenchStatus = load.isZero() ? 'free' : load.lt(1) ? 'partial' : 'busy';
-  return { status, load };
+  return { status: benchStatusForLoad(load), load };
+}
+
+export function benchStatusForLoad(load: DecimalInput): BenchStatus {
+  const d = toDecimal(load);
+  return d.isZero() ? 'free' : d.lt(1) ? 'partial' : 'busy';
 }

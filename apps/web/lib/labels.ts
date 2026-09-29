@@ -23,3 +23,23 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   UPDATE: 'Змінено',
   DELETE: 'Видалено',
 };
+
+export const ALLOCATION_LABELS: Record<string, string> = {
+  full_time: 'Повна зайнятість',
+  part_time: 'Часткова зайнятість',
+};
+
+export const PERSON_STATUS_LABELS: Record<string, string> = {
+  active: 'Активний',
+  bench: 'На бенчі',
+  inactive: 'Неактивний',
+};
+
+export const BENCH_LABELS: Record<string, string> = {
+  free: 'Вільний',
+  partial: 'Частково',
+  busy: 'Зайнятий',
+};
+
+export const toOptions = (labels: Record<string, string>) =>
+  Object.entries(labels).map(([value, label]) => ({ value, label }));

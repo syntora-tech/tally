@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { benchStatus } from './bench';
+import { benchStatus, benchStatusForLoad } from './bench';
 import { toCsv } from './csv';
 import { parseLocalDate, type LocalDate } from './local-date';
 import { numberKey } from './number-key';
@@ -130,5 +130,16 @@ describe('toCsv', () => {
       [{ name: 'Anton "A"', stack: ['Solidity', 'TS'] }],
     );
     expect(csv).toBe('\uFEFFІмʼя,Stack\r\n"Anton ""A""","Solidity, TS"\r\n');
+  });
+});
+
+describe('benchStatusForLoad', () => {
+  it.each([
+    ['0', 'free'],
+    ['0.25', 'partial'],
+    ['1.00', 'busy'],
+    ['1.5', 'busy'],
+  ] as const)('%s → %s', (load, status) => {
+    expect(benchStatusForLoad(load)).toBe(status);
   });
 });
