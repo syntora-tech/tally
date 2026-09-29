@@ -11,7 +11,8 @@
     "test": "vitest run",
     "e2e": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
     "test:int": "VITEST_INTEGRATION=1 vitest run",
-    "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --only-shell chromium"
+    "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --only-shell chromium",
+    "typegen": "next typegen"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

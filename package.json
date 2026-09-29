@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter @tally/web dev",
     "build": "pnpm --filter @tally/web build",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "pnpm --filter @tally/web typegen && eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --parallel typecheck",
