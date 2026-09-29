@@ -8,6 +8,7 @@ import {
   invoice,
   invoiceLine,
   invoiceRevision,
+  job,
   period,
 } from '@tally/db/schema';
 import {
@@ -25,6 +26,7 @@ import { and, asc, desc, eq, inArray, isNotNull, ne, notExists, sql } from 'driz
 import { alias } from 'drizzle-orm/pg-core';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
+import { enqueueJob, renderInvoiceJob } from '../../jobs/queue';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
@@ -284,6 +286,7 @@ export const saveInvoice = defineService({
           gdocFileId: null,
         })
         .where(eq(invoice.id, inv.id));
+      await enqueueJob(tx, renderInvoiceJob(inv.id, revision));
       return ok({ id: inv.id, revision });
     }),
 });
@@ -378,6 +381,7 @@ export const issueInvoice = defineService({
           ),
         })
         .where(eq(invoice.id, id));
+      await enqueueJob(tx, renderInvoiceJob(id, row.invoice.revision));
       return ok({ id, number });
     }),
 });
@@ -454,7 +458,7 @@ export const reissueInvoice = defineService({
     }),
 });
 
-async function currentInvoiceDocument(tx: DbTransaction, invoiceId: string) {
+export async function currentInvoiceDocument(tx: DbTransaction, invoiceId: string) {
   const next = alias(document, 'next_version');
   const [doc] = await tx
     .select({ id: document.id, version: document.version })
@@ -487,3 +491,41 @@ export function signedCopyTarget(ctx: ServiceContext, invoiceId: string) {
     };
   });
 }
+
+/** "Перегенерувати" (7.1): queues a render of the current revision when its PDF is missing. */
+export const regenerateInvoicePdf = defineService({
+  name: 'invoices.regeneratePdf',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) =>
+    inActorScope(ctx, async (tx) => {
+      const [row] = await tx.select().from(invoice).where(eq(invoice.id, id));
+      if (!row || row.status === 'draft' || row.status === 'void') {
+        return err(serviceError('conflict', 'PDF генерується лише для випущеного інвойсу'));
+      }
+      if (row.pdfFileId) return err(serviceError('conflict', 'PDF цієї редакції вже є'));
+      await enqueueJob(tx, renderInvoiceJob(id, row.revision));
+      return ok({ id });
+    }),
+});
+
+/** Latest render job of the invoice for the card: queued, running, failed with the error. */
+export const invoiceRenderStatus = defineService({
+  name: 'invoices.renderStatus',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .select({
+          status: job.status,
+          lastError: job.lastError,
+          attempts: job.attempts,
+          revision: sql<number>`(${job.payload} ->> 'revision')::int`,
+        })
+        .from(job)
+        .where(and(eq(job.kind, 'render_invoice'), sql`${job.payload} ->> 'invoiceId' = ${id}`))
+        .orderBy(desc(job.createdAt))
+        .limit(1),
+    );
+    return ok(row ?? null);
+  },
+});

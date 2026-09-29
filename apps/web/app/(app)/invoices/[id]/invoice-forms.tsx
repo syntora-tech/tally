@@ -20,6 +20,7 @@ import {
   attachSignedInvoiceAction,
   issueInvoiceAction,
   issuePreviewAction,
+  regenerateInvoicePdfAction,
   reissueInvoiceAction,
   saveInvoiceAction,
   voidInvoiceAction,
@@ -324,6 +325,25 @@ export function SignedCopyForm({ invoiceId }: { invoiceId: string }) {
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
       </div>
+    </form>
+  );
+}
+
+export function RegeneratePdfForm({ invoiceId }: { invoiceId: string }) {
+  const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
+    regenerateInvoicePdfAction,
+    null,
+  );
+  const error = useResult(state, 'PDF поставлено в чергу');
+  return (
+    <form action={action} className="flex flex-col gap-2">
+      <input type="hidden" name="id" value={invoiceId} />
+      <div>
+        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+          Перегенерувати PDF
+        </Button>
+      </div>
+      <ErrorAlert message={error?.message} />
     </form>
   );
 }

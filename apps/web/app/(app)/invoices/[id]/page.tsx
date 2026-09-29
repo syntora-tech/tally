@@ -20,8 +20,15 @@ import { INVOICE_STATUS_LABELS } from '@/lib/labels';
 import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { getInvoice, issuePreview } from '@/server/services/invoices';
-import { InvoiceEditForm, IssueForm, ReissueForm, SignedCopyForm, VoidForm } from './invoice-forms';
+import { getInvoice, invoiceRenderStatus, issuePreview } from '@/server/services/invoices';
+import {
+  InvoiceEditForm,
+  IssueForm,
+  RegeneratePdfForm,
+  ReissueForm,
+  SignedCopyForm,
+  VoidForm,
+} from './invoice-forms';
 
 export const metadata: Metadata = { title: 'Інвойс · Tally' };
 
@@ -61,6 +68,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const revisable = inv.status === 'issued' && toDecimal(inv.paidAmount).isZero();
   const voidable = inv.status === 'issued' || inv.status === 'partially_paid';
   const preview = isDraft ? (await issuePreview.run(ctx, { id })).unwrapOr(null) : null;
+  const render = isDraft ? null : (await invoiceRenderStatus.run(ctx, { id })).unwrapOr(null);
+  const rendering =
+    render?.revision === inv.revision &&
+    (render.status === 'queued' || render.status === 'running');
   const latestSigned = signed[0];
   const signedOutdated = latestSigned && (latestSigned.sourceRevision ?? 0) < inv.revision;
 
@@ -214,12 +225,31 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       {!isDraft && inv.status !== 'void' && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Підписання</CardTitle>
+            <CardTitle className="text-base">Файл і підписання</CardTitle>
             <CardDescription>
               Після підпису завантажте підписаний файл — він замінить згенерований у документах
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
+            {inv.pdfFileId ? (
+              <p className="text-sm">
+                Файл редакції {inv.revision} згенеровано — він у документах нижче
+              </p>
+            ) : rendering ? (
+              <p className="text-sm text-muted-foreground">
+                Файл генерується… Оновіть сторінку за хвилину
+                {render.lastError ? ` (попередня спроба: ${render.lastError})` : ''}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 text-sm">
+                <p className="text-muted-foreground">
+                  {render?.status === 'failed'
+                    ? `Не вдалося згенерувати файл: ${render.lastError ?? 'невідома помилка'}`
+                    : 'Файлу для цієї редакції ще немає'}
+                </p>
+                <RegeneratePdfForm invoiceId={inv.id} />
+              </div>
+            )}
             {latestSigned ? (
               <p className="text-sm">
                 Підписано {latestSigned.signedAt ? dateTime.format(latestSigned.signedAt) : ''}

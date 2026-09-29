@@ -112,7 +112,9 @@ async function resolveAnchor(
 
 type NewDocument = z.output<typeof createDocumentInput> & {
   supersedes?: { id: string; version: number };
-  signed?: { at: Date; sourceRevision: number };
+  /** Invoice/act revision the file shows; `signedAt` marks an uploaded signed copy. */
+  sourceRevision?: number;
+  signedAt?: Date;
 };
 
 /**
@@ -158,8 +160,8 @@ export async function insertDocument(
         sizeBytes: stored?.sizeBytes ?? null,
         version: input.supersedes ? input.supersedes.version + 1 : 1,
         supersedesId: input.supersedes?.id ?? null,
-        signedAt: input.signed?.at ?? null,
-        sourceRevision: input.signed?.sourceRevision ?? null,
+        signedAt: input.signedAt ?? null,
+        sourceRevision: input.sourceRevision ?? null,
       })
       .returning({ id: document.id });
     if (!row) throw new Error('Document insert returned no row');
@@ -252,7 +254,8 @@ export function documentServices(getStorage: () => DocumentStorage) {
           { entityType: 'invoice', entityId: invoiceId },
           { entityType: 'client', entityId: target.clientId },
         ],
-        signed: { at: new Date(), sourceRevision: target.revision },
+        signedAt: new Date(),
+        sourceRevision: target.revision,
         ...(target.current ? { supersedes: target.current } : {}),
       });
       return ok(created);

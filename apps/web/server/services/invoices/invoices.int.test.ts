@@ -9,6 +9,7 @@ import {
   documentLink,
   invoice,
   invoiceLine,
+  job,
   numberSequence,
 } from '@tally/db/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -89,6 +90,7 @@ afterAll(async () => {
       await db.update(document).set({ supersedesId: null }).where(inArray(document.id, docIds));
       await db.delete(document).where(inArray(document.id, docIds));
     }
+    await db.delete(job).where(inArray(sql`${job.payload} ->> 'invoiceId'`, ids.invoices));
     // Issued invoices are undeletable by design (I1); only test cleanup bypasses the triggers.
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);

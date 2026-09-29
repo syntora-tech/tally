@@ -38,6 +38,8 @@ export async function GET(_request: NextRequest, ctx: RouteContext<'/api/files/[
       'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(doc.fileName ?? 'file')}`,
       'cache-control': 'private, no-store',
       'x-content-type-options': 'nosniff',
+      // Uploaded and rendered HTML must not run scripts on the app origin.
+      'content-security-policy': 'sandbox',
     },
   });
 }

@@ -4,11 +4,24 @@ import { OWNER_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { formatUaDate, isoDayOfWeek, type LocalDate } from '@tally/domain';
 import { getCompany } from '@/server/services/company';
-import { listCalendarExceptions, listSequences } from '@/server/services/settings';
+import { listCalendarExceptions, listJobs, listSequences } from '@/server/services/settings';
 import { CompanyForm } from './company-form';
 import { CalendarExceptionForm, DeleteExceptionButton, SequenceForm } from './settings-forms';
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];
+
+const JOB_STATUS_LABELS: Record<string, string> = {
+  queued: 'у черзі',
+  running: 'виконується',
+  done: 'готово',
+  failed: 'помилка',
+};
+
+const DATE_TIME = new Intl.DateTimeFormat('uk-UA', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+  timeZone: 'Europe/Kyiv',
+});
 
 export const metadata: Metadata = { title: 'Налаштування · Tally' };
 
@@ -19,6 +32,7 @@ export default async function SettingsPage() {
   const exceptions = (await listCalendarExceptions.run(ctx, {})).unwrapOr([]);
   const sequences = (await listSequences.run(ctx, {})).unwrapOr([]);
   const thisYear = ctx.today.slice(0, 4);
+  const jobs = (await listJobs.run(ctx, {})).unwrapOr([]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,8 +130,38 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Фонові задачі</CardTitle>
+          <CardDescription>
+            Генерація файлів документів. Невдалі задачі повторюються до 3 разів із паузою
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {jobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Задач ще не було</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {jobs.map((j) => (
+                <li key={j.id} className="flex flex-wrap gap-x-3">
+                  <span className="w-36 tabular-nums text-muted-foreground">
+                    {DATE_TIME.format(j.createdAt)}
+                  </span>
+                  <span className="w-32">{j.kind}</span>
+                  <span className="w-28">
+                    {JOB_STATUS_LABELS[j.status] ?? j.status}
+                    {j.attempts > 1 ? ` (${String(j.attempts)})` : ''}
+                  </span>
+                  {j.lastError && <span className="text-destructive">{j.lastError}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
       <p className="text-sm text-muted-foreground">
-        Шаблони документів, користувачі й фонові задачі з’являться на наступних етапах.
+        ID шаблонів Google Docs задаються змінними середовища або в договорі; користувачі — на
+        наступних етапах.
       </p>
     </div>
   );

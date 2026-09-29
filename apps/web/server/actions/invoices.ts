@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
+import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
 import { attachSignedInvoice } from '../services/documents/live';
 import {
   issueInvoice,
   issuePreview,
+  regenerateInvoicePdf,
   reissueInvoice,
   saveInvoice,
   voidInvoice,
@@ -53,7 +55,9 @@ export async function saveInvoiceAction(
     reason,
     lines: linesFrom(formData),
   });
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  if (result.isErr()) return { ok: false, error: result.error };
+  if (reason) runJobsAfterResponse();
+  return done(result.value.id);
 }
 
 export async function issuePreviewAction(id: string, issueDate: string) {
@@ -67,7 +71,9 @@ export async function issueInvoiceAction(
 ): Promise<InvoiceFormState> {
   const ctx = await requireUserContext();
   const result = await issueInvoice.run(ctx, formDataToObject(formData));
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  if (result.isErr()) return { ok: false, error: result.error };
+  runJobsAfterResponse();
+  return done(result.value.id);
 }
 
 export async function voidInvoiceAction(
@@ -100,4 +106,15 @@ export async function attachSignedInvoiceAction(
   return result.isErr()
     ? { ok: false, error: result.error }
     : done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
+}
+
+export async function regenerateInvoicePdfAction(
+  _prev: InvoiceFormState,
+  formData: FormData,
+): Promise<InvoiceFormState> {
+  const ctx = await requireUserContext();
+  const result = await regenerateInvoicePdf.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: result.error };
+  runJobsAfterResponse();
+  return done(result.value.id);
 }

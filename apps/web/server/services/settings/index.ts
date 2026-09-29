@@ -1,6 +1,6 @@
-import { contract, numberSequence, workCalendarException } from '@tally/db/schema';
+import { contract, job, numberSequence, workCalendarException } from '@tally/db/schema';
 import { formatSequenceNumber } from '@tally/domain';
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -135,4 +135,16 @@ export const saveSequence = defineService({
     );
     return row ? ok(row) : err(FORBIDDEN);
   },
+});
+
+/** Settings → background jobs (6.10): the latest queue entries with their errors. */
+export const listJobs = defineService({
+  name: 'settings.jobs.list',
+  input: z.object({ limit: z.number().int().min(1).max(200).default(30) }),
+  handler: async (ctx, { limit }) =>
+    ok(
+      await inActorScope(ctx, (tx) =>
+        tx.select().from(job).orderBy(desc(job.createdAt)).limit(limit),
+      ),
+    ),
 });
