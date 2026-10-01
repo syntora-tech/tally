@@ -1,0 +1,1 @@
+ALTER TABLE "timesheet" ADD COLUMN "note" text;

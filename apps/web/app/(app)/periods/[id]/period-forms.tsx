@@ -93,6 +93,7 @@ export type HoursRow = {
   roleTitle: string | null;
   billing: string;
   hours: string | null;
+  note: string | null;
 };
 
 export function HoursForm({
@@ -118,6 +119,7 @@ export function HoursForm({
             <TableHead>Роль</TableHead>
             <TableHead>Умови клієнту</TableHead>
             <TableHead className="w-32">Години</TableHead>
+            <TableHead>Проєкт / примітка</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -135,6 +137,17 @@ export function HoursForm({
                   defaultValue={r.hours ?? ''}
                   disabled={disabled}
                   className="h-8 w-24"
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  name={`note.${r.assignmentId}`}
+                  aria-label={`Проєкт: ${r.personName}, ${r.clientName ?? 'внутрішнє'}`}
+                  placeholder="напр. Mobile app"
+                  maxLength={200}
+                  defaultValue={r.note ?? ''}
+                  disabled={disabled}
+                  className="h-8 w-56"
                 />
               </TableCell>
             </TableRow>

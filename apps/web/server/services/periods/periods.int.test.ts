@@ -203,6 +203,21 @@ describe('period wizard (spec 6.4)', () => {
     expect(total((r) => r.payUahApprox)).toBe('454585.60');
   });
 
+  it('keeps a project note per assignment and month; omitted keeps it, empty clears it', async () => {
+    const ctx = h.ctxFor(finance);
+    const entry = { periodId: ids.period, assignmentId: ids.assignments.trady ?? '', hours: '184' };
+    const note = async () =>
+      (await getPeriodOverview.run(ctx, { periodId: ids.period }))
+        ._unsafeUnwrap()
+        .assignments.find((a) => a.assignmentId === entry.assignmentId)?.note;
+    await setHours.run(ctx, { ...entry, note: 'Mobile app' });
+    expect(await note()).toBe('Mobile app');
+    await setHours.run(ctx, entry);
+    expect(await note()).toBe('Mobile app');
+    await setHours.run(ctx, { ...entry, note: '' });
+    expect(await note()).toBeNull();
+  });
+
   it('step 4: an adjustment adds to the UAH preview of its item', async () => {
     const ceo = ids.people[3] ?? '';
     const res = await addAdjustment.run(h.ctxFor(finance), {

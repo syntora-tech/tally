@@ -61,6 +61,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
   const result = await getPeriodOverview.run(ctx, { periodId: id });
   if (result.isErr()) notFound();
   const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
+  const notes = new Map(assignments.map((a) => [a.assignmentId, a.note]));
   const closed = p.status === 'closed';
   const billingText = (a: (typeof assignments)[number]) => {
     const b = preview.rows.find((r) => r.assignmentId === a.assignmentId)?.billing;
@@ -114,6 +115,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               roleTitle: a.roleTitle,
               billing: billingText(a),
               hours: a.hours,
+              note: a.note ?? null,
             }))}
           />
           {!closed && <HoursCsvForm periodId={p.id} />}
@@ -140,7 +142,12 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
             {preview.rows.map((r) => (
               <TableRow key={r.assignmentId}>
                 <TableCell>{r.personName}</TableCell>
-                <TableCell>{r.clientName ?? 'внутрішнє'}</TableCell>
+                <TableCell>
+                  {r.clientName ?? 'внутрішнє'}
+                  {notes.get(r.assignmentId) && (
+                    <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
+                  )}
+                </TableCell>
                 <TableCell>{formatAmount(r.hours)}</TableCell>
                 <TableCell>
                   {r.invoiceAmount ? formatAmount(r.invoiceAmount, r.billing?.currency) : '—'}

@@ -121,6 +121,7 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
         graceDays: t.graceDays,
       })),
     hours: hours.find((h) => h.assignmentId === r.assignment.id)?.hours ?? null,
+    note: hours.find((h) => h.assignmentId === r.assignment.id)?.note ?? null,
   }));
   const timesheetIds = new Map(hours.map((h) => [h.assignmentId, h.id]));
   return { month, assignments, timesheetIds };
@@ -241,7 +242,12 @@ const hoursValue = nonNegativeDecimal.refine(
   'Не більше 744 годин на місяць',
 );
 
-export const hoursEntry = z.object({ assignmentId: z.uuid(), hours: hoursValue });
+export const hoursEntry = z.object({
+  assignmentId: z.uuid(),
+  hours: hoursValue,
+  /** Project of the month; omitted keeps the stored note, an empty string clears it. */
+  note: z.string().trim().max(200).optional(),
+});
 
 async function writeHours(
   ctx: ServiceContext,
@@ -251,12 +257,13 @@ async function writeHours(
 ) {
   await inActorScope(ctx, async (tx) => {
     for (const e of entries) {
+      const note = e.note === undefined ? {} : { note: e.note || null };
       await tx
         .insert(timesheet)
-        .values({ periodId, assignmentId: e.assignmentId, hours: e.hours, source })
+        .values({ periodId, assignmentId: e.assignmentId, hours: e.hours, source, ...note })
         .onConflictDoUpdate({
           target: [timesheet.assignmentId, timesheet.periodId],
-          set: { hours: e.hours, source },
+          set: { hours: e.hours, source, ...note },
         });
     }
   });

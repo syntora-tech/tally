@@ -49,10 +49,26 @@ export async function saveHoursAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const periodId = field(formData.get('periodId'));
-  const rows = [...formData.entries()]
-    .map(([k, v]) => [k, field(v)] as const)
+  const entries = [...formData.entries()].map(([k, v]) => [k, field(v)] as const);
+  const notes = new Map(
+    entries.filter(([k]) => k.startsWith('note.')).map(([k, v]) => [k.slice('note.'.length), v]),
+  );
+  const rows = entries
     .filter(([k, v]) => k.startsWith('hours.') && v.trim() !== '')
-    .map(([k, v]) => ({ assignmentId: k.slice('hours.'.length), hours: v.replace(',', '.') }));
+    .map(([k, v]) => {
+      const assignmentId = k.slice('hours.'.length);
+      return { assignmentId, hours: v.replace(',', '.'), note: notes.get(assignmentId) };
+    });
+  const withHours = new Set(rows.map((r) => r.assignmentId));
+  if ([...notes].some(([id, note]) => note.trim() !== '' && !withHours.has(id))) {
+    return {
+      ok: false,
+      error: serviceError(
+        'validation_error',
+        'Примітка без годин не зберігається — вкажіть години',
+      ),
+    };
+  }
   if (rows.length === 0)
     return { ok: false, error: serviceError('validation_error', 'Немає годин для збереження') };
   const result = await importHours.run(ctx, { periodId, rows });
@@ -76,6 +92,7 @@ export async function uploadHoursCsvAction(
     .map((r) => ({
       assignmentId: r.assignment_id ?? '',
       hours: (r.hours ?? '').replace(',', '.'),
+      note: r.note,
     }));
   const result = await importHours.run(ctx, { periodId, rows });
   if (result.isErr()) return { ok: false, error: result.error };

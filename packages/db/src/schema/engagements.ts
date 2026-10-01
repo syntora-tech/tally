@@ -202,6 +202,8 @@ export const timesheet = pgTable(
       .references(() => period.id),
     hours: numeric({ precision: 6, scale: 2 }).notNull(),
     source: text().notNull().default('manual'),
+    /** Which project of the assignment these hours were for, e.g. several projects under one SOW. */
+    note: text(),
   },
   (t) => [
     unique('timesheet_legacy_ref_key').on(t.legacyRef),

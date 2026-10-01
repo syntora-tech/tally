@@ -38,6 +38,8 @@ export type PeriodAssignment = {
   billing: (BillingTermsInput & { validFrom: LocalDate; currency: string })[];
   pay: PeriodPayTerms[];
   hours: string | null;
+  /** Project note of the month's timesheet row. */
+  note?: string | null;
 };
 
 export type PreviewRow = {
