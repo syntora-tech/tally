@@ -232,6 +232,20 @@
       "when": 1790847160416,
       "tag": "20261001093240_cron_schedules",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790852143254,
+      "tag": "20261001105543_mcp",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790852151827,
+      "tag": "20261001105551_mcp_access",
+      "breakpoints": true
     }
   ]
 }
