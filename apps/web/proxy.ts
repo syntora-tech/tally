@@ -2,7 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/public-env';
 
-const PUBLIC_PATHS = ['/login', '/auth/', '/api/cron/'];
+// /api/mcp authenticates its own bearer tokens.
+const PUBLIC_PATHS = ['/login', '/auth/', '/api/cron/', '/api/mcp'];
 
 /** Refreshes the Supabase session cookie and sends anonymous visitors to /login. */
 export async function proxy(request: NextRequest) {
