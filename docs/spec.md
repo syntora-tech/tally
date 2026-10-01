@@ -117,7 +117,7 @@ erDiagram
 | `company` | Наша юрособа (ТОВ «СІНТОРА»): реквізити, директор, IBAN, адреса EN/UA | Шапки інвойсів і актів |
 | `person` | Спеціаліст з пулу: позиція, сеньйорність, стек, домен, ринкова ставка, доступність, локація/TZ, контактна особа | `Bench`, колонка `Employee` |
 | `payee` | Юридичний одержувач виплати: ФОП (ПІБ, ІПН, запис ЄДР, IBAN) або криптогаманець. **Не завжди та сама людина, що й `person`** | `Реестр актов`, аркуші `Акт *` |
-| `client` | Клієнт/партнер: юр. назва, адреса, банківські реквізити, контакти, опційно `zoho_id` | Шапки аркушів `SOW #*`, `Switzerland`, `IdeaSoft` |
+| `client` | Клієнт/партнер: юр. назва, адреса, банківські реквізити, контакти | Шапки аркушів `SOW #*`, `Switzerland`, `IdeaSoft` |
 | `contract` | Договір (MSA, Contract, договір з ФОП) з номером, датою, валютою, правилами дат і оплати, шаблоном документа та послідовністю номерів | `MSA №20-08/25`, `No 2025-28/10`, `№ OD-1001` |
 | `assignment` | Спеціаліст на контракті: роль, FTE, SOW/Annex, дати, `is_internal` (CEO/CTO на власній компанії) | Рядок `Current` |
 | `billing_terms` | Версія умов клієнту: `fixed_monthly / hourly / none`, ставка, валюта, `proration_policy`, канал (fiat/crypto) | Колонки H, I, L |
@@ -176,7 +176,7 @@ person(full_name, display_name, position, seniority text[], stack text[], domain
 payee(kind text check in ('fop','crypto','other'), legal_name_ua, legal_name_en, tax_id, edr_record, edr_date date,
       address_ua, iban, bank_name, wallet_address, wallet_network, person_id -> person null)
 client(legal_name, short_name, address, country, bank_details text, contacts jsonb,
-       default_currency char(3|4), zoho_id null)
+       default_currency char(3|4))
 contract(kind text check in ('client','fop'), number, signed_on date, company_id -> company,
          client_id -> client null, payee_id -> payee null,          -- рівно одне з двох (I9)
          currency, payment_due_rule jsonb, invoice_date_rule jsonb, act_date_rule jsonb,

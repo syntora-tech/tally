@@ -29,7 +29,6 @@ export const clientInput = z.object({
   bankDetails: optionalText,
   contacts: contactList,
   defaultCurrency: currencyCode.default('USD'),
-  zohoId: optionalText,
 });
 
 // Date and payment rules (spec 5.5); the calendar math arrives with WorkCalendar in stage 2.

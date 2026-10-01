@@ -29,7 +29,6 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
           bankDetails: c.bankDetails,
           contacts: c.contacts as Contact[],
           defaultCurrency: c.defaultCurrency,
-          zohoId: c.zohoId,
         }}
       />
     </div>

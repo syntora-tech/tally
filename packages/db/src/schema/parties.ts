@@ -7,7 +7,6 @@ import {
   numeric,
   pgTable,
   text,
-  uniqueIndex,
   unique,
   uuid,
   type AnyPgColumn,
@@ -119,14 +118,10 @@ export const client = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     defaultCurrency: text().notNull().default('USD'),
-    zohoId: text(),
   },
   (t) => [
     unique('client_legacy_ref_key').on(t.legacyRef),
     currencyCheck('client_default_currency_check', t.defaultCurrency),
-    uniqueIndex('client_zoho_id_key')
-      .on(t.zohoId)
-      .where(sql`${t.zohoId} is not null`),
     ...rolePolicies('client', { read: 'all', write: 'finance' }),
   ],
 );

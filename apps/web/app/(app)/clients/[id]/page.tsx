@@ -22,7 +22,6 @@ const FIELD_LABELS: Record<string, string> = {
   bank_details: 'Банківські реквізити',
   contacts: 'Контакти',
   default_currency: 'Валюта',
-  zoho_id: 'Zoho ID',
 };
 
 type Contact = { name: string; role?: string; email?: string; phone?: string };
@@ -73,7 +72,6 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
                 <div className="text-muted-foreground">Банківські реквізити</div>
                 <p className="whitespace-pre-line">{c.bankDetails ?? '—'}</p>
               </div>
-              {c.zohoId && <div className="text-muted-foreground">Zoho ID: {c.zohoId}</div>}
               <div>
                 <div className="text-muted-foreground">Контакти</div>
                 {contacts.length === 0 ? (

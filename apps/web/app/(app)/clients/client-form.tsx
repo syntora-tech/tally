@@ -21,7 +21,6 @@ export type ClientFormValues = {
   bankDetails: string | null;
   contacts: Contact[];
   defaultCurrency: string;
-  zohoId: string | null;
 };
 
 export function ClientForm({ client }: { client?: ClientFormValues }) {
@@ -88,9 +87,6 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
           rows={4}
           defaultValue={client?.bankDetails ?? ''}
         />
-      </FormField>
-      <FormField label="Zoho ID" htmlFor="zohoId" error={errors?.zohoId}>
-        <Input id="zohoId" name="zohoId" defaultValue={client?.zohoId ?? ''} />
       </FormField>
 
       <fieldset className="flex flex-col gap-2 md:col-span-2">
