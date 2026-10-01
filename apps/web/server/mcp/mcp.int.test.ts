@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { account, auditLog, mcpCallLog, mcpClientPolicy, transaction } from '@tally/db/schema';
+import {
+  account,
+  auditLog,
+  client,
+  mcpCallLog,
+  mcpClientPolicy,
+  person,
+  transaction,
+} from '@tally/db/schema';
 import { and, eq, inArray, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../test/int-helpers';
@@ -65,6 +73,8 @@ afterAll(() =>
   h.cleanup(async (db) => {
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
     await db.delete(account).where(like(account.name, `M ${tag}%`));
+    await db.delete(person).where(like(person.fullName, `M ${tag}%`));
+    await db.delete(client).where(like(client.legalName, `M ${tag}%`));
     await db.delete(mcpCallLog).where(inArray(mcpCallLog.clientId, clientIds));
     await db.delete(mcpClientPolicy).where(inArray(mcpClientPolicy.clientId, clientIds));
   }),
@@ -102,13 +112,16 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'list_categories',
       'list_transactions',
       'list_fx_rates',
+      'search_people',
+      'get_person',
+      'list_clients',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(13);
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -210,6 +223,39 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     })) as ToolResult;
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structuredContent)).toContain('transactions.0');
+  });
+
+  it('people and clients: written by name, read back without payee details', async () => {
+    const mcp = await connect(assistantToken);
+    const fullName = `M ${tag} Olena`;
+    await mcp.callTool({
+      name: 'upsert_person_profile',
+      arguments: {
+        idempotencyKey: `people-${tag}`,
+        people: [{ fullName, stack: ['Go'], marketRateUsd: '40' }],
+      },
+    });
+    const found = (await mcp.callTool({
+      name: 'search_people',
+      arguments: { q: fullName },
+    })) as ToolResult;
+    const people = found.structuredContent?.items as Record<string, unknown>[];
+    expect(people).toHaveLength(1);
+    expect(people[0]).toMatchObject({ fullName, stack: ['Go'], bench: 'free' });
+    expect(people[0]).not.toHaveProperty('defaultPayeeId');
+
+    const card = (await mcp.callTool({
+      name: 'get_person',
+      arguments: { id: people[0]?.id },
+    })) as ToolResult;
+    expect(card.structuredContent).not.toHaveProperty('defaultPayee');
+
+    const legalName = `M ${tag} Client Ltd`;
+    const saved = (await mcp.callTool({
+      name: 'upsert_clients',
+      arguments: { idempotencyKey: `clients-${tag}`, clients: [{ legalName, country: 'UK' }] },
+    })) as ToolResult;
+    expect(saved.structuredContent).toMatchObject({ clients: [{ legalName, status: 'created' }] });
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

@@ -1,5 +1,7 @@
 import type { McpProfile } from '@tally/db/schema';
 import type { z } from 'zod';
+import { listClients } from '../services/clients';
+import { upsertClients } from '../services/clients/batch';
 import type { ServiceContext } from '../services/context';
 import type { Service, ServiceResult } from '../services/define-service';
 import { listRates } from '../services/fx';
@@ -10,6 +12,8 @@ import {
   upsertAccounts,
   upsertCategories,
 } from '../services/ledger/batch';
+import { getPerson, searchPeople, type PersonRow } from '../services/people';
+import { upsertPeople } from '../services/people/batch';
 
 export type ToolKind = 'read' | 'write';
 
@@ -40,9 +44,33 @@ function tool<S extends z.ZodType, T>(
   };
 }
 
+/** Bench profile only: payees (tax ids, IBANs, wallets) never leave through MCP (13.2). */
+function benchProfile(p: PersonRow) {
+  return {
+    id: p.id,
+    fullName: p.fullName,
+    displayName: p.displayName,
+    position: p.position,
+    seniority: p.seniority,
+    stack: p.stack,
+    domains: p.domains,
+    marketRateUsd: p.marketRateUsd,
+    allocation: p.allocation,
+    availabilityFrom: p.availabilityFrom,
+    location: p.location,
+    timezone: p.timezone,
+    contactOwner: p.contactOwner,
+    status: p.status,
+    load: p.load,
+    bench: p.bench,
+    notes: p.notes,
+  };
+}
+
 /**
- * Tools v1 for the Ledger (spec 13.3, narrowed and written directly per A-054). Deletions, payouts,
- * allocations and document actions are deliberately absent from MCP (13.3 «не виставляються»).
+ * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
+ * A-054, A-056). Deletions, payees, contracts, terms, payouts, allocations and document actions
+ * are deliberately absent from MCP (13.3 «не виставляються»).
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -108,6 +136,47 @@ export const TOOLS: readonly ToolDef[] = [
     service: listRates,
     present: (rows) =>
       rows.map(({ onDate, base, quote, rate, source }) => ({ onDate, base, quote, rate, source })),
+  }),
+  tool({
+    name: 'search_people',
+    title: 'Search people (bench)',
+    description:
+      'People with bench filters: q (name/position), stack (tags, all must match), seniority, maxRate (USD/hour, decimal string), availableOn (YYYY-MM-DD), allocation full_time|part_time, location, bench free|partial|busy (computed for today), status active|bench|inactive. Payees are never returned.',
+    kind: 'read',
+    service: searchPeople,
+    present: (rows) => rows.map(benchProfile),
+  }),
+  tool({
+    name: 'get_person',
+    title: 'Person profile',
+    description: 'One person by id: bench profile and current load, without payee details.',
+    kind: 'read',
+    service: getPerson,
+    present: benchProfile,
+  }),
+  tool({
+    name: 'list_clients',
+    title: 'Clients',
+    description:
+      'Clients with legal and short name, country, default currency and the number of contracts.',
+    kind: 'read',
+    service: listClients,
+  }),
+  tool({
+    name: 'upsert_person_profile',
+    title: 'Create or update people',
+    description:
+      'Bench profiles in bulk (max 200). Matched by id, else by fullName (case-insensitive); only the fields sent are changed, a missing person is created (fullName required). Renaming needs the id. Payees, contracts and pay terms are not editable here. All-or-nothing; errors keyed "people.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertPeople,
+  }),
+  tool({
+    name: 'upsert_clients',
+    title: 'Create or update clients',
+    description:
+      'Clients in bulk (max 100). Matched by id, else by legalName (case-insensitive); only the fields sent are changed, a missing client is created (legalName required). contacts is an array of {name, role?, email?, phone?} and replaces the stored list when sent. Contracts and billing terms are not editable here. All-or-nothing; errors keyed "clients.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertClients,
   }),
   tool({
     name: 'upsert_accounts',

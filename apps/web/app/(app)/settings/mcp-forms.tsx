@@ -14,7 +14,7 @@ import {
 
 const PROFILE_OPTIONS = [
   { value: 'read_only', label: 'Лише читання' },
-  { value: 'assistant', label: 'Асистент: читання й запис Ledger' },
+  { value: 'assistant', label: 'Асистент: читання й запис (Ledger, люди, клієнти)' },
 ] as const;
 
 function issuedToken(state: SettingsFormState): string | null {
