@@ -1,4 +1,4 @@
--- Custom SQL migration file, put your code below! --select public.setup_app_table('public.fx_rate');
+select public.setup_app_table('public.fx_rate');
 select public.setup_app_table('public.allocation');
 
 -- USD-pegged stablecoins settle USD amounts one to one (spec 5.4, Q15).
