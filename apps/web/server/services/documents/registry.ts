@@ -104,7 +104,7 @@ async function labelLinks(
     return {
       entityType: type,
       entityId: l.entityId,
-      label: known ?? 'Запис недоступний',
+      label: known ?? 'documents.recordUnavailable',
       href: known !== undefined ? (HREF[type]?.(l.entityId) ?? null) : null,
     };
   });
@@ -206,7 +206,7 @@ export const getDocument = defineService({
         supersededById: newer?.id ?? null,
       };
     });
-    return card ? ok(card) : err(serviceError('not_found', 'Документ не знайдено'));
+    return card ? ok(card) : err(serviceError('not_found', 'documents.notFound'));
   },
 });
 
@@ -214,7 +214,7 @@ export const updateDocument = defineService({
   name: 'documents.update',
   input: z.object({
     id: z.uuid(),
-    title: requiredText('Вкажіть назву'),
+    title: requiredText('field.name'),
     number: optionalText,
     docDate: optionalLocalDate,
     url: optionalHttpUrl,
@@ -225,7 +225,7 @@ export const updateDocument = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(document).set(input).where(eq(document.id, id)).returning({ id: document.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Документ не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'documents.notFound'));
   },
 });
 

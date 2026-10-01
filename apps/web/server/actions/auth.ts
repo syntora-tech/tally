@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { anonymousContext } from '../request-context';
@@ -30,7 +31,7 @@ export async function requestMagicLink(
   const checked = await checkSignInAllowed.run(anonymousContext(), {
     email: formData.get('email'),
   });
-  if (checked.isErr()) return { ok: false, error: checked.error };
+  if (checked.isErr()) return { ok: false, error: await localizeForUser(checked.error) };
 
   // Same response for unknown emails, so the form does not reveal who has access.
   if (checked.value.allowed) {
@@ -45,7 +46,7 @@ export async function requestMagicLink(
     if (error) {
       return {
         ok: false,
-        error: serviceError('internal_error', 'Не вдалося надіслати лист. Спробуйте пізніше'),
+        error: await localizeForUser(serviceError('internal_error', 'auth.sendFailed')),
       };
     }
   }

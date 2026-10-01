@@ -19,7 +19,7 @@ export const paymentCandidates = defineService({
   handler: async (ctx, { invoiceId }) =>
     inActorScope(ctx, async (tx) => {
       const [inv] = await tx.select().from(invoice).where(eq(invoice.id, invoiceId));
-      if (!inv) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!inv) return err(serviceError('not_found', 'invoices.notFound'));
       const rows = await tx
         .select({
           id: transaction.id,
@@ -56,18 +56,18 @@ export const allocateToInvoice = defineService({
   name: 'allocations.toInvoice',
   input: z.object({
     invoiceId: z.uuid(),
-    transactionId: z.uuid({ error: 'Оберіть транзакцію' }),
+    transactionId: z.uuid({ error: 'allocations.chooseTransaction' }),
     amount: decimalString,
     fxRate: z.preprocess((v) => (v === '' ? undefined : v), decimalString.optional()),
   }),
   handler: async (ctx, input) =>
     inActorScope(ctx, async (tx) => {
       const [inv] = await tx.select().from(invoice).where(eq(invoice.id, input.invoiceId));
-      if (!inv) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!inv) return err(serviceError('not_found', 'invoices.notFound'));
       if (!toDecimal(input.amount).gt(0)) {
         return err(
-          serviceError('validation_error', 'Сума має бути більша за 0', {
-            amount: ['Сума має бути більша за 0'],
+          serviceError('validation_error', 'field.positive', {
+            amount: ['field.positive'],
           }),
         );
       }
@@ -82,7 +82,7 @@ export const allocateToInvoice = defineService({
           fxSource: input.fxRate ? 'manual' : null,
         })
         .returning({ id: allocation.id });
-      return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+      return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
     }),
 });
 
@@ -93,7 +93,7 @@ export const removeAllocation = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.delete(allocation).where(eq(allocation.id, id)).returning({ id: allocation.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Розподіл не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'allocations.notFound'));
   },
 });
 

@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useActionState, useState } from 'react';
 import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -27,6 +28,8 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveClient, null);
   const [contacts, setContacts] = useState<Contact[]>(client?.contacts ?? []);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const t = useTranslations('clients.form');
+  const tc = useTranslations('common');
 
   const update = (i: number, patch: Partial<Contact>) => {
     setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
@@ -41,7 +44,7 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
           <AlertDescription>{state.error.message}</AlertDescription>
         </Alert>
       )}
-      <FormField label="Юридична назва" htmlFor="legalName" error={errors?.legalName}>
+      <FormField label={t('legalName')} htmlFor="legalName" error={errors?.legalName}>
         <Input
           id="legalName"
           name="legalName"
@@ -50,7 +53,7 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
           placeholder="Creditor Group Corp."
         />
       </FormField>
-      <FormField label="Коротка назва" htmlFor="shortName" error={errors?.shortName}>
+      <FormField label={t('shortName')} htmlFor="shortName" error={errors?.shortName}>
         <Input
           id="shortName"
           name="shortName"
@@ -58,11 +61,11 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
           placeholder="Boosty"
         />
       </FormField>
-      <FormField label="Країна" htmlFor="country" error={errors?.country}>
+      <FormField label={t('country')} htmlFor="country" error={errors?.country}>
         <Input id="country" name="country" defaultValue={client?.country ?? ''} />
       </FormField>
       <FormField
-        label="Валюта за замовчуванням"
+        label={t('defaultCurrency')}
         htmlFor="defaultCurrency"
         error={errors?.defaultCurrency}
       >
@@ -73,14 +76,14 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
         />
       </FormField>
       <FormField
-        label="Адреса та реєстраційні дані"
+        label={t('address')}
         htmlFor="address"
         className="md:col-span-2"
-        hint="Як у шапці інвойсу: адреса, File number, Represented by…"
+        hint={t('addressHint')}
       >
         <Textarea id="address" name="address" rows={4} defaultValue={client?.address ?? ''} />
       </FormField>
-      <FormField label="Банківські реквізити" htmlFor="bankDetails" className="md:col-span-2">
+      <FormField label={t('bankDetails')} htmlFor="bankDetails" className="md:col-span-2">
         <Textarea
           id="bankDetails"
           name="bankDetails"
@@ -90,20 +93,20 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
       </FormField>
 
       <fieldset className="flex flex-col gap-2 md:col-span-2">
-        <legend className="mb-1 text-sm font-medium">Контакти</legend>
+        <legend className="mb-1 text-sm font-medium">{t('contacts')}</legend>
         {contacts.map((c, i) => (
           <div key={i} className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
             <Input
-              aria-label="Ім’я"
-              placeholder="Ім’я"
+              aria-label={t('contactName')}
+              placeholder={t('contactName')}
               value={c.name}
               onChange={(e) => {
                 update(i, { name: e.target.value });
               }}
             />
             <Input
-              aria-label="Роль"
-              placeholder="Роль"
+              aria-label={t('contactRole')}
+              placeholder={t('contactRole')}
               value={c.role ?? ''}
               onChange={(e) => {
                 update(i, { role: e.target.value });
@@ -119,8 +122,8 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
               }}
             />
             <Input
-              aria-label="Телефон"
-              placeholder="Телефон"
+              aria-label={t('contactPhone')}
+              placeholder={t('contactPhone')}
               value={c.phone ?? ''}
               onChange={(e) => {
                 update(i, { phone: e.target.value });
@@ -130,7 +133,7 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Видалити контакт"
+              aria-label={t('removeContact')}
               onClick={() => {
                 setContacts((cs) => cs.filter((_, j) => j !== i));
               }}
@@ -139,11 +142,7 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
             </Button>
           </div>
         ))}
-        {errors?.contacts && (
-          <p className="text-sm text-destructive">
-            Перевірте контакти: ім’я обов’язкове, email — коректний
-          </p>
-        )}
+        {errors?.contacts && <p className="text-sm text-destructive">{t('contactsError')}</p>}
         <Button
           type="button"
           variant="outline"
@@ -153,19 +152,19 @@ export function ClientForm({ client }: { client?: ClientFormValues }) {
             setContacts((cs) => [...cs, { name: '' }]);
           }}
         >
-          <Plus className="size-4" /> Додати контакт
+          <Plus className="size-4" /> {t('addContact')}
         </Button>
       </fieldset>
 
       <div className="flex gap-2 md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Зберігаємо…' : 'Зберегти'}
+          {pending ? tc('saving') : tc('save')}
         </Button>
         <Button
           variant="ghost"
           render={<Link href={client?.id ? `/clients/${client.id}` : '/clients'} />}
         >
-          Скасувати
+          {tc('cancel')}
         </Button>
       </div>
     </form>

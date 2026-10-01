@@ -1,6 +1,7 @@
 'use client';
 
 import { Copy } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form-field';
@@ -12,10 +13,8 @@ import {
   type SettingsFormState,
 } from '@/server/actions/settings';
 
-const PROFILE_OPTIONS = [
-  { value: 'read_only', label: 'Лише читання' },
-  { value: 'assistant', label: 'Асистент: читання й запис (Ledger, люди, клієнти)' },
-] as const;
+const PROFILES = ['read_only', 'assistant'] as const;
+const PROFILE_KEYS = { read_only: 'readOnly', assistant: 'assistant' } as const;
 
 function issuedToken(state: SettingsFormState): string | null {
   if (!state?.ok) return null;
@@ -28,6 +27,7 @@ export function CreateMcpClientForm({ mcpUrl }: { mcpUrl: string }) {
   const [state, action, pending] = useActionState(createMcpClientAction, null);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   const token = issuedToken(state);
+  const t = useTranslations('mcpForms');
   useEffect(() => {
     if (state && !state.ok && !state.error.fieldErrors) toast.error(state.error.message);
   }, [state]);
@@ -38,7 +38,7 @@ export function CreateMcpClientForm({ mcpUrl }: { mcpUrl: string }) {
   return (
     <div className="flex flex-col gap-3">
       <form action={action} className="flex flex-wrap items-end gap-3">
-        <FormField label="Назва агента" htmlFor="mcp-name" error={errors?.clientName}>
+        <FormField label={t('name')} htmlFor="mcp-name" error={errors?.clientName}>
           <Input
             id="mcp-name"
             name="clientName"
@@ -47,31 +47,29 @@ export function CreateMcpClientForm({ mcpUrl }: { mcpUrl: string }) {
             className="w-72"
           />
         </FormField>
-        <FormField label="Доступ" htmlFor="mcp-profile" error={errors?.profile}>
+        <FormField label={t('access')} htmlFor="mcp-profile" error={errors?.profile}>
           <select
             id="mcp-profile"
             name="profile"
             defaultValue="read_only"
             className="h-9 rounded-md border border-input bg-transparent px-2.5 text-sm"
           >
-            {PROFILE_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
+            {PROFILES.map((p) => (
+              <option key={p} value={p}>
+                {t(PROFILE_KEYS[p])}
               </option>
             ))}
           </select>
         </FormField>
         <Button type="submit" disabled={pending}>
-          Створити токен
+          {t('create')}
         </Button>
       </form>
       {token && (
         <div className="flex flex-col gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-          <p className="font-medium">
-            Скопіюйте токен зараз — більше його не буде видно. Зберігайте як пароль.
-          </p>
+          <p className="font-medium">{t('copyNow')}</p>
           <code className="break-all rounded bg-muted px-2 py-1">{token}</code>
-          <p className="text-muted-foreground">Підключення в Claude Code:</p>
+          <p className="text-muted-foreground">{t('connect')}</p>
           <code className="break-all rounded bg-muted px-2 py-1">{command}</code>
           <div>
             <Button
@@ -80,11 +78,11 @@ export function CreateMcpClientForm({ mcpUrl }: { mcpUrl: string }) {
               size="sm"
               onClick={() => {
                 void navigator.clipboard.writeText(command).then(() => {
-                  toast.success('Команду скопійовано');
+                  toast.success(t('copied'));
                 });
               }}
             >
-              <Copy className="size-4" /> Скопіювати команду
+              <Copy className="size-4" /> {t('copy')}
             </Button>
           </div>
         </div>
@@ -95,15 +93,16 @@ export function CreateMcpClientForm({ mcpUrl }: { mcpUrl: string }) {
 
 export function RevokeMcpClientButton({ clientId }: { clientId: string }) {
   const [state, action, pending] = useActionState(revokeMcpClientAction, null);
+  const t = useTranslations('mcpForms');
   useEffect(() => {
-    if (state?.ok) toast.success('Доступ відкликано');
+    if (state?.ok) toast.success(t('revoked'));
     else if (state) toast.error(state.error.message);
-  }, [state]);
+  }, [state, t]);
   return (
     <form action={action}>
       <input type="hidden" name="clientId" value={clientId} />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        Відкликати
+        {t('revoke')}
       </Button>
     </form>
   );

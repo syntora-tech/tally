@@ -1,12 +1,12 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPayee } from '@/server/services/payees';
 import { PayeeForm } from '../../payee-form';
 import { peopleOptions } from '../../people-options';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Редагування одержувача · Tally' };
+export const generateMetadata = pageTitle('editPayee');
 
 export default async function EditPayeePage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireRole(FINANCE_ROLES);

@@ -104,7 +104,7 @@ describe('document registry (spec 6.9)', () => {
   it('viewer sees the document but labels of finance-only entities are hidden', async () => {
     const card = (await getDocument.run(h.ctxFor(viewer), { id: docIds[1] ?? '' }))._unsafeUnwrap();
     const contractChip = card.links.find((l) => l.entityType === 'contract');
-    expect(contractChip).toMatchObject({ label: 'Запис недоступний', href: null });
+    expect(contractChip).toMatchObject({ label: 'documents.recordUnavailable', href: null });
     const link = await linkDocument.run(h.ctxFor(viewer), {
       documentId: docIds[1],
       entityType: 'person',

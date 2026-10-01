@@ -28,9 +28,9 @@ test('AC 13.6: the owner issues an MCP token, the agent calls /api/mcp, revoke �
 }) => {
   await signIn(page, E2E_OWNER_EMAIL);
   await page.goto('/settings');
-  await page.getByLabel('Назва агента').fill(agent);
-  await page.getByLabel('Доступ').selectOption('assistant');
-  await page.getByRole('button', { name: 'Створити токен' }).click();
+  await page.getByLabel('Agent name').fill(agent);
+  await page.getByLabel('Access').selectOption('assistant');
+  await page.getByRole('button', { name: 'Create token' }).click();
   const token = (await page.locator('code', { hasText: /^tally_pat_/ }).textContent()) ?? '';
   expect(token).toMatch(/^tally_pat_/);
 
@@ -50,7 +50,7 @@ test('AC 13.6: the owner issues an MCP token, the agent calls /api/mcp, revoke �
 
   await page.reload();
   const row = page.getByRole('listitem').filter({ hasText: agent });
-  await row.getByRole('button', { name: 'Відкликати' }).click();
-  await expect(row.getByText('відкликано')).toBeVisible();
+  await row.getByRole('button', { name: 'Revoke' }).click();
+  await expect(row.getByText('revoked')).toBeVisible();
   expect((await call()).status()).toBe(403);
 });

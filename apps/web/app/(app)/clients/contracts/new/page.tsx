@@ -1,12 +1,13 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getClient } from '@/server/services/clients';
 import { getPayee } from '@/server/services/payees';
 import { ContractForm } from '../contract-form';
+import { getTranslations } from 'next-intl/server';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Новий договір · Tally' };
+export const generateMetadata = pageTitle('newContract');
 
 export default async function NewContractPage({
   searchParams,
@@ -14,6 +15,7 @@ export default async function NewContractPage({
   searchParams: Promise<{ clientId?: string; payeeId?: string }>;
 }) {
   const ctx = await requireRole(FINANCE_ROLES);
+  const t = await getTranslations('contracts');
   const { clientId, payeeId } = await searchParams;
 
   let counterpartyName: string;
@@ -34,7 +36,7 @@ export default async function NewContractPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Новий договір</h1>
+      <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
       <ContractForm
         counterpartyName={counterpartyName}
         contract={{

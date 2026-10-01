@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { parseCsv } from '@/lib/csv-parse';
@@ -27,7 +28,7 @@ export async function openPeriodAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const result = await openPeriod.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/periods/${result.value.id}`);
 }
 
@@ -37,7 +38,7 @@ export async function updatePeriodAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const result = await updatePeriod.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${result.value.id}`);
   return { ok: true, data: result.value };
 }
@@ -63,16 +64,16 @@ export async function saveHoursAction(
   if ([...notes].some(([id, note]) => note.trim() !== '' && !withHours.has(id))) {
     return {
       ok: false,
-      error: serviceError(
-        'validation_error',
-        'Примітка без годин не зберігається — вкажіть години',
-      ),
+      error: await localizeForUser(serviceError('validation_error', 'periods.noteWithoutHours')),
     };
   }
   if (rows.length === 0)
-    return { ok: false, error: serviceError('validation_error', 'Немає годин для збереження') };
+    return {
+      ok: false,
+      error: await localizeForUser(serviceError('validation_error', 'periods.noHours')),
+    };
   const result = await importHours.run(ctx, { periodId, rows });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${periodId}`);
   return { ok: true, data: { id: periodId } };
 }
@@ -85,7 +86,10 @@ export async function uploadHoursCsvAction(
   const periodId = field(formData.get('periodId'));
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: serviceError('validation_error', 'Оберіть CSV-файл') };
+    return {
+      ok: false,
+      error: await localizeForUser(serviceError('validation_error', 'periods.chooseCsv')),
+    };
   }
   const rows = parseCsv(await file.text())
     .filter((r) => (r.hours ?? '') !== '')
@@ -95,7 +99,7 @@ export async function uploadHoursCsvAction(
       note: r.note,
     }));
   const result = await importHours.run(ctx, { periodId, rows });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${periodId}`);
   return { ok: true, data: { id: periodId } };
 }
@@ -106,7 +110,7 @@ export async function closePeriodAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const result = await closePeriod.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${result.value.id}`);
   return { ok: true, data: result.value };
 }
@@ -117,7 +121,7 @@ export async function reopenPeriodAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const result = await reopenPeriod.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${result.value.id}`);
   return { ok: true, data: result.value };
 }
@@ -132,7 +136,7 @@ export async function addAdjustmentAction(
     ...input,
     amount: typeof input.amount === 'string' ? input.amount.replace(',', '.') : input.amount,
   });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${field(formData.get('periodId'))}`);
   return { ok: true, data: result.value };
 }
@@ -143,7 +147,7 @@ export async function removeAdjustmentAction(
 ): Promise<PeriodFormState> {
   const ctx = await requireUserContext();
   const result = await removeAdjustment.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${field(formData.get('periodId'))}`);
   return { ok: true, data: result.value };
 }

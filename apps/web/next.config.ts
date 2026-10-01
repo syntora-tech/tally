@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@tally/domain', '@tally/db'],
@@ -7,4 +8,4 @@ const nextConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: '4.5mb' } },
 };
 
-export default nextConfig;
+export default createNextIntlPlugin('./i18n/request.ts')(nextConfig);

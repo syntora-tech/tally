@@ -6,7 +6,7 @@ import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScopeAtomic } from '../atomic';
 import { defineService } from '../define-service';
-import { mapDbError, serviceError } from '../errors';
+import { mapDbError, serviceError, msg } from '../errors';
 import {
   currencyCode,
   decimalString,
@@ -27,15 +27,11 @@ type ItemErrors = Record<string, string[]>;
 
 function batchFailure(errors: ItemErrors) {
   const count = Object.keys(errors).length;
-  return serviceError(
-    'validation_error',
-    `Пакет не записано: помилки в ${String(count)} елементах`,
-    errors,
-  );
+  return serviceError('validation_error', msg('batch.failedItems', { count }), errors);
 }
 
 export const accountItem = z.object({
-  name: requiredText('Вкажіть назву').describe('Unique account name, e.g. "Privat USD"'),
+  name: requiredText('field.name').describe('Unique account name, e.g. "Privat USD"'),
   kind: z.enum(['bank', 'crypto', 'cash']),
   currency: currencyCode.describe('ISO code or stablecoin: USD, EUR, UAH, USDT, USDC'),
   network: optionalText.describe('Blockchain network for crypto wallets, e.g. ETH, TRON'),
@@ -53,7 +49,7 @@ export const upsertAccounts = defineService({
       const names = input.accounts.map((a) => a.name);
       const errors: ItemErrors = {};
       const duplicate = names.find((n, i) => names.indexOf(n) !== i);
-      if (duplicate) errors.accounts = [`Назва «${duplicate}» повторюється в пакеті`];
+      if (duplicate) errors.accounts = [msg('batch.duplicateName', { name: duplicate })];
       const existing = await tx.select().from(account).where(inArray(account.name, names));
       const results: { name: string; id: string; status: 'created' | 'updated' | 'unchanged' }[] =
         [];
@@ -61,7 +57,7 @@ export const upsertAccounts = defineService({
         const current = existing.find((a) => a.name === item.name);
         if (!current) {
           const [row] = await tx.insert(account).values(item).returning({ id: account.id });
-          if (!row) return err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+          if (!row) return err(serviceError('forbidden', 'general.forbidden'));
           results.push({ name: item.name, id: row.id, status: 'created' });
           continue;
         }
@@ -83,7 +79,7 @@ export const upsertAccounts = defineService({
             .where(eq(posting.accountId, current.id))
             .limit(1);
           if (used) {
-            errors[`accounts.${String(index)}`] = ['Валюту рахунку з проводками змінити не можна'];
+            errors[`accounts.${String(index)}`] = ['ledger.currencyLocked'];
             continue;
           }
         }
@@ -96,7 +92,7 @@ export const upsertAccounts = defineService({
 
 export const categoryItem = z.object({
   txType: z.enum(TX_TYPES).describe('Transaction type the category belongs to'),
-  name: requiredText('Вкажіть назву').describe('Category name, unique within its type'),
+  name: requiredText('field.name').describe('Category name, unique within its type'),
 });
 
 /** Categories are insert-only by (type, name); existing ones are reported as such. */
@@ -120,7 +116,7 @@ export const upsertCategories = defineService({
           .select({ id: category.id })
           .from(category)
           .where(sql`${category.txType} = ${item.txType} and ${category.name} = ${item.name}`);
-        if (!current) return err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+        if (!current) return err(serviceError('forbidden', 'general.forbidden'));
         results.push({ ...item, id: current.id, status: 'existing' });
       }
       return ok({ categories: results });
@@ -142,9 +138,9 @@ export const setFxRates = defineService({
     inActorScopeAtomic(ctx, input, async (tx) => {
       const errors: ItemErrors = {};
       for (const [index, item] of input.rates.entries()) {
-        if (!toDecimal(item.rate).gt(0)) errors[`rates.${String(index)}`] = ['Курс має бути > 0'];
+        if (!toDecimal(item.rate).gt(0)) errors[`rates.${String(index)}`] = ['fx.ratePositive'];
         if (item.base === item.quote) {
-          errors[`rates.${String(index)}`] = ['Базова й котирувальна валюти однакові'];
+          errors[`rates.${String(index)}`] = ['fx.samePair'];
         }
       }
       if (Object.keys(errors).length) return err(batchFailure(errors));
@@ -211,7 +207,7 @@ export const addTransactions = defineService({
       const refs = input.transactions.map((t) => t.externalRef);
       refs.forEach((r, i) => {
         if (refs.indexOf(r) !== i)
-          errors[`transactions.${String(i)}`] = [`externalRef «${r}» повторюється в пакеті`];
+          errors[`transactions.${String(i)}`] = [msg('batch.duplicateRef', { ref: r })];
       });
       const known = await existingRefs(tx, refs);
       const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
@@ -240,7 +236,7 @@ export const addTransactions = defineService({
         const leg = (l: z.output<typeof legRef> | undefined, name: string) => {
           if (!l) return undefined;
           const id = accountId(l.account);
-          if (!id) problems.push(`${name}: рахунок «${l.account}» не знайдено`);
+          if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
           return { accountId: id ?? '', amount: l.amount };
         };
         const categoryId = categories.find((c) =>
@@ -249,7 +245,9 @@ export const addTransactions = defineService({
             : c.txType === item.type && c.name === item.category,
         )?.id;
         if (!categoryId)
-          problems.push(`категорію «${item.category}» типу ${item.type} не знайдено`);
+          problems.push(
+            msg('batch.categoryNotFound', { category: item.category, type: item.type }),
+          );
         const resolved = {
           type: item.type,
           occurredOn: item.occurredOn,

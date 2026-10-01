@@ -34,7 +34,7 @@ import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { serviceError, msg } from '../errors';
 import {
   currencyCode,
   decimalString,
@@ -162,9 +162,7 @@ export const openPeriod = defineService({
         .returning({ id: period.id });
       return row;
     });
-    return created
-      ? ok(created)
-      : err(serviceError('internal_error', 'Не вдалося відкрити період'));
+    return created ? ok(created) : err(serviceError('internal_error', 'periods.openFailed'));
   },
 });
 
@@ -183,7 +181,7 @@ export const updatePeriod = defineService({
         .where(and(eq(period.id, periodId), eq(period.status, 'open')))
         .returning({ id: period.id }),
     );
-    return row ? ok(row) : err(serviceError('conflict', 'Період закрито або не знайдено'));
+    return row ? ok(row) : err(serviceError('conflict', 'periods.closedOrMissing'));
   },
 });
 
@@ -233,14 +231,11 @@ export const getPeriodOverview = defineService({
         invoices,
       };
     });
-    return data ? ok(data) : err(serviceError('not_found', 'Період не знайдено'));
+    return data ? ok(data) : err(serviceError('not_found', 'periods.notFound'));
   },
 });
 
-const hoursValue = nonNegativeDecimal.refine(
-  (v) => toDecimal(v).lte(744),
-  'Не більше 744 годин на місяць',
-);
+const hoursValue = nonNegativeDecimal.refine((v) => toDecimal(v).lte(744), 'periods.maxHours');
 
 export const hoursEntry = z.object({
   assignmentId: z.uuid(),
@@ -306,8 +301,8 @@ export const closePeriod = defineService({
   handler: async (ctx, { periodId }) => {
     const result = await inActorScope(ctx, async (tx) => {
       const [p] = await tx.select().from(period).where(eq(period.id, periodId)).for('update');
-      if (!p) return err(serviceError('not_found', 'Період не знайдено'));
-      if (p.status === 'closed') return err(serviceError('conflict', 'Період уже закрито'));
+      if (!p) return err(serviceError('not_found', 'periods.notFound'));
+      if (p.status === 'closed') return err(serviceError('conflict', 'periods.alreadyClosed'));
       const { month, assignments, timesheetIds } = await loadPeriodData(tx, p);
       const cal = await loadCalendar(tx);
 
@@ -346,7 +341,12 @@ export const closePeriod = defineService({
           return err(
             serviceError(
               'conflict',
-              `Валюта ставки ${foreign.a.personName} (${foreign.currency}) не збігається з валютою договору ${c.number} (${c.currency})`,
+              msg('periods.rateCurrency', {
+                person: foreign.a.personName,
+                rateCurrency: foreign.currency,
+                contract: c.number,
+                contractCurrency: c.currency,
+              }),
             ),
           );
         }
@@ -402,7 +402,7 @@ export const closePeriod = defineService({
 /** Owner-only, with a reason recorded in audit_log (I6, A-041). */
 export const reopenPeriod = defineService({
   name: 'periods.reopen',
-  input: z.object({ periodId: z.uuid(), reason: requiredText('Вкажіть причину') }),
+  input: z.object({ periodId: z.uuid(), reason: requiredText('field.reason') }),
   handler: async (ctx, { periodId, reason }) => {
     const [row] = await inActorScope(ctx, async (tx) => {
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
@@ -414,7 +414,7 @@ export const reopenPeriod = defineService({
       if (rows.length) await dropPayroll(tx, periodId);
       return rows;
     });
-    return row ? ok(row) : err(serviceError('conflict', 'Період не закритий або не знайдений'));
+    return row ? ok(row) : err(serviceError('conflict', 'periods.notClosed'));
   },
 });
 
@@ -423,15 +423,15 @@ export const addAdjustment = defineService({
   name: 'periods.addAdjustment',
   input: z.object({
     periodId: z.uuid(),
-    personId: z.uuid({ error: 'Оберіть людину' }),
+    personId: z.uuid({ error: 'field.person' }),
     payoutMethod: z.enum(['fiat', 'crypto']).default('fiat'),
     kind: z.enum(['bonus', 'deduction', 'trip_reimbursement', 'correction', 'other']),
-    amount: decimalString.refine((v) => !toDecimal(v).isZero(), 'Сума не може бути нульовою'),
+    amount: decimalString.refine((v) => !toDecimal(v).isZero(), 'field.nonZero'),
     currency: currencyCode.refine(
       (c) => ['USD', 'USDT', 'USDC', 'UAH'].includes(c),
-      'Валюта: USD або UAH',
+      'periods.adjustmentCurrency',
     ),
-    reason: requiredText('Вкажіть причину'),
+    reason: requiredText('field.reason'),
   }),
   handler: async (ctx, input) => {
     const amount =
@@ -442,7 +442,7 @@ export const addAdjustment = defineService({
         .values({ ...input, amount })
         .returning({ id: adjustment.id }),
     );
-    return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+    return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
   },
 });
 
@@ -453,6 +453,6 @@ export const removeAdjustment = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.delete(adjustment).where(eq(adjustment.id, id)).returning({ id: adjustment.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Коригування не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'periods.adjustmentNotFound'));
   },
 });

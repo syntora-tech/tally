@@ -4,7 +4,7 @@ import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScopeAtomic } from '../atomic';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { serviceError, msg } from '../errors';
 import { definedOnly } from '../patch';
 import { PERSON_STATUSES, personProfileInput } from './schema';
 
@@ -45,13 +45,13 @@ export const upsertPeople = defineService({
                 .where(sql`lower(${person.fullName}) = lower(${patch.fullName})`)
             : [];
         if (matches.length > 1) {
-          errors[key] = [`Кілька людей з ім'ям «${patch.fullName ?? ''}» — передайте id`];
+          errors[key] = [msg('people.ambiguousName', { name: patch.fullName ?? '' })];
           continue;
         }
         const current = matches[0];
         if (!current) {
           if (id) {
-            errors[key] = ['Людину з таким id не знайдено'];
+            errors[key] = ['people.idNotFound'];
             continue;
           }
           const full = personProfileInput.safeParse(patch);
@@ -60,7 +60,7 @@ export const upsertPeople = defineService({
             continue;
           }
           const [row] = await tx.insert(person).values(full.data).returning({ id: person.id });
-          if (!row) return err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+          if (!row) return err(serviceError('forbidden', 'general.forbidden'));
           results.push({ index, id: row.id, fullName: full.data.fullName, status: 'created' });
           continue;
         }
@@ -78,7 +78,7 @@ export const upsertPeople = defineService({
         });
       }
       if (Object.keys(errors).length) {
-        return err(serviceError('validation_error', 'Пакет не записано: є помилки', errors));
+        return err(serviceError('validation_error', 'batch.failed', errors));
       }
       return ok({ people: results });
     }),

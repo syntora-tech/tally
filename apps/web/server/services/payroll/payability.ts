@@ -87,10 +87,10 @@ export async function refreshPayability(db: Db, today: LocalDate) {
 /** Owner releases a waiting line early at the company's expense, with a reason (5.3). */
 export const overridePayable = defineService({
   name: 'payroll.overridePayable',
-  input: z.object({ lineId: z.uuid(), reason: requiredText('Вкажіть причину') }),
+  input: z.object({ lineId: z.uuid(), reason: requiredText('field.reason') }),
   handler: async (ctx, { lineId, reason }) => {
     if (ctx.actor.kind !== 'user' || ctx.actor.role !== 'owner') {
-      return err(serviceError('forbidden', 'Розблокувати виплату достроково може лише власник'));
+      return err(serviceError('forbidden', 'payroll.overrideOwnerOnly'));
     }
     const row = await inActorScope(ctx, async (tx) => {
       const [line] = await tx
@@ -111,6 +111,6 @@ export const overridePayable = defineService({
       if (line) await tx.execute(sql`select public.refresh_payroll_item(${line.itemId})`);
       return line;
     });
-    return row ? ok(row) : err(serviceError('conflict', 'Рядок уже доступний до виплати'));
+    return row ? ok(row) : err(serviceError('conflict', 'payroll.alreadyPayable'));
   },
 });

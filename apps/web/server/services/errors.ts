@@ -1,5 +1,7 @@
 /**
- * Machine-readable `code` for adapters (UI, MCP `isError`), user-facing `message` in Ukrainian.
+ * Machine-readable `code` for adapters (UI, MCP `isError`). `message` and `fieldErrors` hold message
+ * keys of the `errors` namespace (see `msg`), localized by the adapter: UI language for actions,
+ * English for MCP (A-058). Text that is not a known key is shown as is.
  */
 export type ServiceError = {
   code: ServiceErrorCode;
@@ -15,6 +17,10 @@ export type ServiceErrorCode =
   | 'conflict'
   | 'closed_period'
   | 'internal_error';
+
+/** A message key with values, e.g. `msg('ledger.duplicateRef', { ref })` → `ledger.duplicateRef|{"ref":"…"}`. */
+export const msg = (key: string, values?: Record<string, string | number>): string =>
+  values ? `${key}|${JSON.stringify(values)}` : key;
 
 export const serviceError = (
   code: ServiceErrorCode,
@@ -48,89 +54,74 @@ export function mapDbError(error: unknown): ServiceError | null {
     case 'TL010':
       return serviceError(
         'closed_period',
-        `Не можна змінювати умови заднім числом у закритому періоді. Нова версія може починатися не раніше ${pg.hint ? formatHint(pg.hint) : 'першого відкритого місяця'}.`,
+        pg.hint ? msg('db.termsClosedFrom', { date: formatHint(pg.hint) }) : 'db.termsClosed',
       );
     case 'TL001':
     case 'TL002':
-      return serviceError(
-        'conflict',
-        'Випущений документ не можна змінити — лише анулювати й перевипустити',
-      );
+      return serviceError('conflict', 'db.immutable');
     case 'TL003':
-      return serviceError('validation_error', 'Для випуску потрібен знімок документа');
+      return serviceError('validation_error', 'db.snapshotRequired');
     case 'TL004':
-      return serviceError(
-        'validation_error',
-        `Дата ${pg.detail ?? ''} — неробочий день. Оберіть робочий день або (власник) вкажіть причину`,
-      );
+      return serviceError('validation_error', msg('db.nonWorkingDay', { date: pg.detail ?? '' }));
     case 'TL005':
-      return serviceError('conflict', 'Інвойс щойно змінили — оновіть сторінку й спробуйте ще раз');
+      return serviceError('conflict', 'db.invoiceChanged');
     case 'TL006':
-      return serviceError('validation_error', 'Вкажіть причину зміни випущеного інвойсу');
+      return serviceError('validation_error', 'db.revisionReason');
     case 'TL040':
       return serviceError(
         'validation_error',
-        `Валюта проводки не збігається з валютою рахунку (${pg.detail ?? ''})`,
+        msg('db.postingCurrency', { detail: pg.detail ?? '' }),
       );
     case 'TL041':
-      return serviceError(
-        'validation_error',
-        'Неправильна форма транзакції: перевірте суми, знаки й комісію для цього типу',
-      );
+      return serviceError('validation_error', 'db.transactionShape');
     case 'TL050':
-      return serviceError('validation_error', 'У транзакції немає основної проводки');
+      return serviceError('validation_error', 'db.noMainPosting');
     case 'TL051':
       return serviceError(
         'validation_error',
-        `Валюти не збігаються (${pg.detail ?? ''}) — вкажіть курс або оберіть іншу транзакцію`,
+        msg('db.allocationCurrency', { detail: pg.detail ?? '' }),
       );
     case 'TL052':
-      return serviceError('conflict', 'Цю транзакцію не можна розподілити на обраний документ');
+      return serviceError('conflict', 'db.allocationTarget');
     case 'TL053':
-      return serviceError(
-        'validation_error',
-        `Сума більша за залишок інвойсу (${pg.detail ?? ''})`,
-      );
+      return serviceError('validation_error', msg('db.overInvoice', { detail: pg.detail ?? '' }));
     case 'TL054':
       return serviceError(
         'validation_error',
-        `Сума більша за нерозподілений залишок транзакції (${pg.detail ?? ''})`,
+        msg('db.overTransaction', { detail: pg.detail ?? '' }),
       );
     case 'TL055':
-      return serviceError('conflict', 'Оплата інвойсу змінюється лише через розподіл транзакцій');
+      return serviceError('conflict', 'db.paidDerived');
     case 'TL032':
-      return serviceError('conflict', 'У періоді вже є виплати — відкрити його знову не можна');
+      return serviceError('conflict', 'db.periodHasPayouts');
     case 'TL056':
-      return serviceError('validation_error', 'Спершу вкажіть курс виплати');
+      return serviceError('validation_error', 'payroll.rateFirst');
     case 'TL060':
-      return serviceError(
-        'validation_error',
-        'Акт має бути за договором ФОП з тим самим одержувачем',
-      );
+      return serviceError('validation_error', 'db.actContract');
     case 'TL020':
-      return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
+      return serviceError('validation_error', 'db.sequenceDown');
     case 'TL021':
-      return serviceError('not_found', 'Для договору не налаштовано послідовність номерів');
+      return serviceError('not_found', 'db.noSequence');
     case 'TL022':
-      return serviceError('validation_error', 'Дата документа раніша за рік послідовності номерів');
+      return serviceError('validation_error', 'db.sequenceYear');
     case 'TL030':
-      return serviceError('closed_period', 'Період закрито — години змінювати не можна');
+      return serviceError('closed_period', 'db.periodClosed');
     case 'TL031':
-      return serviceError('validation_error', 'Вкажіть причину відкриття періоду');
+      return serviceError('validation_error', 'db.reopenReason');
     case '23505':
       return pg.constraint_name?.endsWith('_version_key')
-        ? serviceError('conflict', 'Версія умов з цієї дати вже існує')
-        : serviceError('conflict', 'Такий запис уже існує');
+        ? serviceError('conflict', 'db.versionExists')
+        : serviceError('conflict', 'db.duplicate');
     case '23503':
-      return serviceError('conflict', 'Запис пов’язаний з іншими даними');
+      return serviceError('conflict', 'db.referenced');
     case '23514':
     case '23502':
     case '22P02':
     case '22007':
     case '22008':
-      return serviceError('validation_error', 'Дані не пройшли перевірку');
+      return serviceError('validation_error', 'db.invalid');
     case '42501':
-      return serviceError('forbidden', 'Недостатньо прав для цієї дії');
+      return serviceError('forbidden', 'general.forbidden');
     default:
       return null;
   }
@@ -139,4 +130,36 @@ export function mapDbError(error: unknown): ServiceError | null {
 function formatHint(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
   return y && m && d ? `${d}.${m}.${y}` : isoDate;
+}
+
+export type Translate = (key: string, values?: Record<string, string | number>) => string | null;
+
+const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/;
+
+/** Message key (with optional `|{values}`) → text; anything that is not a known key stays as is. */
+export function localizeMessage(text: string, translate: Translate): string {
+  const sep = text.indexOf('|');
+  const key = sep < 0 ? text : text.slice(0, sep);
+  if (!MESSAGE_KEY.test(key)) return text;
+  let values: Record<string, string | number> | undefined;
+  if (sep >= 0) {
+    try {
+      values = JSON.parse(text.slice(sep + 1)) as Record<string, string | number>;
+    } catch {
+      return text;
+    }
+  }
+  return translate(key, values) ?? text;
+}
+
+export function localizeError(error: ServiceError, translate: Translate): ServiceError {
+  const message = localizeMessage(error.message, translate);
+  if (!error.fieldErrors) return { ...error, message };
+  const fieldErrors = Object.fromEntries(
+    Object.entries(error.fieldErrors).map(([field, messages]) => [
+      field,
+      messages.map((m) => localizeMessage(m, translate)),
+    ]),
+  );
+  return { ...error, message, fieldErrors };
 }

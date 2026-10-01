@@ -1,5 +1,4 @@
-import { formatAmount, formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS } from '@/lib/labels';
-import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { suggestRate } from '@/server/services/fx';
@@ -21,21 +18,12 @@ import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
 import { OverrideForm, PayDialog } from './payroll-forms';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Виплати · Tally' };
+export const generateMetadata = pageTitle('payroll');
 
-const LINE_STATUS: Record<string, string> = {
-  accrued: 'нараховано',
-  awaiting_client: 'чекає клієнта',
-  payable: 'можна виплатити',
-  paid: 'виплачено',
-};
-
-const GROUPS: { key: PayrollGroup; title: string }[] = [
-  { key: 'ready', title: 'Можна виплатити зараз' },
-  { key: 'waiting', title: 'Чекає оплати клієнта' },
-  { key: 'paid', title: 'Виплачено' },
-];
+const GROUPS: PayrollGroup[] = ['ready', 'waiting', 'paid'];
+const LINE_STATUSES = ['accrued', 'awaiting_client', 'payable', 'paid'] as const;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -50,10 +38,20 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     suggestRate.run(ctx, { onDate: ctx.today }),
   ]);
   const items = rows.unwrapOr([]);
+  const [t, tc, fmt, { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS }] = await Promise.all([
+    getTranslations('payroll'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
+  const lineStatus = (s: string) =>
+    (LINE_STATUSES as readonly string[]).includes(s)
+      ? t(`lineStatus.${s as (typeof LINE_STATUSES)[number]}`)
+      : s;
   const accountRows = accounts.unwrapOr([]).map(({ account: a, balance }) => ({
     id: a.id,
     currency: a.currency,
-    label: `${a.name} · ${formatAmount(balance, a.currency)}`,
+    label: `${a.name} · ${fmt.amount(balance, a.currency)}`,
   }));
   const isOwner = ctx.actor.role === 'owner';
 
@@ -61,22 +59,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Виплати</h1>
-          <p className="text-muted-foreground">
-            Pay-when-paid: рядок стає доступним після повної оплати клієнтом або в дедлайн за
-            рахунок компанії
-          </p>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <nav className="flex flex-wrap gap-2" aria-label="Період">
+        <nav className="flex flex-wrap gap-2" aria-label={t('period')}>
           <Button size="sm" variant="secondary" render={<Link href="/payroll/acts" />}>
-            Реєстр актів
+            {t('actsRegistry')}
           </Button>
           <Button
             size="sm"
             variant={periodId ? 'outline' : 'default'}
             render={<Link href="/payroll" />}
           >
-            Усі
+            {t('all')}
           </Button>
           {periods
             .unwrapOr([])
@@ -89,25 +84,22 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                 variant={p.id === periodId ? 'default' : 'outline'}
                 render={<Link href={`/payroll?period=${p.id}`} />}
               >
-                {monthTitle(p.month)}
+                {fmt.month(p.month)}
               </Button>
             ))}
         </nav>
       </div>
 
-      {items.length === 0 && (
-        <p className="text-muted-foreground">
-          Виплат ще немає — вони створюються при закритті періоду
-        </p>
-      )}
+      {items.length === 0 && <p className="text-muted-foreground">{t('empty')}</p>}
 
       {GROUPS.map((g) => {
-        const group = items.filter((i) => i.group === g.key);
+        const group = items.filter((i) => i.group === g);
         if (group.length === 0) return null;
+        const title = t(`groups.${g}`);
         return (
-          <section key={g.key} className="flex flex-col gap-3" aria-label={g.title}>
+          <section key={g} className="flex flex-col gap-3" aria-label={title}>
             <h2 className="text-lg font-semibold">
-              {g.title} ({group.length})
+              {title} ({group.length})
             </h2>
             {group.map((i) => {
               const fiat = i.item.payoutMethod === 'fiat';
@@ -116,21 +108,18 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                   <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
                     <div>
                       <CardTitle className="text-base">
-                        {i.personName} · {monthTitle(i.month)}
+                        {i.personName} · {fmt.month(i.month)}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {fiat ? 'fiat' : 'crypto'} · {i.payeeName ?? 'одержувача не вказано'}
-                        {i.nextDeadline &&
-                          ` · дедлайн ${formatUaDate(i.nextDeadline as LocalDate)}`}
+                        {fiat ? 'fiat' : 'crypto'} · {i.payeeName ?? t('noPayee')}
+                        {i.nextDeadline && t('deadline', { date: fmt.date(i.nextDeadline) })}
                       </p>
                     </div>
                     <div className="text-right text-sm">
-                      <div className="font-medium">{formatAmount(i.item.totalUsd, 'USD')}</div>
+                      <div className="font-medium">{fmt.amount(i.item.totalUsd, 'USD')}</div>
                       {fiat && (
                         <div>
-                          {i.item.totalUah
-                            ? formatAmount(i.item.totalUah, 'UAH')
-                            : 'курс не задано'}
+                          {i.item.totalUah ? fmt.amount(i.item.totalUah, 'UAH') : t('noRate')}
                           {i.item.fxSource && (
                             <Badge variant="outline" className="ml-2">
                               {i.item.payoutFxRate} · {FX_SOURCE_LABELS[i.item.fxSource]}
@@ -140,7 +129,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                       )}
                       {i.remaining !== null && i.group !== 'paid' && (
                         <div className="text-muted-foreground">
-                          залишок {formatAmount(i.remaining, i.currency)}
+                          {t('remaining', { amount: fmt.amount(i.remaining, i.currency) })}
                         </div>
                       )}
                     </div>
@@ -149,44 +138,42 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Робота</TableHead>
-                          <TableHead>USD</TableHead>
-                          <TableHead>Статус</TableHead>
-                          <TableHead>Фінансування</TableHead>
+                          <TableHead>{t('col.work')}</TableHead>
+                          <TableHead>{t('col.usd')}</TableHead>
+                          <TableHead>{t('col.status')}</TableHead>
+                          <TableHead>{t('col.funding')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {i.lines.map((l) => (
                           <TableRow key={l.id}>
                             <TableCell>
-                              {l.clientName ?? 'внутрішнє'}
+                              {l.clientName ?? tc('internal')}
                               {l.invoiceNumber && (
                                 <span className="text-muted-foreground">
-                                  {' '}
-                                  · інвойс {l.invoiceNumber}
+                                  {t('invoice', { number: l.invoiceNumber })}
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell>{formatAmount(l.amountUsd)}</TableCell>
+                            <TableCell>{fmt.amount(l.amountUsd)}</TableCell>
                             <TableCell>
-                              {LINE_STATUS[l.status]}
+                              {lineStatus(l.status)}
                               {l.status === 'awaiting_client' && l.deadline && (
                                 <span className="text-muted-foreground">
-                                  {' '}
-                                  до {formatUaDate(l.deadline)}
+                                  {t('until', { date: fmt.date(l.deadline) })}
                                 </span>
                               )}
                               {l.overrideReason && (
                                 <div className="text-xs text-muted-foreground">
-                                  розблоковано: {l.overrideReason}
+                                  {t('released', { reason: l.overrideReason })}
                                 </div>
                               )}
                             </TableCell>
                             <TableCell>
                               {l.fundingSource === 'client'
-                                ? 'клієнт'
+                                ? t('fundingClient')
                                 : l.fundingSource === 'company'
-                                  ? 'компанія'
+                                  ? t('fundingCompany')
                                   : '—'}
                               {isOwner && l.status === 'awaiting_client' && (
                                 <OverrideForm lineId={l.id} />
@@ -200,7 +187,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                       <ul className="text-sm">
                         {i.adjustments.map((a) => (
                           <li key={a.id}>
-                            {ADJUSTMENT_KIND_LABELS[a.kind]}: {formatAmount(a.amount, a.currency)} —{' '}
+                            {ADJUSTMENT_KIND_LABELS[a.kind]}: {fmt.amount(a.amount, a.currency)} —{' '}
                             {a.reason}
                           </li>
                         ))}

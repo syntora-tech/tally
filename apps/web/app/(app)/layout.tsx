@@ -1,19 +1,23 @@
 import { AppSidebar } from '@/components/app-sidebar';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { ALL_ROLES, navItemsFor, ROLE_LABELS } from '@/lib/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { ALL_ROLES, navItemsFor } from '@/lib/navigation';
 import { signOut } from '@/server/actions/auth';
 import { requireRole } from '@/server/request-context';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { actor } = await requireRole(ALL_ROLES);
+  const t = await getTranslations('roles');
+  const locale = await getLocale();
 
   return (
     <SidebarProvider>
       <AppSidebar
         items={navItemsFor(actor.role)}
         email={actor.email}
-        roleLabel={ROLE_LABELS[actor.role]}
+        roleLabel={t(actor.role)}
+        locale={locale}
         signOutAction={signOut}
       />
       <SidebarInset>

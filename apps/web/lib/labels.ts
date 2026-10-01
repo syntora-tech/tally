@@ -1,145 +1,44 @@
-import type { DocumentType } from '@tally/db/schema';
+import { useTranslations } from 'next-intl';
 
-export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  contract: 'Договір',
-  sow: 'SOW',
-  annex: 'Додаток',
-  invoice: 'Інвойс',
-  act: 'Акт',
-  cv: 'CV',
-  nda: 'NDA',
-  statement: 'Виписка',
-  other: 'Інше',
-};
+type Option = { value: string; label: string };
+// Any translator scoped to `enums` (client hook or server `getTranslations`).
+type EnumTranslator = { raw: (key: never) => unknown };
 
-export const DOC_STATUS_LABELS: Record<string, string> = {
-  draft: 'Чернетка',
-  issued: 'Діючий',
-  void: 'Анульований',
-};
-
-export const AUDIT_ACTION_LABELS: Record<string, string> = {
-  INSERT: 'Створено',
-  UPDATE: 'Змінено',
-  DELETE: 'Видалено',
-};
-
-export const ALLOCATION_LABELS: Record<string, string> = {
-  full_time: 'Повна зайнятість',
-  part_time: 'Часткова зайнятість',
-};
-
-export const PERSON_STATUS_LABELS: Record<string, string> = {
-  active: 'Активний',
-  bench: 'На бенчі',
-  inactive: 'Неактивний',
-};
-
-export const BENCH_LABELS: Record<string, string> = {
-  free: 'Вільний',
-  partial: 'Частково',
-  busy: 'Зайнятий',
-};
-
-export const toOptions = (labels: Record<string, string>) =>
+export const toOptions = (labels: Record<string, string>): Option[] =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
 
-export const PAYEE_KIND_LABELS: Record<string, string> = {
-  fop: 'ФОП',
-  crypto: 'Крипто-гаманець',
-  other: 'Інше',
-};
+/** Enum labels of the current language, keyed by the stored value (messages `enums.*`). */
+export function labelsFrom(t: EnumTranslator) {
+  const map = (key: string) => t.raw(key as never) as Record<string, string>;
+  return {
+    DOCUMENT_TYPE_LABELS: map('documentType'),
+    DOC_STATUS_LABELS: map('docStatus'),
+    AUDIT_ACTION_LABELS: map('auditAction'),
+    ALLOCATION_LABELS: map('allocation'),
+    PERSON_STATUS_LABELS: map('personStatus'),
+    BENCH_LABELS: map('bench'),
+    PAYEE_KIND_LABELS: map('payeeKind'),
+    CONTRACT_STATUS_LABELS: map('contractStatus'),
+    CONTRACT_KIND_LABELS: map('contractKind'),
+    PAYMENT_DUE_TYPES: toOptions(map('paymentDueType')),
+    INVOICE_DATE_TYPES: toOptions(map('invoiceDateType')),
+    ACT_DATE_TYPES: toOptions(map('actDateType')),
+    BILLING_TYPE_LABELS: map('billingType'),
+    PRORATION_LABELS: map('proration'),
+    PAY_TYPE_LABELS: map('payType'),
+    PAYOUT_METHOD_LABELS: map('payoutMethod'),
+    RELEASE_POLICY_LABELS: map('releasePolicy'),
+    INVOICE_STATUS_LABELS: map('invoiceStatus'),
+    TX_TYPE_LABELS: map('txType'),
+    ACCOUNT_KIND_LABELS: map('accountKind'),
+    FX_SOURCE_LABELS: map('fxSource'),
+    ADJUSTMENT_KIND_LABELS: map('adjustmentKind'),
+  };
+}
 
-export const CONTRACT_STATUS_LABELS: Record<string, string> = {
-  active: 'Діючий',
-  ended: 'Завершений',
-};
+export type Labels = ReturnType<typeof labelsFrom>;
 
-export const CONTRACT_KIND_LABELS: Record<string, string> = {
-  client: 'Договір з клієнтом',
-  fop: 'Договір з ФОП',
-};
-
-export const PAYMENT_DUE_TYPES = [
-  { value: 'day_of_month', label: 'До числа місяця' },
-  { value: 'net_days', label: 'Через N днів після інвойсу' },
-];
-
-export const INVOICE_DATE_TYPES = [
-  { value: 'first_working_day_after_period', label: 'Перший робочий день після періоду' },
-  { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
-];
-
-export const BILLING_TYPE_LABELS: Record<string, string> = {
-  hourly: 'Погодинно',
-  fixed_monthly: 'Фіксовано за місяць',
-  none: 'Не виставляється',
-};
-
-export const PRORATION_LABELS: Record<string, string> = {
-  full_month: 'Повна сума незалежно від годин',
-  by_hours: 'Пропорційно годинам (ставка / норма × години)',
-  trunc_hourly: 'Ціла погодинна ставка (floor(ставка / норма) × години)',
-};
-
-export const PAY_TYPE_LABELS: Record<string, string> = {
-  fixed: 'Фіксована сума',
-  hourly: 'Погодинно від місячної суми',
-  included: 'Включено (0)',
-};
-
-export const PAYOUT_METHOD_LABELS: Record<string, string> = {
-  fiat: 'Фіат',
-  crypto: 'Крипто',
-};
-
-export const RELEASE_POLICY_LABELS: Record<string, string> = {
-  on_payment_or_due: 'Після оплати клієнтом або в дедлайн',
-  immediate: 'Одразу',
-};
-
-export const ACT_DATE_TYPES = [
-  { value: 'last_working_day_of_period', label: 'Останній робочий день періоду' },
-  { value: 'nth_working_day_after_period', label: 'N-й робочий день після періоду' },
-  { value: 'manual', label: 'Лише вручну' },
-];
-
-export const INVOICE_STATUS_LABELS: Record<string, string> = {
-  draft: 'Чернетка',
-  issued: 'Випущено',
-  partially_paid: 'Частково оплачено',
-  paid: 'Оплачено',
-  void: 'Анульовано',
-  written_off: 'Списано',
-};
-
-export const TX_TYPE_LABELS: Record<string, string> = {
-  revenue: 'Дохід',
-  expense: 'Витрата',
-  transfer: 'Переказ',
-  fx_exchange: 'Обмін валюти',
-  crypto_buy: 'Купівля крипти',
-  crypto_sell: 'Продаж крипти',
-  crypto_swap: 'Обмін крипти',
-  adjustment: 'Коригування',
-};
-
-export const ACCOUNT_KIND_LABELS: Record<string, string> = {
-  bank: 'Банк',
-  crypto: 'Крипто',
-  cash: 'Готівка',
-};
-
-export const FX_SOURCE_LABELS: Record<string, string> = {
-  bank_actual: 'фактичний обмін',
-  nbu: 'НБУ',
-  manual: 'вручну',
-};
-
-export const ADJUSTMENT_KIND_LABELS: Record<string, string> = {
-  bonus: 'Бонус',
-  deduction: 'Утримання',
-  trip_reimbursement: 'Компенсація поїздки',
-  correction: 'Коригування',
-  other: 'Інше',
-};
+/** For client and non-async server components; async ones use `getLabels()`. */
+export function useLabels(): Labels {
+  return labelsFrom(useTranslations('enums'));
+}

@@ -1,12 +1,13 @@
 'use client';
 
 import { Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ACCOUNT_KIND_LABELS, TX_TYPE_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import {
   deleteTransactionAction,
   saveAccountAction,
@@ -25,16 +26,24 @@ function useFeedback(state: LedgerFormState, success: string) {
 
 export function DeleteTransactionButton({ id }: { id: string }) {
   const [state, action, pending] = useActionState(deleteTransactionAction, null);
-  useFeedback(state, 'Транзакцію видалено');
+  const t = useTranslations('ledgerForms');
+  const tc = useTranslations('common');
+  useFeedback(state, t('txDeleted'));
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (!confirm('Видалити транзакцію з усіма проводками?')) e.preventDefault();
+        if (!confirm(t('confirmDelete'))) e.preventDefault();
       }}
     >
       <input type="hidden" name="id" value={id} />
-      <Button type="submit" size="icon" variant="ghost" disabled={pending} aria-label="Видалити">
+      <Button
+        type="submit"
+        size="icon"
+        variant="ghost"
+        disabled={pending}
+        aria-label={tc('delete')}
+      >
         <Trash2 className="size-4" />
       </Button>
     </form>
@@ -54,15 +63,23 @@ export type AccountValues = {
 
 export function AccountForm({ value, today }: { value?: AccountValues; today: string }) {
   const [state, action, pending] = useActionState(saveAccountAction, null);
-  const errors = useFeedback(state, value ? 'Рахунок збережено' : 'Рахунок додано');
+  const t = useTranslations('ledgerForms');
+  const tc = useTranslations('common');
+  const { ACCOUNT_KIND_LABELS } = useLabels();
+  const errors = useFeedback(state, value ? t('accountSaved') : t('accountAdded'));
   const p = value ? `acc-${value.id}` : 'acc-new';
   return (
     <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-8">
       {value && <input type="hidden" name="id" value={value.id} />}
-      <FormField label="Назва" htmlFor={`${p}-name`} error={errors?.name} className="col-span-2">
+      <FormField
+        label={t('name')}
+        htmlFor={`${p}-name`}
+        error={errors?.name}
+        className="col-span-2"
+      >
         <Input id={`${p}-name`} name="name" defaultValue={value?.name} required />
       </FormField>
-      <FormField label="Тип" htmlFor={`${p}-kind`}>
+      <FormField label={t('kind')} htmlFor={`${p}-kind`}>
         <NativeSelect
           id={`${p}-kind`}
           name="kind"
@@ -70,7 +87,7 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           options={toOptions(ACCOUNT_KIND_LABELS)}
         />
       </FormField>
-      <FormField label="Валюта" htmlFor={`${p}-currency`} error={errors?.currency}>
+      <FormField label={t('currency')} htmlFor={`${p}-currency`} error={errors?.currency}>
         <Input
           id={`${p}-currency`}
           name="currency"
@@ -78,7 +95,7 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           required
         />
       </FormField>
-      <FormField label="Мережа" htmlFor={`${p}-network`}>
+      <FormField label={t('network')} htmlFor={`${p}-network`}>
         <Input
           id={`${p}-network`}
           name="network"
@@ -86,7 +103,7 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           placeholder="ETH, TRON"
         />
       </FormField>
-      <FormField label="Залишок на старті" htmlFor={`${p}-opening`} error={errors?.openingBalance}>
+      <FormField label={t('opening')} htmlFor={`${p}-opening`} error={errors?.openingBalance}>
         <Input
           id={`${p}-opening`}
           name="openingBalance"
@@ -94,7 +111,7 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           defaultValue={value?.openingBalance ?? '0'}
         />
       </FormField>
-      <FormField label="Дата старту" htmlFor={`${p}-date`} error={errors?.openingDate}>
+      <FormField label={t('openingDate')} htmlFor={`${p}-date`} error={errors?.openingDate}>
         <Input
           id={`${p}-date`}
           name="openingDate"
@@ -105,10 +122,10 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
       <div className="flex h-9 items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="isActive" defaultChecked={value?.isActive ?? true} />{' '}
-          Активний
+          {t('active')}
         </label>
         <Button type="submit" variant={value ? 'outline' : 'default'} disabled={pending}>
-          {value ? 'Зберегти' : 'Додати'}
+          {value ? tc('save') : tc('add')}
         </Button>
       </div>
     </form>
@@ -117,10 +134,13 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
 
 export function CategoryForm() {
   const [state, action, pending] = useActionState(saveCategoryAction, null);
-  const errors = useFeedback(state, 'Категорію додано');
+  const t = useTranslations('ledgerForms');
+  const tc = useTranslations('common');
+  const { TX_TYPE_LABELS } = useLabels();
+  const errors = useFeedback(state, t('categoryAdded'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
-      <FormField label="Тип" htmlFor="cat-type">
+      <FormField label={t('kind')} htmlFor="cat-type">
         <NativeSelect
           id="cat-type"
           name="txType"
@@ -128,11 +148,11 @@ export function CategoryForm() {
           options={toOptions(TX_TYPE_LABELS)}
         />
       </FormField>
-      <FormField label="Назва" htmlFor="cat-name" error={errors?.name}>
+      <FormField label={t('name')} htmlFor="cat-name" error={errors?.name}>
         <Input id="cat-name" name="name" required className="w-64" />
       </FormField>
       <Button type="submit" disabled={pending}>
-        Додати
+        {tc('add')}
       </Button>
     </form>
   );
@@ -140,20 +160,21 @@ export function CategoryForm() {
 
 export function ManualRateForm({ today }: { today: string }) {
   const [state, action, pending] = useActionState(saveManualRateAction, null);
-  const errors = useFeedback(state, 'Курс збережено');
+  const t = useTranslations('ledgerForms');
+  const errors = useFeedback(state, t('rateSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
-      <FormField label="Дата" htmlFor="rate-date" error={errors?.onDate}>
+      <FormField label={t('date')} htmlFor="rate-date" error={errors?.onDate}>
         <Input id="rate-date" name="onDate" type="date" defaultValue={today} />
       </FormField>
-      <FormField label="Валюта" htmlFor="rate-base" error={errors?.base}>
+      <FormField label={t('currency')} htmlFor="rate-base" error={errors?.base}>
         <Input id="rate-base" name="base" defaultValue="USD" className="w-24" />
       </FormField>
-      <FormField label="Курс, UAH за 1" htmlFor="rate-value" error={errors?.rate}>
+      <FormField label={t('rateUah')} htmlFor="rate-value" error={errors?.rate}>
         <Input id="rate-value" name="rate" inputMode="decimal" className="w-32" required />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Зберегти ручний курс
+        {t('saveManualRate')}
       </Button>
     </form>
   );

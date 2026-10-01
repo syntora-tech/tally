@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 export type LinkTargets = Record<
@@ -7,12 +8,7 @@ export type LinkTargets = Record<
   { id: string; label: string }[]
 >;
 
-const GROUP_LABELS: Record<keyof LinkTargets, string> = {
-  person: 'Люди',
-  client: 'Клієнти',
-  payee: 'Одержувачі',
-  contract: 'Договори',
-};
+const GROUPS: (keyof LinkTargets)[] = ['person', 'client', 'payee', 'contract'];
 
 /** Grouped native select; option value is `entityType:entityId`. */
 export function LinkTargetSelect({
@@ -20,6 +16,7 @@ export function LinkTargetSelect({
   className,
   ...props
 }: React.ComponentProps<'select'> & { targets: LinkTargets }) {
+  const t = useTranslations('documents');
   return (
     <select
       className={cn(
@@ -28,13 +25,13 @@ export function LinkTargetSelect({
       )}
       {...props}
     >
-      <option value="">Оберіть сутність…</option>
-      {(Object.keys(GROUP_LABELS) as (keyof LinkTargets)[]).map((type) =>
+      <option value="">{t('chooseEntity')}</option>
+      {GROUPS.map((type) =>
         targets[type].length ? (
-          <optgroup key={type} label={GROUP_LABELS[type]}>
-            {targets[type].map((t) => (
-              <option key={t.id} value={`${type}:${t.id}`}>
-                {t.label}
+          <optgroup key={type} label={t(`groups.${type}`)}>
+            {targets[type].map((target) => (
+              <option key={target.id} value={`${type}:${target.id}`}>
+                {target.label}
               </option>
             ))}
           </optgroup>

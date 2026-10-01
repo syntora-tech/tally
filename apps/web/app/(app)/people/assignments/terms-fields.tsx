@@ -1,16 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Input } from '@/components/ui/input';
-import {
-  BILLING_TYPE_LABELS,
-  PAY_TYPE_LABELS,
-  PAYOUT_METHOD_LABELS,
-  PRORATION_LABELS,
-  RELEASE_POLICY_LABELS,
-  toOptions,
-} from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 
 type Errors = Record<string, string[]> | undefined;
 
@@ -34,7 +28,7 @@ export type PayDefaults = {
 /** "60.00000000" → "60" for editing. */
 export const editable = (v: string) => (v.includes('.') ? v.replace(/\.?0+$/, '') : v);
 
-/** «Клієнту» block. `prefix` is `billing.` in the create form and empty in the version form. */
+/** Client terms block. `prefix` is `billing.` in the create form and empty in the version form. */
 export function BillingFields({
   prefix,
   defaults,
@@ -45,10 +39,12 @@ export function BillingFields({
   errors: Errors;
 }) {
   const [type, setType] = useState(defaults.type);
+  const t = useTranslations('terms');
+  const labels = useLabels();
   const id = (f: string) => `${prefix.replace('.', '-')}${f}`;
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <FormField label="Тип" htmlFor={id('type')} error={errors?.[`${prefix}type`]}>
+      <FormField label={t('type')} htmlFor={id('type')} error={errors?.[`${prefix}type`]}>
         <NativeSelect
           id={id('type')}
           name={`${prefix}type`}
@@ -56,13 +52,13 @@ export function BillingFields({
           onChange={(e) => {
             setType(e.target.value);
           }}
-          options={toOptions(BILLING_TYPE_LABELS)}
+          options={toOptions(labels.BILLING_TYPE_LABELS)}
         />
       </FormField>
       {type !== 'none' && (
         <>
           <FormField
-            label={type === 'hourly' ? 'Ставка за годину' : 'Сума за місяць'}
+            label={type === 'hourly' ? t('hourlyRate') : t('monthlyAmount')}
             htmlFor={id('rate')}
             error={errors?.[`${prefix}rate`]}
           >
@@ -74,24 +70,24 @@ export function BillingFields({
               defaultValue={editable(defaults.rate)}
             />
           </FormField>
-          <FormField label="Валюта" htmlFor={id('currency')}>
+          <FormField label={t('currency')} htmlFor={id('currency')}>
             <Input
               id={id('currency')}
               name={`${prefix}currency`}
               defaultValue={defaults.currency}
             />
           </FormField>
-          <FormField label="Канал інвойсу" htmlFor={id('invoiceChannel')}>
+          <FormField label={t('invoiceChannel')} htmlFor={id('invoiceChannel')}>
             <NativeSelect
               id={id('invoiceChannel')}
               name={`${prefix}invoiceChannel`}
               defaultValue={defaults.invoiceChannel}
-              options={toOptions(PAYOUT_METHOD_LABELS)}
+              options={toOptions(labels.PAYOUT_METHOD_LABELS)}
             />
           </FormField>
           {type === 'fixed_monthly' && (
             <FormField
-              label="Якщо відпрацьовано не весь місяць"
+              label={t('proration')}
               htmlFor={id('prorationPolicy')}
               className="md:col-span-2"
             >
@@ -99,7 +95,7 @@ export function BillingFields({
                 id={id('prorationPolicy')}
                 name={`${prefix}prorationPolicy`}
                 defaultValue={defaults.prorationPolicy}
-                options={toOptions(PRORATION_LABELS)}
+                options={toOptions(labels.PRORATION_LABELS)}
               />
             </FormField>
           )}
@@ -109,7 +105,7 @@ export function BillingFields({
   );
 }
 
-/** «Людині» block. */
+/** Person terms block. */
 export function PayFields({
   prefix,
   defaults,
@@ -120,10 +116,12 @@ export function PayFields({
   errors: Errors;
 }) {
   const [type, setType] = useState(defaults.type);
+  const t = useTranslations('terms');
+  const labels = useLabels();
   const id = (f: string) => `${prefix.replace('.', '-')}${f}`;
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <FormField label="Тип" htmlFor={id('type')} error={errors?.[`${prefix}type`]}>
+      <FormField label={t('type')} htmlFor={id('type')} error={errors?.[`${prefix}type`]}>
         <NativeSelect
           id={id('type')}
           name={`${prefix}type`}
@@ -131,19 +129,15 @@ export function PayFields({
           onChange={(e) => {
             setType(e.target.value);
           }}
-          options={toOptions(PAY_TYPE_LABELS)}
+          options={toOptions(labels.PAY_TYPE_LABELS)}
         />
       </FormField>
       {type !== 'included' && (
         <>
           <FormField
-            label="Сума за місяць"
+            label={t('monthlyAmount')}
             htmlFor={id('amount')}
-            hint={
-              type === 'fixed'
-                ? 'Вже з урахуванням FTE (2300 × 0.5 = 1150)'
-                : 'Для погодинної: сума / норма × години'
-            }
+            hint={type === 'fixed' ? t('fixedHint') : t('hourlyHint')}
             error={errors?.[`${prefix}amount`]}
           >
             <Input
@@ -154,7 +148,7 @@ export function PayFields({
               defaultValue={editable(defaults.amount)}
             />
           </FormField>
-          <FormField label="Валюта" htmlFor={id('currency')}>
+          <FormField label={t('currency')} htmlFor={id('currency')}>
             <Input
               id={id('currency')}
               name={`${prefix}currency`}
@@ -163,23 +157,23 @@ export function PayFields({
           </FormField>
         </>
       )}
-      <FormField label="Спосіб виплати" htmlFor={id('payoutMethod')}>
+      <FormField label={t('payoutMethod')} htmlFor={id('payoutMethod')}>
         <NativeSelect
           id={id('payoutMethod')}
           name={`${prefix}payoutMethod`}
           defaultValue={defaults.payoutMethod}
-          options={toOptions(PAYOUT_METHOD_LABELS)}
+          options={toOptions(labels.PAYOUT_METHOD_LABELS)}
         />
       </FormField>
-      <FormField label="Коли можна виплатити" htmlFor={id('releasePolicy')}>
+      <FormField label={t('releasePolicy')} htmlFor={id('releasePolicy')}>
         <NativeSelect
           id={id('releasePolicy')}
           name={`${prefix}releasePolicy`}
           defaultValue={defaults.releasePolicy}
-          options={toOptions(RELEASE_POLICY_LABELS)}
+          options={toOptions(labels.RELEASE_POLICY_LABELS)}
         />
       </FormField>
-      <FormField label="Додаткові робочі дні після дедлайну" htmlFor={id('graceDays')}>
+      <FormField label={t('graceDays')} htmlFor={id('graceDays')}>
         <Input
           id={id('graceDays')}
           name={`${prefix}graceDays`}

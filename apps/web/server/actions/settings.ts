@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
@@ -17,7 +18,7 @@ async function run<T>(
 ): Promise<SettingsFormState> {
   const ctx = await requireUserContext();
   const result = await service.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/settings');
   return { ok: true, data: result.value };
 }

@@ -1,11 +1,11 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getClient } from '@/server/services/clients';
 import { ClientForm } from '../../client-form';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Редагування клієнта · Tally' };
+export const generateMetadata = pageTitle('editClient');
 
 type Contact = { name: string; role?: string; email?: string; phone?: string };
 

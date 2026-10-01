@@ -1,13 +1,14 @@
 'use client';
 
 import { derivedRate, parseDecimal } from '@tally/domain';
+import { useTranslations } from 'next-intl';
 import { useActionState, useState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { TX_TYPE_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import { createTransactionAction, type LedgerFormState } from '@/server/actions/ledger';
 
 type AccountOption = { id: string; name: string; currency: string };
@@ -25,6 +26,9 @@ export function TransactionForm(props: {
     null,
   );
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const t = useTranslations('txForm');
+  const tc = useTranslations('common');
+  const { TX_TYPE_LABELS } = useLabels();
   const [type, setType] = useState('expense');
   const [legs, setLegs] = useState({ from: '', to: '', fromAmount: '', toAmount: '' });
   const [adjustSign, setAdjustSign] = useState<'to' | 'from'>('to');
@@ -54,7 +58,7 @@ export function TransactionForm(props: {
         <NativeSelect
           id={`${key}-account`}
           name={`${key}.accountId`}
-          placeholder="Оберіть рахунок"
+          placeholder={t('chooseAccount')}
           options={accountOptions}
           value={legs[key]}
           onChange={(e) => {
@@ -63,7 +67,9 @@ export function TransactionForm(props: {
         />
       </FormField>
       <FormField
-        label={`Сума${currencyOf(legs[key]) ? `, ${currencyOf(legs[key])}` : ''}`}
+        label={
+          currencyOf(legs[key]) ? t('amountIn', { currency: currencyOf(legs[key]) }) : t('amount')
+        }
         htmlFor={`${key}-amount`}
       >
         <Input
@@ -88,7 +94,7 @@ export function TransactionForm(props: {
         </Alert>
       )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <FormField label="Тип" htmlFor="type">
+        <FormField label={t('type')} htmlFor="type">
           <NativeSelect
             id="type"
             name="type"
@@ -99,7 +105,7 @@ export function TransactionForm(props: {
             }}
           />
         </FormField>
-        <FormField label="Дата" htmlFor="occurredOn" error={errors?.occurredOn}>
+        <FormField label={t('date')} htmlFor="occurredOn" error={errors?.occurredOn}>
           <Input
             id="occurredOn"
             name="occurredOn"
@@ -108,12 +114,12 @@ export function TransactionForm(props: {
             required
           />
         </FormField>
-        <FormField label="Категорія" htmlFor="categoryId" error={errors?.categoryId}>
+        <FormField label={t('category')} htmlFor="categoryId" error={errors?.categoryId}>
           <NativeSelect
             id="categoryId"
             name="categoryId"
             key={type}
-            placeholder="Оберіть категорію"
+            placeholder={t('chooseCategory')}
             options={props.categories
               .filter((c) => c.txType === type)
               .map((c) => ({ value: c.id, label: c.name }))}
@@ -127,13 +133,13 @@ export function TransactionForm(props: {
       </div>
 
       {type === 'adjustment' && (
-        <FormField label="Напрям" htmlFor="adjust-sign">
+        <FormField label={t('direction')} htmlFor="adjust-sign">
           <NativeSelect
             id="adjust-sign"
             value={adjustSign}
             options={[
-              { value: 'to', label: 'Збільшити залишок' },
-              { value: 'from', label: 'Зменшити залишок' },
+              { value: 'to', label: t('increase') },
+              { value: 'from', label: t('decrease') },
             ]}
             onChange={(e) => {
               setAdjustSign(e.target.value === 'from' ? 'from' : 'to');
@@ -141,48 +147,48 @@ export function TransactionForm(props: {
           />
         </FormField>
       )}
-      {showFrom && leg('from', twoLeg ? 'Списати з рахунку' : 'Рахунок')}
-      {showTo && leg('to', twoLeg ? 'Зарахувати на рахунок' : 'Рахунок')}
+      {showFrom && leg('from', twoLeg ? t('fromAccount') : t('account'))}
+      {showTo && leg('to', twoLeg ? t('toAccount') : t('account'))}
       {rate && (
         <p className="text-sm text-muted-foreground">
-          Курс з двох сум: 1 {currencyOf(legs.from)} = {rate} {currencyOf(legs.to)}
+          {t('derivedRate', { from: currencyOf(legs.from), rate, to: currencyOf(legs.to) })}
         </p>
       )}
 
       <details className="rounded-md border p-3">
-        <summary className="cursor-pointer text-sm">Комісія (необов’язково)</summary>
+        <summary className="cursor-pointer text-sm">{t('fee')}</summary>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <FormField label="Рахунок комісії" htmlFor="fee-account" error={errors?.fee}>
+          <FormField label={t('feeAccount')} htmlFor="fee-account" error={errors?.fee}>
             <NativeSelect
               id="fee-account"
               name="fee.accountId"
-              placeholder="Без комісії"
+              placeholder={t('noFee')}
               options={accountOptions}
             />
           </FormField>
-          <FormField label="Сума комісії" htmlFor="fee-amount">
+          <FormField label={t('feeAmount')} htmlFor="fee-amount">
             <Input id="fee-amount" name="fee.amount" inputMode="decimal" />
           </FormField>
         </div>
       </details>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <FormField label="Контрагент" htmlFor="counterparty">
+        <FormField label={t('counterparty')} htmlFor="counterparty">
           <Input id="counterparty" name="counterparty" />
         </FormField>
         <FormField
-          label={type.startsWith('crypto') ? 'Хеш транзакції' : 'Референс банку / хеш'}
+          label={type.startsWith('crypto') ? t('txHash') : t('bankRef')}
           htmlFor="externalRef"
         >
           <Input id="externalRef" name="externalRef" />
         </FormField>
       </div>
-      <FormField label="Опис" htmlFor="description">
+      <FormField label={t('description')} htmlFor="description">
         <Textarea id="description" name="description" rows={2} />
       </FormField>
       <div>
         <Button type="submit" disabled={pending}>
-          {pending ? 'Зберігаємо…' : 'Зберегти транзакцію'}
+          {pending ? tc('saving') : t('submit')}
         </Button>
       </div>
     </form>

@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
@@ -25,7 +26,7 @@ export async function createActAction(
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = await createAct.run(ctx, { ...input, amountUah: decimalField(input.amountUah) });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/payroll/acts/${result.value.id}`);
 }
 
@@ -39,7 +40,9 @@ export async function saveActDraftAction(
     ...input,
     amountUah: decimalField(input.amountUah),
   });
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  return result.isErr()
+    ? { ok: false, error: await localizeForUser(result.error) }
+    : done(result.value.id);
 }
 
 export async function issueActAction(
@@ -48,7 +51,7 @@ export async function issueActAction(
 ): Promise<ActFormState> {
   const ctx = await requireUserContext();
   const result = await issueAct.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   runJobsAfterResponse();
   return done(result.value.id);
 }
@@ -59,7 +62,9 @@ export async function voidActAction(
 ): Promise<ActFormState> {
   const ctx = await requireUserContext();
   const result = await voidAct.run(ctx, formDataToObject(formData));
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  return result.isErr()
+    ? { ok: false, error: await localizeForUser(result.error) }
+    : done(result.value.id);
 }
 
 export async function setSignedUrlAction(
@@ -68,5 +73,7 @@ export async function setSignedUrlAction(
 ): Promise<ActFormState> {
   const ctx = await requireUserContext();
   const result = await setSignedUrl.run(ctx, formDataToObject(formData));
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  return result.isErr()
+    ? { ok: false, error: await localizeForUser(result.error) }
+    : done(result.value.id);
 }

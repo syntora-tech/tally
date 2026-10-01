@@ -19,7 +19,7 @@ const optionalIban = z
       emptyToNull,
       z
         .string()
-        .regex(/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/, 'Невірний формат IBAN')
+        .regex(/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/, 'payees.iban')
         .nullable()
         .optional(),
     ),
@@ -32,7 +32,7 @@ const optionalDigits = z
     z
       .string()
       .trim()
-      .regex(/^\d{8,12}$/, 'Лише цифри (ІПН / ЄДРПОУ)')
+      .regex(/^\d{8,12}$/, 'payees.taxId')
       .nullable()
       .optional(),
   )
@@ -44,7 +44,7 @@ const optionalUuid = z
 
 export const payeeInput = z
   .object({
-    kind: z.enum(PAYEE_KINDS, { error: 'Оберіть тип одержувача' }),
+    kind: z.enum(PAYEE_KINDS, { error: 'payees.kind' }),
     legalNameUa: optionalText,
     legalNameEn: optionalText,
     taxId: optionalDigits,
@@ -58,11 +58,11 @@ export const payeeInput = z
     personId: optionalUuid,
   })
   .refine((p) => p.legalNameUa ?? p.legalNameEn, {
-    message: 'Вкажіть назву українською або англійською',
+    message: 'payees.name',
     path: ['legalNameUa'],
   })
   .refine((p) => p.kind !== 'crypto' || p.walletAddress, {
-    message: 'Для крипто-одержувача потрібна адреса гаманця',
+    message: 'payees.wallet',
     path: ['walletAddress'],
   });
 
@@ -102,7 +102,7 @@ export const getPayee = defineService({
         .leftJoin(person, eq(person.id, payee.personId))
         .where(eq(payee.id, id)),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Одержувача не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'payees.notFound'));
   },
 });
 
@@ -113,7 +113,7 @@ export const createPayee = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.insert(payee).values(input).returning({ id: payee.id }),
     );
-    return row ? ok(row) : err(serviceError('internal_error', 'Не вдалося створити запис'));
+    return row ? ok(row) : err(serviceError('internal_error', 'general.createFailed'));
   },
 });
 
@@ -124,7 +124,7 @@ export const updatePayee = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(payee).set(input).where(eq(payee.id, id)).returning({ id: payee.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Одержувача не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'payees.notFound'));
   },
 });
 
@@ -140,6 +140,6 @@ export const setDefaultPayee = defineService({
         .where(eq(person.id, personId))
         .returning({ id: person.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Людину не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'people.notFound'));
   },
 });

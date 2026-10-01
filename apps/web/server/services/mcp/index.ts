@@ -8,7 +8,7 @@ import { serviceError } from '../errors';
 import { requiredText } from '../fields';
 import { generateToken } from './token';
 
-const FORBIDDEN = serviceError('forbidden', 'Керувати агентами може лише власник');
+const FORBIDDEN = serviceError('forbidden', 'mcp.ownerOnly');
 
 /** MCP clients of the owner, without token hashes (13.6 «Підключені агенти»). */
 export const listMcpClients = defineService({
@@ -40,7 +40,7 @@ export const listMcpClients = defineService({
 export const createMcpClient = defineService({
   name: 'mcp.clients.create',
   input: z.object({
-    clientName: requiredText('Вкажіть назву агента, наприклад «Claude Code — Ledger»'),
+    clientName: requiredText('mcp.clientName'),
     profile: z.enum(MCP_PROFILES).default('read_only'),
   }),
   handler: async (ctx, input) => {
@@ -74,7 +74,7 @@ export const revokeMcpClient = defineService({
         .where(eq(mcpClientPolicy.clientId, clientId))
         .returning({ clientId: mcpClientPolicy.clientId }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Агента не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'mcp.notFound'));
   },
 });
 

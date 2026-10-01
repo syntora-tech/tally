@@ -1,5 +1,5 @@
-import { formatAmount, formatUaDate, sum, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
+import { sum } from '@tally/domain';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS } from '@/lib/labels';
-import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPeriodOverview } from '@/server/services/periods';
@@ -28,8 +26,9 @@ import {
   RemoveAdjustmentButton,
   ReopenForm,
 } from './period-forms';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Період · Tally' };
+export const generateMetadata = pageTitle('period');
 
 function Step({
   n,
@@ -63,38 +62,42 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
   const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
   const notes = new Map(assignments.map((a) => [a.assignmentId, a.note]));
   const closed = p.status === 'closed';
+  const [t, tp, tc, fmt, { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS }] =
+    await Promise.all([
+      getTranslations('period'),
+      getTranslations('periods'),
+      getTranslations('common'),
+      getFormat(),
+      getLabels(),
+    ]);
   const billingText = (a: (typeof assignments)[number]) => {
     const b = preview.rows.find((r) => r.assignmentId === a.assignmentId)?.billing;
-    if (!b || b.type === 'none') return 'не виставляється';
-    return `${BILLING_TYPE_LABELS[b.type] ?? b.type} ${formatAmount(b.rate, b.currency)}`;
+    if (!b || b.type === 'none') return t('notBilled');
+    return `${BILLING_TYPE_LABELS[b.type] ?? b.type} ${fmt.amount(b.rate, b.currency)}`;
   };
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{monthTitle(p.month)}</h1>
+          <h1 className="text-2xl font-semibold">{fmt.month(p.month)}</h1>
           <p className="flex items-center gap-2 text-muted-foreground">
             <Badge variant={closed ? 'secondary' : 'default'}>
-              {closed ? 'Закритий' : 'Відкритий'}
+              {closed ? tp('statusClosed') : tp('statusOpen')}
             </Badge>
             {closed && p.closedAt && (
               <span>
-                закрито {formatUaDate(p.closedAt.toISOString().slice(0, 10) as LocalDate)}
+                {t('closedOn', { date: fmt.date(p.closedAt.toISOString().slice(0, 10)) })}
               </span>
             )}
           </p>
         </div>
         <Button variant="outline" render={<a href={`/api/periods/${p.id}/hours`} />}>
-          Шаблон годин (CSV)
+          {t('hoursTemplate')}
         </Button>
       </div>
 
-      <Step
-        n={1}
-        title="Параметри"
-        description="Норма = робочі дні × 8 з урахуванням винятків календаря; можна змінити"
-      >
+      <Step n={1} title={t('step1')} description={t('step1Description')}>
         <ParamsForm
           periodId={p.id}
           workHours={p.workHours}
@@ -103,7 +106,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
         />
       </Step>
 
-      <Step n={2} title="Години" description="Години за активними залученнями місяця">
+      <Step n={2} title={t('step2')} description={t('step2Description')}>
         <div className="flex flex-col gap-4">
           <HoursForm
             periodId={p.id}
@@ -122,20 +125,16 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
         </div>
       </Step>
 
-      <Step
-        n={3}
-        title="Розрахунок"
-        description="Суми рахуються з усіх рядків; ЗП в UAH — орієнтовно за довідковим курсом"
-      >
+      <Step n={3} title={t('step3')} description={t('step3Description')}>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Людина</TableHead>
-              <TableHead>Клієнт</TableHead>
-              <TableHead>Години</TableHead>
-              <TableHead>Інвойс</TableHead>
-              <TableHead>ЗП, USD</TableHead>
-              <TableHead>ЗП, UAH ≈</TableHead>
+              <TableHead>{t('col.person')}</TableHead>
+              <TableHead>{t('col.client')}</TableHead>
+              <TableHead>{t('col.hours')}</TableHead>
+              <TableHead>{t('col.invoice')}</TableHead>
+              <TableHead>{t('col.payUsd')}</TableHead>
+              <TableHead>{t('col.payUah')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -143,40 +142,36 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               <TableRow key={r.assignmentId}>
                 <TableCell>{r.personName}</TableCell>
                 <TableCell>
-                  {r.clientName ?? 'внутрішнє'}
+                  {r.clientName ?? tc('internal')}
                   {notes.get(r.assignmentId) && (
                     <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
                   )}
                 </TableCell>
-                <TableCell>{formatAmount(r.hours)}</TableCell>
+                <TableCell>{fmt.amount(r.hours)}</TableCell>
                 <TableCell>
-                  {r.invoiceAmount ? formatAmount(r.invoiceAmount, r.billing?.currency) : '—'}
+                  {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
                 </TableCell>
-                <TableCell>{formatAmount(r.payUsd)}</TableCell>
-                <TableCell>{r.payUahApprox ? formatAmount(r.payUahApprox) : '—'}</TableCell>
+                <TableCell>{fmt.amount(r.payUsd)}</TableCell>
+                <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={3}>Разом</TableCell>
+              <TableCell colSpan={3}>{tc('total')}</TableCell>
               <TableCell data-testid="total-invoice">
-                {formatAmount(preview.totals.invoiceUsd)}
+                {fmt.amount(preview.totals.invoiceUsd)}
               </TableCell>
-              <TableCell data-testid="total-pay">{formatAmount(preview.totals.payUsd)}</TableCell>
+              <TableCell data-testid="total-pay">{fmt.amount(preview.totals.payUsd)}</TableCell>
               <TableCell>
-                {preview.totals.payUahApprox ? formatAmount(preview.totals.payUahApprox) : '—'}
+                {preview.totals.payUahApprox ? fmt.amount(preview.totals.payUahApprox) : '—'}
               </TableCell>
             </TableRow>
           </TableFooter>
         </Table>
       </Step>
 
-      <Step
-        n={4}
-        title="Коригування"
-        description="Бонус, утримання чи компенсація з причиною; UAH додається до виплати після конвертації"
-      >
+      <Step n={4} title={t('step4')} description={t('step4Description')}>
         <div className="flex flex-col gap-4">
           {adjustments.length > 0 && (
             <ul className="flex flex-col gap-1 text-sm">
@@ -184,7 +179,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                 <li key={a.id} className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{personName}</span>
                   <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
-                  <span className="tabular-nums">{formatAmount(a.amount, a.currency)}</span>
+                  <span className="tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
                   {a.payoutMethod === 'crypto' && <Badge variant="outline">crypto</Badge>}
                   <span className="text-muted-foreground">{a.reason}</span>
                   {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
@@ -205,10 +200,10 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Виплата</TableHead>
-                <TableHead>Спосіб</TableHead>
-                <TableHead>USD</TableHead>
-                <TableHead>UAH ≈ з коригуваннями</TableHead>
+                <TableHead>{t('planCol.payout')}</TableHead>
+                <TableHead>{t('planCol.method')}</TableHead>
+                <TableHead>{t('planCol.usd')}</TableHead>
+                <TableHead>{t('planCol.uah')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -216,18 +211,18 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                 <TableRow key={`${i.personId}:${i.payoutMethod}`}>
                   <TableCell>{i.personName}</TableCell>
                   <TableCell>{i.payoutMethod === 'crypto' ? 'crypto' : 'fiat'}</TableCell>
-                  <TableCell>{formatAmount(i.totalUsd)}</TableCell>
-                  <TableCell>{i.totalUahApprox ? formatAmount(i.totalUahApprox) : '—'}</TableCell>
+                  <TableCell>{fmt.amount(i.totalUsd)}</TableCell>
+                  <TableCell>{i.totalUahApprox ? fmt.amount(i.totalUahApprox) : '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={2}>Разом до виплати</TableCell>
-                <TableCell>{formatAmount(sum(plan.map((i) => i.totalUsd)))}</TableCell>
+                <TableCell colSpan={2}>{t('totalToPay')}</TableCell>
+                <TableCell>{fmt.amount(sum(plan.map((i) => i.totalUsd)))}</TableCell>
                 <TableCell data-testid="total-pay-uah">
                   {p.referenceFxUsdUah
-                    ? formatAmount(sum(plan.map((i) => i.totalUahApprox ?? '0')))
+                    ? fmt.amount(sum(plan.map((i) => i.totalUahApprox ?? '0')))
                     : '—'}
                 </TableCell>
               </TableRow>
@@ -238,12 +233,8 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
 
       <Step
         n={5}
-        title={closed ? 'Період закрито' : 'Закриття'}
-        description={
-          closed
-            ? 'Години незмінні. Відкрити знову може лише власник із причиною.'
-            : 'Створює чернетки інвойсів (один на договір) і виплати; статуси рядків — за оплатою клієнта (5.3)'
-        }
+        title={closed ? t('step5Closed') : t('step5')}
+        description={closed ? t('step5ClosedDescription') : t('step5Description')}
       >
         <div className="flex flex-col gap-4">
           {closed ? (
@@ -253,9 +244,9 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
           )}
           {payroll.length > 0 && (
             <p className="text-sm">
-              Виплат створено: {payroll.length}.{' '}
+              {t('payoutsCreated', { count: payroll.length })}{' '}
               <Link href={`/payroll?period=${p.id}`} className="underline">
-                Перейти до виплат
+                {t('toPayroll')}
               </Link>
             </p>
           )}
@@ -264,9 +255,9 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               {invoices.map((i) => (
                 <li key={i.id} className="flex items-center gap-2">
                   <Link href={`/invoices/${i.id}`} className="font-medium hover:underline">
-                    {i.clientName} — {i.number ?? 'чернетка'}
+                    {i.clientName} — {i.number ?? t('draft')}
                   </Link>
-                  <span>{formatAmount(i.total, i.currency)}</span>
+                  <span>{fmt.amount(i.total, i.currency)}</span>
                   <Badge variant="outline">{INVOICE_STATUS_LABELS[i.status]}</Badge>
                 </li>
               ))}

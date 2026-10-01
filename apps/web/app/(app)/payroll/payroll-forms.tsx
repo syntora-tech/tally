@@ -1,6 +1,7 @@
 'use client';
 
-import { formatAmount, parseDecimal, payrollTotalUah } from '@tally/domain';
+import { parseDecimal, payrollTotalUah } from '@tally/domain';
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
@@ -8,7 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FX_SOURCE_LABELS } from '@/lib/labels';
+import { useFormat } from '@/lib/format';
+import { useLabels } from '@/lib/labels';
 import {
   overridePayableAction,
   payItemAction,
@@ -39,11 +41,15 @@ export type PayDialogProps = {
 
 /** "Виплатити" (6.6): rate with its source badge, UAH total, account; creates expense + allocation. */
 export function PayDialog(p: PayDialogProps) {
+  const t = useTranslations('payDialog');
+  const tc = useTranslations('common');
+  const fmt = useFormat();
+  const { FX_SOURCE_LABELS } = useLabels();
   // The dialog disappears once the item is paid, so the toast fires before the page re-renders.
   const [state, action, pending] = useActionState<PayrollFormState, FormData>(
     async (prev, formData) => {
       const result = await payItemAction(prev, formData);
-      if (result?.ok) toast.success('Виплату записано');
+      if (result?.ok) toast.success(t('paid'));
       return result;
     },
     null,
@@ -71,7 +77,7 @@ export function PayDialog(p: PayDialogProps) {
           setOpen(true);
         }}
       >
-        Виплатити
+        {t('pay')}
       </Button>
     );
   }
@@ -81,7 +87,7 @@ export function PayDialog(p: PayDialogProps) {
       {p.fiat && (
         <div className="flex flex-wrap items-end gap-3">
           <FormField
-            label="Курс USD→UAH"
+            label={t('rate')}
             htmlFor={`rate-${p.itemId}`}
             error={error?.fieldErrors?.rate}
           >
@@ -103,29 +109,29 @@ export function PayDialog(p: PayDialogProps) {
           </Badge>
           {preview && (
             <span className="mb-2 text-sm">
-              До виплати: <span className="font-medium">{formatAmount(preview, 'UAH')}</span>
+              {t('toPay')} <span className="font-medium">{fmt.amount(preview, 'UAH')}</span>
             </span>
           )}
         </div>
       )}
       <div className="flex flex-wrap items-end gap-3">
         <FormField
-          label="Рахунок списання"
+          label={t('account')}
           htmlFor={`acc-${p.itemId}`}
           error={error?.fieldErrors?.accountId}
         >
           <NativeSelect
             id={`acc-${p.itemId}`}
             name="accountId"
-            placeholder="Оберіть рахунок"
+            placeholder={t('chooseAccount')}
             options={p.accounts.map((a) => ({ value: a.id, label: a.label }))}
           />
         </FormField>
-        <FormField label="Дата" htmlFor={`date-${p.itemId}`}>
+        <FormField label={t('date')} htmlFor={`date-${p.itemId}`}>
           <Input id={`date-${p.itemId}`} name="occurredOn" type="date" defaultValue={p.today} />
         </FormField>
         <FormField
-          label={`Сума, ${p.fiat ? 'UAH' : 'USD'}`}
+          label={t('amount', { currency: p.fiat ? 'UAH' : 'USD' })}
           htmlFor={`amount-${p.itemId}`}
           error={error?.fieldErrors?.amount}
         >
@@ -138,7 +144,7 @@ export function PayDialog(p: PayDialogProps) {
             className="w-36"
           />
         </FormField>
-        <FormField label="Категорія" htmlFor={`cat-${p.itemId}`}>
+        <FormField label={t('category')} htmlFor={`cat-${p.itemId}`}>
           <NativeSelect
             id={`cat-${p.itemId}`}
             name="categoryName"
@@ -152,7 +158,7 @@ export function PayDialog(p: PayDialogProps) {
       </div>
       {p.isOwner && (
         <FormField
-          label="Причина авансу (якщо більше доступного)"
+          label={t('advanceReason')}
           htmlFor={`override-${p.itemId}`}
           error={error?.fieldErrors?.overrideReason}
         >
@@ -166,7 +172,7 @@ export function PayDialog(p: PayDialogProps) {
       )}
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
-          Записати виплату
+          {t('record')}
         </Button>
         <Button
           type="button"
@@ -175,7 +181,7 @@ export function PayDialog(p: PayDialogProps) {
             setOpen(false);
           }}
         >
-          Скасувати
+          {tc('cancel')}
         </Button>
       </div>
     </form>
@@ -187,19 +193,20 @@ export function OverrideForm({ lineId }: { lineId: string }) {
     overridePayableAction,
     null,
   );
-  const error = useResult(state, 'Рядок розблоковано');
+  const t = useTranslations('payDialog');
+  const error = useResult(state, t('released'));
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="lineId" value={lineId} />
       <Input
         name="reason"
-        placeholder="Причина"
-        aria-label="Причина розблокування"
+        placeholder={t('reason')}
+        aria-label={t('releaseReason')}
         className="h-8 w-48"
         required
       />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        Розблокувати
+        {t('release')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>

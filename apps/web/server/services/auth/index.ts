@@ -11,7 +11,7 @@ const emailInput = z
   .string()
   .trim()
   .toLowerCase()
-  .pipe(z.email({ error: 'Введіть коректний email' }));
+  .pipe(z.email({ error: 'auth.email' }));
 
 /**
  * Pre-flight before sending a magic link, so no email goes to addresses without access.
@@ -58,7 +58,7 @@ export const completeSignIn = defineService({
             .onConflictDoNothing();
           return ok({ role: 'owner' as const });
         case 'deny':
-          return err(serviceError('forbidden', 'Цей обліковий запис не має доступу до Tally'));
+          return err(serviceError('forbidden', 'auth.noAccess'));
       }
     });
   },

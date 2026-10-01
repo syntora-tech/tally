@@ -1,31 +1,16 @@
-import { formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { describeRule } from '@/lib/contract-rules';
-import { CONTRACT_KIND_LABELS, CONTRACT_STATUS_LABELS } from '@/lib/labels';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getContract } from '@/server/services/clients';
+import { getTranslations } from 'next-intl/server';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Договір · Tally' };
-
-const FIELD_LABELS: Record<string, string> = {
-  number: 'Номер',
-  signed_on: 'Дата підписання',
-  currency: 'Валюта',
-  payment_due_rule: 'Строк оплати',
-  invoice_date_rule: 'Дата інвойсу',
-  act_date_rule: 'Дата акту',
-  invoice_template_file_id: 'Шаблон інвойсу',
-  act_template_file_id: 'Шаблон акту',
-  number_sequence_key: 'Послідовність номерів',
-  status: 'Статус',
-};
+export const generateMetadata = pageTitle('contract');
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -43,12 +28,18 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (result.isErr()) notFound();
   const { contract: c, clientName, payeeName, companyName } = result.value;
   const isClient = c.kind === 'client';
+  const [t, tc, fmt, { CONTRACT_KIND_LABELS, CONTRACT_STATUS_LABELS }] = await Promise.all([
+    getTranslations('contracts'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Договір {c.number}</h1>
+          <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
           <p className="text-muted-foreground">
             {CONTRACT_KIND_LABELS[c.kind]} ·{' '}
             {isClient ? (
@@ -63,39 +54,36 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           </p>
         </div>
         <Button variant="outline" render={<Link href={`/clients/contracts/${c.id}/edit`} />}>
-          Редагувати
+          {tc('edit')}
         </Button>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Умови</CardTitle>
+            <CardTitle className="text-base">{t('terms')}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl>
-              <Row label="Наша сторона" value={companyName} />
-              <Row
-                label="Дата підписання"
-                value={c.signedOn ? formatUaDate(c.signedOn as LocalDate) : null}
-              />
-              <Row label="Валюта" value={c.currency} />
-              <Row label="Статус" value={CONTRACT_STATUS_LABELS[c.status]} />
+              <Row label={t('ourSide')} value={companyName} />
+              <Row label={t('signedOn')} value={c.signedOn ? fmt.date(c.signedOn) : null} />
+              <Row label={t('currency')} value={c.currency} />
+              <Row label={t('status')} value={CONTRACT_STATUS_LABELS[c.status]} />
               {isClient && (
-                <Row label="Строк оплати" value={describeRule('payment', c.paymentDueRule)} />
+                <Row label={t('paymentDue')} value={fmt.rule('payment', c.paymentDueRule)} />
               )}
               {isClient && (
-                <Row label="Дата інвойсу" value={describeRule('invoice', c.invoiceDateRule)} />
+                <Row label={t('invoiceDate')} value={fmt.rule('invoice', c.invoiceDateRule)} />
               )}
-              <Row label="Дата акту" value={describeRule('act', c.actDateRule)} />
-              {isClient && <Row label="Шаблон інвойсу" value={c.invoiceTemplateFileId} />}
-              <Row label="Шаблон акту" value={c.actTemplateFileId} />
-              <Row label="Послідовність номерів" value={c.numberSequenceKey} />
+              <Row label={t('actDate')} value={fmt.rule('act', c.actDateRule)} />
+              {isClient && <Row label={t('invoiceTemplate')} value={c.invoiceTemplateFileId} />}
+              <Row label={t('actTemplate')} value={c.actTemplateFileId} />
+              <Row label={t('sequence')} value={c.numberSequenceKey} />
             </dl>
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6">
           <LinkedDocuments ctx={ctx} entityType="contract" entityId={c.id} canAdd />
-          <AuditHistory ctx={ctx} tableName="contract" rowId={c.id} fieldLabels={FIELD_LABELS} />
+          <AuditHistory ctx={ctx} tableName="contract" rowId={c.id} />
         </div>
       </div>
     </div>

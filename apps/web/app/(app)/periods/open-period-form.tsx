@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,6 +14,7 @@ export function OpenPeriodForm({ suggestedMonth }: { suggestedMonth: string }) {
     null,
   );
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const t = useTranslations('periods.form');
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       {state && !state.ok && !errors && (
@@ -20,7 +22,7 @@ export function OpenPeriodForm({ suggestedMonth }: { suggestedMonth: string }) {
           <AlertDescription>{state.error.message}</AlertDescription>
         </Alert>
       )}
-      <FormField label="Місяць" htmlFor="month" error={errors?.month}>
+      <FormField label={t('month')} htmlFor="month" error={errors?.month}>
         <Input
           id="month"
           name="month"
@@ -31,18 +33,14 @@ export function OpenPeriodForm({ suggestedMonth }: { suggestedMonth: string }) {
         />
       </FormField>
       <FormField
-        label="Норма, год"
+        label={t('norm')}
         htmlFor="workHours"
-        hint="Порожньо — робочі дні × 8"
+        hint={t('normHint')}
         error={errors?.workHours}
       >
         <Input id="workHours" name="workHours" inputMode="decimal" className="w-32" />
       </FormField>
-      <FormField
-        label="Довідковий курс USD→UAH"
-        htmlFor="referenceFxUsdUah"
-        error={errors?.referenceFxUsdUah}
-      >
+      <FormField label={t('fx')} htmlFor="referenceFxUsdUah" error={errors?.referenceFxUsdUah}>
         <Input
           id="referenceFxUsdUah"
           name="referenceFxUsdUah"
@@ -51,7 +49,7 @@ export function OpenPeriodForm({ suggestedMonth }: { suggestedMonth: string }) {
         />
       </FormField>
       <Button type="submit" disabled={pending}>
-        {pending ? 'Відкриваємо…' : 'Відкрити період'}
+        {pending ? t('opening') : t('open')}
       </Button>
     </form>
   );

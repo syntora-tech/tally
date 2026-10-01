@@ -149,14 +149,14 @@ export const getInvoice = defineService({
         .orderBy(desc(document.signedAt));
       return { ...row, lines, revisions, signed };
     });
-    return card ? ok(card) : err(serviceError('not_found', 'Інвойс не знайдено'));
+    return card ? ok(card) : err(serviceError('not_found', 'invoices.notFound'));
   },
 });
 
 const lineInput = z.object({
   id: z.preprocess((v) => (v === '' ? undefined : v), z.uuid().optional()),
-  descriptionEn: requiredText('Опис англійською'),
-  descriptionUa: requiredText('Опис українською'),
+  descriptionEn: requiredText('invoices.descriptionEn'),
+  descriptionUa: requiredText('invoices.descriptionUa'),
   quantity: nonNegativeDecimal,
   unitPrice: nonNegativeDecimal,
 });
@@ -165,7 +165,7 @@ export const saveInvoiceInput = z.object({
   id: z.uuid(),
   issueDate: localDateString,
   dateOverrideReason: optionalText,
-  lines: z.array(lineInput).min(1, 'Потрібен хоча б один рядок').max(100),
+  lines: z.array(lineInput).min(1, 'invoices.lineRequired').max(100),
   /** Required when revising an issued invoice (A-044). */
   reason: optionalText,
 });
@@ -236,21 +236,16 @@ export const saveInvoice = defineService({
   handler: async (ctx, input) =>
     inActorScope(ctx, async (tx) => {
       const row = await loadInvoice(tx, input.id);
-      if (!row) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       const inv = row.invoice;
       const revising = inv.status !== 'draft';
       if (revising && !(inv.status === 'issued' && toDecimal(inv.paidAmount).isZero())) {
-        return err(
-          serviceError(
-            'conflict',
-            'Оплачений інвойс змінити не можна — лише анулювати й перевипустити',
-          ),
-        );
+        return err(serviceError('conflict', 'invoices.paidLocked'));
       }
       if (revising && !input.reason) {
         return err(
-          serviceError('validation_error', 'Вкажіть причину зміни', {
-            reason: ['Вкажіть причину зміни'],
+          serviceError('validation_error', 'invoices.changeReason', {
+            reason: ['invoices.changeReason'],
           }),
         );
       }
@@ -269,8 +264,7 @@ export const saveInvoice = defineService({
         return ok({ id: inv.id, revision: inv.revision });
       }
       const co = await companyRow(tx);
-      if (!co)
-        return err(serviceError('conflict', 'Спершу заповніть реквізити компанії в Налаштуваннях'));
+      if (!co) return err(serviceError('conflict', 'company.missing'));
       const revision = inv.revision + 1;
       await tx
         .update(invoice)
@@ -299,7 +293,7 @@ export const issuePreview = defineService({
   handler: async (ctx, { id, issueDate }) =>
     inActorScope(ctx, async (tx) => {
       const row = await loadInvoice(tx, id);
-      if (!row) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       const cal = await loadCalendar(tx);
       const suggested = row.periodMonth
         ? defaultInvoiceDate(
@@ -345,19 +339,17 @@ export const issueInvoice = defineService({
   handler: async (ctx, { id, issueDate, dateOverrideReason }) =>
     inActorScope(ctx, async (tx) => {
       const row = await loadInvoice(tx, id);
-      if (!row) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       if (row.invoice.status !== 'draft')
-        return err(serviceError('conflict', 'Інвойс уже випущено'));
+        return err(serviceError('conflict', 'invoices.alreadyIssued'));
       const lines = await tx
         .select()
         .from(invoiceLine)
         .where(eq(invoiceLine.invoiceId, id))
         .orderBy(asc(invoiceLine.position));
-      if (lines.length === 0)
-        return err(serviceError('validation_error', 'Інвойс без рядків не можна випустити'));
+      if (lines.length === 0) return err(serviceError('validation_error', 'invoices.noLines'));
       const co = await companyRow(tx);
-      if (!co)
-        return err(serviceError('conflict', 'Спершу заповніть реквізити компанії в Налаштуваннях'));
+      if (!co) return err(serviceError('conflict', 'company.missing'));
 
       const due = dueDate(row.contract.paymentDueRule as PaymentDueRule, issueDate);
       const total = sum(lines.map((l) => l.amount)).toFixed(2);
@@ -389,7 +381,7 @@ export const issueInvoice = defineService({
 
 export const voidInvoice = defineService({
   name: 'invoices.void',
-  input: z.object({ id: z.uuid(), reason: requiredText('Вкажіть причину анулювання') }),
+  input: z.object({ id: z.uuid(), reason: requiredText('field.voidReason') }),
   handler: async (ctx, { id, reason }) => {
     const [row] = await inActorScope(ctx, (tx) =>
       tx
@@ -398,14 +390,7 @@ export const voidInvoice = defineService({
         .where(and(eq(invoice.id, id), inArray(invoice.status, ['issued', 'partially_paid'])))
         .returning({ id: invoice.id }),
     );
-    return row
-      ? ok(row)
-      : err(
-          serviceError(
-            'conflict',
-            'Анулювати можна лише випущений неоплачений або частково оплачений інвойс',
-          ),
-        );
+    return row ? ok(row) : err(serviceError('conflict', 'invoices.voidState'));
   },
 });
 
@@ -416,9 +401,9 @@ export const reissueInvoice = defineService({
   handler: async (ctx, { id }) =>
     inActorScope(ctx, async (tx) => {
       const row = await loadInvoice(tx, id);
-      if (!row) return err(serviceError('not_found', 'Інвойс не знайдено'));
+      if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       if (row.invoice.status !== 'void')
-        return err(serviceError('conflict', 'Перевипустити можна лише анульований інвойс'));
+        return err(serviceError('conflict', 'invoices.reissueState'));
       const lines = await tx
         .select()
         .from(invoiceLine)
@@ -511,9 +496,9 @@ export const regenerateInvoicePdf = defineService({
     inActorScope(ctx, async (tx) => {
       const [row] = await tx.select().from(invoice).where(eq(invoice.id, id));
       if (!row || row.status === 'draft' || row.status === 'void') {
-        return err(serviceError('conflict', 'PDF генерується лише для випущеного інвойсу'));
+        return err(serviceError('conflict', 'invoices.pdfIssuedOnly'));
       }
-      if (row.pdfFileId) return err(serviceError('conflict', 'PDF цієї редакції вже є'));
+      if (row.pdfFileId) return err(serviceError('conflict', 'invoices.pdfExists'));
       await enqueueJob(tx, renderInvoiceJob(id, row.revision));
       return ok({ id });
     }),

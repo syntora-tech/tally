@@ -1,7 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { appColumnHelper, DataTable, type AppColumnDef } from '@/components/data-table';
-import { PAYEE_KIND_LABELS } from '@/lib/labels';
+import { useLabels } from '@/lib/labels';
 
 export type PayeeRow = {
   id: string;
@@ -14,31 +15,33 @@ export type PayeeRow = {
 };
 
 const col = appColumnHelper<PayeeRow>();
-const columns: AppColumnDef<PayeeRow>[] = [
-  col.accessor('name', { header: 'Назва' }),
-  col.accessor((r) => PAYEE_KIND_LABELS[r.kind] ?? r.kind, { id: 'kind', header: 'Тип' }),
-  col.accessor('personName', {
-    header: 'Людина',
-    cell: ({ getValue }) => getValue<string | null>() ?? '—',
-  }),
-  col.accessor('taxId', {
-    header: 'ІПН',
-    cell: ({ getValue }) => getValue<string | null>() ?? '—',
-  }),
-  col.accessor((r) => r.iban ?? r.walletNetwork ?? '', {
-    id: 'account',
-    header: 'Рахунок / мережа',
-    cell: ({ getValue }) => getValue<string>() || '—',
-  }),
-];
 
 export function PayeesTable({ rows }: { rows: PayeeRow[] }) {
+  const t = useTranslations('payees');
+  const { PAYEE_KIND_LABELS } = useLabels();
+  const columns: AppColumnDef<PayeeRow>[] = [
+    col.accessor('name', { header: t('col.name') }),
+    col.accessor((r) => PAYEE_KIND_LABELS[r.kind] ?? r.kind, { id: 'kind', header: t('col.kind') }),
+    col.accessor('personName', {
+      header: t('col.person'),
+      cell: ({ getValue }) => getValue<string | null>() ?? '—',
+    }),
+    col.accessor('taxId', {
+      header: t('col.taxId'),
+      cell: ({ getValue }) => getValue<string | null>() ?? '—',
+    }),
+    col.accessor((r) => r.iban ?? r.walletNetwork ?? '', {
+      id: 'account',
+      header: t('col.account'),
+      cell: ({ getValue }) => getValue<string>() || '—',
+    }),
+  ];
   return (
     <DataTable
       columns={columns}
       data={rows}
-      searchPlaceholder="Пошук за назвою, ІПН…"
-      emptyText="Одержувачів ще немає"
+      searchPlaceholder={t('search')}
+      emptyText={t('empty')}
       rowHref={(r) => `/people/payees/${r.id}`}
     />
   );

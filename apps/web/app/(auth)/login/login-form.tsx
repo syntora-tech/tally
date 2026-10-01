@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -18,14 +19,12 @@ export function LoginForm({ error, next, googleEnabled }: Props) {
     requestMagicLink,
     null,
   );
+  const t = useTranslations('login');
 
   if (state?.ok) {
     return (
       <Alert role="status">
-        <AlertDescription>
-          Якщо цей email має доступ до Tally, на нього надіслано посилання для входу. Перевірте
-          пошту.
-        </AlertDescription>
+        <AlertDescription>{t('sent')}</AlertDescription>
       </Alert>
     );
   }
@@ -56,14 +55,14 @@ export function LoginForm({ error, next, googleEnabled }: Props) {
           {emailError && <p className="text-sm text-destructive">{emailError}</p>}
         </div>
         <Button type="submit" disabled={pending}>
-          {pending ? 'Надсилаємо…' : 'Надіслати посилання для входу'}
+          {pending ? t('sending') : t('sendLink')}
         </Button>
       </form>
       {googleEnabled && (
         <form action={signInWithGoogle}>
           <input type="hidden" name="next" value={next ?? ''} />
           <Button type="submit" variant="outline" className="w-full">
-            Увійти через Google
+            {t('google')}
           </Button>
         </form>
       )}

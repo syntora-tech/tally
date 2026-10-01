@@ -4,7 +4,7 @@ import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScopeAtomic } from '../atomic';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { serviceError, msg } from '../errors';
 import { definedOnly } from '../patch';
 import { currencyCode } from '../fields';
 import { clientInput } from './schema';
@@ -46,13 +46,13 @@ export const upsertClients = defineService({
                 .where(sql`lower(${client.legalName}) = lower(${patch.legalName})`)
             : [];
         if (matches.length > 1) {
-          errors[key] = [`Кілька клієнтів з назвою «${patch.legalName ?? ''}» — передайте id`];
+          errors[key] = [msg('clients.ambiguousName', { name: patch.legalName ?? '' })];
           continue;
         }
         const current = matches[0];
         if (!current) {
           if (id) {
-            errors[key] = ['Клієнта з таким id не знайдено'];
+            errors[key] = ['clients.idNotFound'];
             continue;
           }
           const full = clientInput.safeParse(patch);
@@ -61,7 +61,7 @@ export const upsertClients = defineService({
             continue;
           }
           const [row] = await tx.insert(client).values(full.data).returning({ id: client.id });
-          if (!row) return err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+          if (!row) return err(serviceError('forbidden', 'general.forbidden'));
           results.push({ index, id: row.id, legalName: full.data.legalName, status: 'created' });
           continue;
         }
@@ -79,7 +79,7 @@ export const upsertClients = defineService({
         });
       }
       if (Object.keys(errors).length) {
-        return err(serviceError('validation_error', 'Пакет не записано: є помилки', errors));
+        return err(serviceError('validation_error', 'batch.failed', errors));
       }
       return ok({ clients: results });
     }),

@@ -1,5 +1,4 @@
-import { formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,13 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FX_SOURCE_LABELS } from '@/lib/labels';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listRates, suggestRate } from '@/server/services/fx';
 import { ManualRateForm } from '../ledger-forms';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Курси · Tally' };
+export const generateMetadata = pageTitle('rates');
 
 export default async function RatesPage() {
   const ctx = await requireRole(FINANCE_ROLES);
@@ -26,27 +25,28 @@ export default async function RatesPage() {
     suggestRate.run(ctx, { onDate: ctx.today, fetchMissing: false }),
   ]);
   const today = suggestion.unwrapOr(null);
+  const t = await getTranslations('rates');
+  const fmt = await getFormat();
+  const { FX_SOURCE_LABELS } = await getLabels();
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
           ← Ledger
         </Link>
-        <h1 className="text-2xl font-semibold">Курси валют</h1>
-        <p className="text-muted-foreground">
-          Для виплат: фактичний обмін за 3 дні → НБУ на дату → останній ручний
-        </p>
+        <h1 className="text-2xl font-semibold">{t('title')}</h1>
+        <p className="text-muted-foreground">{t('subtitle')}</p>
       </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Курс виплати на сьогодні:{' '}
+            {t('todayRate')}{' '}
             {today ? (
               <>
                 {today.rate} <Badge variant="outline">{FX_SOURCE_LABELS[today.source]}</Badge>
               </>
             ) : (
-              'немає даних'
+              t('noData')
             )}
           </CardTitle>
         </CardHeader>
@@ -57,17 +57,19 @@ export default async function RatesPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Дата</TableHead>
-            <TableHead>Валюта</TableHead>
-            <TableHead>Курс, UAH</TableHead>
-            <TableHead>Джерело</TableHead>
+            <TableHead>{t('date')}</TableHead>
+            <TableHead>{t('pair')}</TableHead>
+            <TableHead>{t('rate')}</TableHead>
+            <TableHead>{t('source')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rates.unwrapOr([]).map((r) => (
             <TableRow key={r.id}>
-              <TableCell>{formatUaDate(r.onDate as LocalDate)}</TableCell>
-              <TableCell>{r.base}</TableCell>
+              <TableCell>{fmt.date(r.onDate)}</TableCell>
+              <TableCell>
+                {r.base}/{r.quote}
+              </TableCell>
               <TableCell className="tabular-nums">{r.rate}</TableCell>
               <TableCell>{FX_SOURCE_LABELS[r.source]}</TableCell>
             </TableRow>

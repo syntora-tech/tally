@@ -145,11 +145,11 @@ test.afterAll(() =>
 
 async function revenue(page: Page, amount: string) {
   await page.goto('/ledger/new');
-  await page.getByLabel('Тип').selectOption('revenue');
-  await page.getByLabel('Категорія').selectOption({ label: 'Client Revenue' });
+  await page.getByLabel('Type').selectOption('revenue');
+  await page.getByLabel('Category').selectOption({ label: 'Client Revenue' });
   await page.locator('#to-account').selectOption({ label: `${accounts.usd} (USD)` });
   await page.locator('#to-amount').fill(amount);
-  await page.getByRole('button', { name: 'Зберегти транзакцію' }).click();
+  await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL(/\/ledger$/);
 }
 
@@ -167,8 +167,8 @@ async function allocate(page: Page, client: string, amount: string) {
     .getAttribute('value');
   await page.locator('#pay-tx').selectOption(option ?? '');
   await page.locator('#pay-amount').fill(amount);
-  await page.getByRole('button', { name: 'Зарахувати оплату' }).click();
-  await expect(page.getByText('Оплату зараховано')).toBeVisible();
+  await page.getByRole('button', { name: 'Allocate payment' }).click();
+  await expect(page.getByText('Payment allocated')).toBeVisible();
 }
 
 const itemCard = (page: Page, person: string) =>
@@ -181,25 +181,25 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   // Common: close August, issue the three invoices on 01.09.
   await setToday(page, '2043-09-01');
   await page.goto('/periods');
-  await page.getByLabel('Місяць').fill(MONTH);
-  await page.getByRole('button', { name: 'Відкрити період' }).click();
+  await page.getByLabel('Month').fill(MONTH);
+  await page.getByRole('button', { name: 'Open period' }).click();
   await expect(page).toHaveURL(/\/periods\/[0-9a-f-]+$/);
   for (const [key, person] of Object.entries(people)) {
     const client = clients[key.replace('p', 'k') as keyof typeof clients];
-    await page.getByLabel(`Години: ${person}, ${client}`).fill('10');
+    await page.getByLabel(`Hours: ${person}, ${client}`).fill('10');
   }
-  await page.getByRole('button', { name: 'Зберегти години' }).click();
-  await expect(page.getByText('Години збережено')).toBeVisible();
+  await page.getByRole('button', { name: 'Save hours' }).click();
+  await expect(page.getByText('Hours saved')).toBeVisible();
   page.once('dialog', (d) => void d.accept());
-  await page.getByRole('button', { name: 'Закрити період' }).click();
-  await expect(page.getByText(/Виплат створено: \d+/)).toBeVisible();
+  await page.getByRole('button', { name: 'Close period' }).click();
+  await expect(page.getByText(/Payouts created: \d+/)).toBeVisible();
   const periodUrl = page.url();
   for (const client of Object.values(clients)) {
     await page.goto(periodUrl);
-    await page.getByRole('link', { name: `${client} — чернетка` }).click();
-    await expect(page.getByLabel('Дата випуску')).toHaveValue('2043-09-01');
-    await page.getByRole('button', { name: 'Випустити й присвоїти номер' }).click();
-    await expect(page.getByRole('heading', { name: /Інвойс № S\d+\/43/ })).toBeVisible();
+    await page.getByRole('link', { name: `${client} — draft` }).click();
+    await expect(page.getByLabel('Issue date')).toHaveValue('2043-09-01');
+    await page.getByRole('button', { name: 'Issue and assign a number' }).click();
+    await expect(page.getByRole('heading', { name: /Invoice No\. S\d+\/43/ })).toBeVisible();
   }
 
   // 1. Client pays on time (17.09) → line payable funded by the client → payout at the Ledger rate → act.
@@ -207,54 +207,54 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await revenue(page, '470');
   await allocate(page, clients.k1, '470');
   await page.goto('/ledger/new');
-  await page.getByLabel('Тип').selectOption('fx_exchange');
+  await page.getByLabel('Type').selectOption('fx_exchange');
   await page.locator('#from-account').selectOption({ label: `${accounts.usd} (USD)` });
   await page.locator('#from-amount').fill('300');
   await page.locator('#to-account').selectOption({ label: `${accounts.uah} (UAH)` });
   await page.locator('#to-amount').fill('12315');
-  await page.getByRole('button', { name: 'Зберегти транзакцію' }).click();
+  await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL(/\/ledger$/);
 
   await page.goto('/payroll');
   const p1 = itemCard(page, people.p1);
-  await expect(p1).toContainText('клієнт');
-  await p1.getByRole('button', { name: 'Виплатити' }).click();
-  await expect(p1.getByText('фактичний обмін')).toBeVisible();
-  await expect(p1.getByLabel('Курс USD→UAH')).toHaveValue('41.050000');
+  await expect(p1).toContainText('client');
+  await p1.getByRole('button', { name: 'Pay' }).click();
+  await expect(p1.getByText('actual exchange')).toBeVisible();
+  await expect(p1.getByLabel('USD→UAH rate')).toHaveValue('41.050000');
   const uahOption = await p1
     .locator('select[name=accountId] option', { hasText: accounts.uah })
     .getAttribute('value');
   await p1.locator('select[name=accountId]').selectOption(uahOption ?? '');
-  const payAmount = await p1.getByLabel('Сума, UAH').inputValue();
-  await p1.getByRole('button', { name: 'Записати виплату' }).click();
-  await expect(page.getByText('Виплату записано')).toBeVisible();
+  const payAmount = await p1.getByLabel('Amount, UAH').inputValue();
+  await p1.getByRole('button', { name: 'Record payout' }).click();
+  await expect(page.getByText('Payout recorded')).toBeVisible();
 
   await page.goto('/payroll/acts');
   await page
     .getByRole('row', { name: new RegExp(fop) })
-    .getByRole('link', { name: 'чернетка' })
+    .getByRole('link', { name: 'draft' })
     .click();
-  await expect(page.getByLabel('Дата акту')).toHaveValue('2043-08-31');
+  await expect(page.getByLabel('Act date')).toHaveValue('2043-08-31');
   await expect(page.getByTestId('act-amount')).toContainText(
-    payAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ' '),
+    payAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
   );
-  await page.getByRole('button', { name: 'Випустити акт і присвоїти номер' }).click();
-  await expect(page.getByRole('heading', { name: /Акт № 94 - А1/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
+  await expect(page.getByRole('heading', { name: /Act No\. 94 - А1/ })).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Файл акту згенеровано')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('The act file is generated')).toBeVisible({ timeout: 15_000 });
 
   // 4. 50 % on 18.09 → the line waits until 21.09.
   await setToday(page, '2043-09-18');
   await revenue(page, '235');
   await allocate(page, clients.k3, '235');
   await page.goto('/payroll');
-  await expect(itemCard(page, people.p3)).toContainText('чекає клієнта до 21.09.2043');
+  await expect(itemCard(page, people.p3)).toContainText('waiting for client until 21.09.2043');
 
   // 2. Client is late: on 21.09 the line becomes payable at the company's expense.
   await setToday(page, '2043-09-21');
   await page.goto('/payroll');
-  await expect(itemCard(page, people.p2)).toContainText('можна виплатити');
-  await expect(itemCard(page, people.p2)).toContainText('компанія');
+  await expect(itemCard(page, people.p2)).toContainText('payable');
+  await expect(itemCard(page, people.p2)).toContainText('company');
   await page.goto('/dashboard');
   const creditBefore = await page.getByTestId('credit-to-clients').innerText();
   expect(creditBefore).not.toMatch(/^0\.00/);
@@ -263,30 +263,30 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await setToday(page, '2043-09-25');
   await revenue(page, '470');
   await allocate(page, clients.k2, '470');
-  await expect(page.getByText('Оплачено').first()).toBeVisible();
+  await expect(page.getByText('Paid').first()).toBeVisible();
   await page.goto('/dashboard');
   await expect(page.getByTestId('credit-to-clients')).not.toHaveText(creditBefore);
   await page.goto('/payroll');
-  await expect(itemCard(page, people.p2)).toContainText('компанія');
+  await expect(itemCard(page, people.p2)).toContainText('company');
 
   // 5. A paid invoice cannot be edited; void + reissue gives a new number and rebinds the funding.
   await openInvoice(page, clients.k1);
-  await expect(page.getByText('Інвойс має оплати, тож змінити його не можна')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Зберегти нову редакцію' })).toHaveCount(0);
+  await expect(page.getByText('The invoice has payments, so it cannot be changed')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save new revision' })).toHaveCount(0);
   await openInvoice(page, clients.k3);
-  const oldNumber = (await page.getByRole('heading', { name: /Інвойс №/ }).innerText()).match(
+  const oldNumber = (await page.getByRole('heading', { name: /Invoice No\./ }).innerText()).match(
     /S\d+\/43/,
   )?.[0];
-  await page.getByLabel('Причина анулювання').fill('Wrong rate');
-  await page.getByRole('button', { name: 'Анулювати' }).click();
-  await expect(page.getByText('Анульовано').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Перевипустити (нова чернетка)' }).click();
-  await expect(page.getByRole('heading', { name: /Чернетка інвойсу/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Випустити й присвоїти номер' }).click();
-  const heading = page.getByRole('heading', { name: /Інвойс № S\d+\/43/ });
+  await page.getByLabel('Void reason').fill('Wrong rate');
+  await page.getByRole('button', { name: 'Void' }).click();
+  await expect(page.getByText('Void').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Reissue (new draft)' }).click();
+  await expect(page.getByRole('heading', { name: /Invoice draft/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Issue and assign a number' }).click();
+  const heading = page.getByRole('heading', { name: /Invoice No\. S\d+\/43/ });
   await expect(heading).toBeVisible();
   const newNumber = (await heading.innerText()).match(/S\d+\/43/)?.[0];
   expect(newNumber).not.toBe(oldNumber);
   await page.goto('/payroll');
-  await expect(itemCard(page, people.p3)).toContainText(`інвойс ${newNumber ?? ''}`);
+  await expect(itemCard(page, people.p3)).toContainText(`invoice ${newNumber ?? ''}`);
 });

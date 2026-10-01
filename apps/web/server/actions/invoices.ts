@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
@@ -56,7 +57,7 @@ export async function saveInvoiceAction(
     reason,
     lines: linesFrom(formData),
   });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   if (reason) runJobsAfterResponse();
   return done(result.value.id);
 }
@@ -72,7 +73,7 @@ export async function issueInvoiceAction(
 ): Promise<InvoiceFormState> {
   const ctx = await requireUserContext();
   const result = await issueInvoice.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   runJobsAfterResponse();
   return done(result.value.id);
 }
@@ -83,7 +84,9 @@ export async function voidInvoiceAction(
 ): Promise<InvoiceFormState> {
   const ctx = await requireUserContext();
   const result = await voidInvoice.run(ctx, formDataToObject(formData));
-  return result.isErr() ? { ok: false, error: result.error } : done(result.value.id);
+  return result.isErr()
+    ? { ok: false, error: await localizeForUser(result.error) }
+    : done(result.value.id);
 }
 
 export async function reissueInvoiceAction(
@@ -92,7 +95,7 @@ export async function reissueInvoiceAction(
 ): Promise<InvoiceFormState> {
   const ctx = await requireUserContext();
   const result = await reissueInvoice.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/invoices');
   redirect(`/invoices/${result.value.id}`);
 }
@@ -105,7 +108,7 @@ export async function attachSignedInvoiceAction(
   const input = formDataToObject(formData);
   const result = await attachSignedInvoice.run(ctx, input);
   return result.isErr()
-    ? { ok: false, error: result.error }
+    ? { ok: false, error: await localizeForUser(result.error) }
     : done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
 }
 
@@ -115,7 +118,7 @@ export async function regenerateInvoicePdfAction(
 ): Promise<InvoiceFormState> {
   const ctx = await requireUserContext();
   const result = await regenerateInvoicePdf.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   runJobsAfterResponse();
   return done(result.value.id);
 }
@@ -130,7 +133,7 @@ export async function allocatePaymentAction(
     ...input,
     amount: typeof input.amount === 'string' ? input.amount.replace(',', '.') : input.amount,
   });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   return done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
 }
@@ -142,7 +145,7 @@ export async function removeAllocationAction(
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = await removeAllocation.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   return done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
 }

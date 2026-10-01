@@ -87,7 +87,7 @@ describe('uploadCv (spec 6.2)', () => {
   it('rejects non-PDF files and viewers', async () => {
     const txt = new File(['hello'], 'cv.txt', { type: 'text/plain' });
     const bad = await services.uploadCv.run(h.ctxFor(owner), { personId, file: txt });
-    expect(bad._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('CV має бути у форматі PDF');
+    expect(bad._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('documents.cvPdf');
     const forbidden = await services.uploadCv.run(h.ctxFor(viewer), {
       personId,
       file: pdf('x.pdf'),
@@ -100,14 +100,14 @@ describe('uploadCv (spec 6.2)', () => {
       type: 'application/pdf',
     });
     const res = await services.uploadCv.run(h.ctxFor(owner), { personId, file: big });
-    expect(res._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('Файл більший за 4 МБ');
+    expect(res._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('documents.tooLarge');
   });
 });
 
 describe('createDocument (spec 6.9)', () => {
   it('requires a file or a link', async () => {
     const res = await services.createDocument.run(h.ctxFor(owner), { type: 'nda', title: 'NDA' });
-    expect(res._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('Додайте файл або посилання');
+    expect(res._unsafeUnwrapErr().fieldErrors?.file?.[0]).toBe('documents.fileOrUrl');
   });
 
   it('stores unlinked files under documents/ and accepts link-only documents', async () => {

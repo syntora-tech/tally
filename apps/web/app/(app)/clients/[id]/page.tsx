@@ -1,5 +1,3 @@
-import { formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
@@ -7,22 +5,13 @@ import { LinkedDocuments } from '@/components/linked-documents';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CONTRACT_STATUS_LABELS } from '@/lib/labels';
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getClient } from '@/server/services/clients';
+import { getTranslations } from 'next-intl/server';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Клієнт · Tally' };
-
-const FIELD_LABELS: Record<string, string> = {
-  legal_name: 'Юридична назва',
-  short_name: 'Коротка назва',
-  address: 'Адреса',
-  country: 'Країна',
-  bank_details: 'Банківські реквізити',
-  contacts: 'Контакти',
-  default_currency: 'Валюта',
-};
+export const generateMetadata = pageTitle('client');
 
 type Contact = { name: string; role?: string; email?: string; phone?: string };
 
@@ -34,6 +23,12 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   const { client: c, contracts, activePeople } = result.value;
   const isFinance = FINANCE_ROLES.includes(ctx.actor.role);
   const contacts = c.contacts as Contact[];
+  const [t, tc, fmt, { CONTRACT_STATUS_LABELS }] = await Promise.all([
+    getTranslations('clientCard'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,10 +43,10 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         {isFinance && (
           <div className="flex gap-2">
             <Button variant="outline" render={<Link href={`/clients/${c.id}/edit`} />}>
-              Редагувати
+              {tc('edit')}
             </Button>
             <Button render={<Link href={`/clients/contracts/new?clientId=${c.id}`} />}>
-              Новий договір
+              {t('newContract')}
             </Button>
           </div>
         )}
@@ -61,19 +56,19 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Реквізити</CardTitle>
+              <CardTitle className="text-base">{t('details')}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               <div>
-                <div className="text-muted-foreground">Адреса</div>
+                <div className="text-muted-foreground">{t('address')}</div>
                 <p className="whitespace-pre-line">{c.address ?? '—'}</p>
               </div>
               <div>
-                <div className="text-muted-foreground">Банківські реквізити</div>
+                <div className="text-muted-foreground">{t('bankDetails')}</div>
                 <p className="whitespace-pre-line">{c.bankDetails ?? '—'}</p>
               </div>
               <div>
-                <div className="text-muted-foreground">Контакти</div>
+                <div className="text-muted-foreground">{t('contacts')}</div>
                 {contacts.length === 0 ? (
                   '—'
                 ) : (
@@ -95,11 +90,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           {isFinance && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Договори</CardTitle>
+                <CardTitle className="text-base">{t('contracts')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {contracts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Договорів ще немає</p>
+                  <p className="text-sm text-muted-foreground">{t('noContracts')}</p>
                 ) : (
                   <ul className="flex flex-col gap-2 text-sm">
                     {contracts.map((ct) => (
@@ -112,7 +107,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
                         </Link>
                         {ct.signedOn && (
                           <span className="text-muted-foreground">
-                            від {formatUaDate(ct.signedOn as LocalDate)}
+                            {t('signedOn', { date: fmt.date(ct.signedOn) })}
                           </span>
                         )}
                         <Badge variant="outline">{ct.currency}</Badge>
@@ -130,11 +125,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           {isFinance && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Активні люди</CardTitle>
+                <CardTitle className="text-base">{t('activePeople')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {activePeople.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Зараз нікого не залучено</p>
+                  <p className="text-sm text-muted-foreground">{t('noActivePeople')}</p>
                 ) : (
                   <ul className="flex flex-col gap-2 text-sm">
                     {activePeople.map((a) => (
@@ -160,10 +155,10 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           {isFinance && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Інвойси та дебіторка</CardTitle>
+                <CardTitle className="text-base">{t('invoicesTitle')}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Інвойси, дебіторка й середня затримка оплати з’являться на Етапі 2.
+                {t('invoicesSoon')}
               </CardContent>
             </Card>
           )}
@@ -171,7 +166,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
         <div className="flex flex-col gap-6">
           <LinkedDocuments ctx={ctx} entityType="client" entityId={c.id} canAdd={isFinance} />
-          <AuditHistory ctx={ctx} tableName="client" rowId={c.id} fieldLabels={FIELD_LABELS} />
+          <AuditHistory ctx={ctx} tableName="client" rowId={c.id} />
         </div>
       </div>
     </div>

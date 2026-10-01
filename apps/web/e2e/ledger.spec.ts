@@ -35,29 +35,29 @@ test('AC 6.7: accounts, revenue with a fee and an exchange with two actual amoun
     await page.locator('#acc-new-name').fill(name);
     await page.locator('#acc-new-currency').fill(currency);
     await page.locator('#acc-new-opening').fill(opening);
-    await page.getByRole('button', { name: 'Додати' }).click();
+    await page.getByRole('button', { name: 'Add' }).click();
     await expect(page.getByText(name).first()).toBeVisible();
   }
 
   await page.goto('/ledger/new');
-  await page.getByLabel('Тип').selectOption('revenue');
-  await page.getByLabel('Категорія').selectOption({ label: 'Client Revenue' });
+  await page.getByLabel('Type').selectOption('revenue');
+  await page.getByLabel('Category').selectOption({ label: 'Client Revenue' });
   await page.locator('#to-account').selectOption({ label: `${usd} (USD)` });
   await page.locator('#to-amount').fill('1000');
-  await page.getByText('Комісія (необов’язково)').click();
-  await page.getByLabel('Рахунок комісії').selectOption({ label: `${usd} (USD)` });
-  await page.getByLabel('Сума комісії').fill('5');
-  await page.getByRole('button', { name: 'Зберегти транзакцію' }).click();
+  await page.getByText('Fee (optional)').click();
+  await page.getByLabel('Fee account').selectOption({ label: `${usd} (USD)` });
+  await page.getByLabel('Fee amount').fill('5');
+  await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL(/\/ledger$/);
-  await expect(page.getByRole('link', { name: usd }).locator('..')).toContainText(/4\s896\.78/);
+  await expect(page.getByRole('link', { name: usd }).locator('..')).toContainText(/4,896\.78/);
 
   await page.goto('/ledger/new');
-  await page.getByLabel('Тип').selectOption('fx_exchange');
+  await page.getByLabel('Type').selectOption('fx_exchange');
   await page.locator('#from-account').selectOption({ label: `${usd} (USD)` });
   await page.locator('#from-amount').fill('2000');
   await page.locator('#to-account').selectOption({ label: `${uah} (UAH)` });
   await page.locator('#to-amount').fill('86100');
   await expect(page.getByText('1 USD = 43.050000 UAH')).toBeVisible();
-  await page.getByRole('button', { name: 'Зберегти транзакцію' }).click();
-  await expect(page.getByRole('link', { name: uah }).locator('..')).toContainText(/86\s100\.00/);
+  await page.getByRole('button', { name: 'Save transaction' }).click();
+  await expect(page.getByRole('link', { name: uah }).locator('..')).toContainText(/86,100\.00/);
 });

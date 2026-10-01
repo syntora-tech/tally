@@ -1,12 +1,13 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ADJUSTMENT_KIND_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import {
   Table,
   TableBody,
@@ -52,11 +53,13 @@ export function ParamsForm(props: {
     updatePeriodAction,
     null,
   );
-  const error = useResult(state, 'Параметри збережено');
+  const t = useTranslations('periodForms');
+  const tc = useTranslations('common');
+  const error = useResult(state, t('paramsSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="periodId" value={props.periodId} />
-      <FormField label="Норма, год" htmlFor="workHours" error={error?.fieldErrors?.workHours}>
+      <FormField label={t('norm')} htmlFor="workHours" error={error?.fieldErrors?.workHours}>
         <Input
           id="workHours"
           name="workHours"
@@ -65,7 +68,7 @@ export function ParamsForm(props: {
           className="w-32"
         />
       </FormField>
-      <FormField label="Довідковий курс USD→UAH" htmlFor="referenceFxUsdUah">
+      <FormField label={t('fx')} htmlFor="referenceFxUsdUah">
         <Input
           id="referenceFxUsdUah"
           name="referenceFxUsdUah"
@@ -76,7 +79,7 @@ export function ParamsForm(props: {
       </FormField>
       {!props.disabled && (
         <Button type="submit" variant="outline" disabled={pending}>
-          Зберегти
+          {tc('save')}
         </Button>
       )}
       <div className="w-full">
@@ -106,7 +109,9 @@ export function HoursForm({
   disabled: boolean;
 }) {
   const [state, action, pending] = useActionState<PeriodFormState, FormData>(saveHoursAction, null);
-  const error = useResult(state, 'Години збережено');
+  const t = useTranslations('periodForms');
+  const tc = useTranslations('common');
+  const error = useResult(state, t('hoursSaved'));
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="periodId" value={periodId} />
@@ -114,25 +119,28 @@ export function HoursForm({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Людина</TableHead>
-            <TableHead>Клієнт</TableHead>
-            <TableHead>Роль</TableHead>
-            <TableHead>Умови клієнту</TableHead>
-            <TableHead className="w-32">Години</TableHead>
-            <TableHead>Проєкт / примітка</TableHead>
+            <TableHead>{t('col.person')}</TableHead>
+            <TableHead>{t('col.client')}</TableHead>
+            <TableHead>{t('col.role')}</TableHead>
+            <TableHead>{t('col.terms')}</TableHead>
+            <TableHead className="w-32">{t('col.hours')}</TableHead>
+            <TableHead>{t('col.note')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.assignmentId}>
               <TableCell>{r.personName}</TableCell>
-              <TableCell>{r.clientName ?? 'внутрішнє'}</TableCell>
+              <TableCell>{r.clientName ?? tc('internal')}</TableCell>
               <TableCell className="text-muted-foreground">{r.roleTitle ?? '—'}</TableCell>
               <TableCell className="text-muted-foreground">{r.billing}</TableCell>
               <TableCell>
                 <Input
                   name={`hours.${r.assignmentId}`}
-                  aria-label={`Години: ${r.personName}, ${r.clientName ?? 'внутрішнє'}`}
+                  aria-label={t('hoursAria', {
+                    person: r.personName,
+                    client: r.clientName ?? tc('internal'),
+                  })}
                   inputMode="decimal"
                   defaultValue={r.hours ?? ''}
                   disabled={disabled}
@@ -142,8 +150,11 @@ export function HoursForm({
               <TableCell>
                 <Input
                   name={`note.${r.assignmentId}`}
-                  aria-label={`Проєкт: ${r.personName}, ${r.clientName ?? 'внутрішнє'}`}
-                  placeholder="напр. Mobile app"
+                  aria-label={t('noteAria', {
+                    person: r.personName,
+                    client: r.clientName ?? tc('internal'),
+                  })}
+                  placeholder={t('notePlaceholder')}
                   maxLength={200}
                   defaultValue={r.note ?? ''}
                   disabled={disabled}
@@ -156,7 +167,7 @@ export function HoursForm({
       </Table>
       {!disabled && (
         <Button type="submit" disabled={pending} className="self-start">
-          {pending ? 'Зберігаємо…' : 'Зберегти години'}
+          {pending ? tc('saving') : t('saveHours')}
         </Button>
       )}
     </form>
@@ -168,7 +179,8 @@ export function HoursCsvForm({ periodId }: { periodId: string }) {
     uploadHoursCsvAction,
     null,
   );
-  const error = useResult(state, 'Години з CSV імпортовано');
+  const t = useTranslations('periodForms');
+  const error = useResult(state, t('csvImported'));
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="periodId" value={periodId} />
@@ -176,11 +188,11 @@ export function HoursCsvForm({ periodId }: { periodId: string }) {
         type="file"
         name="file"
         accept=".csv,text/csv"
-        aria-label="CSV з годинами"
+        aria-label={t('csvFile')}
         className="text-sm"
       />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        Імпортувати CSV
+        {t('importCsv')}
       </Button>
       <ErrorAlert message={error?.message} />
     </form>
@@ -192,20 +204,20 @@ export function CloseForm({ periodId }: { periodId: string }) {
     closePeriodAction,
     null,
   );
-  const error = useResult(state, 'Період закрито, чернетки інвойсів створено');
+  const t = useTranslations('periodForms');
+  const error = useResult(state, t('closed'));
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (!confirm('Закрити період? Години стануть незмінними, буде створено чернетки інвойсів.'))
-          e.preventDefault();
+        if (!confirm(t('confirmClose'))) e.preventDefault();
       }}
       className="flex flex-col gap-2"
     >
       <input type="hidden" name="periodId" value={periodId} />
       <ErrorAlert message={error?.message} />
       <Button type="submit" disabled={pending} className="self-start">
-        {pending ? 'Закриваємо…' : 'Закрити період'}
+        {pending ? t('closing') : t('close')}
       </Button>
     </form>
   );
@@ -216,15 +228,16 @@ export function ReopenForm({ periodId }: { periodId: string }) {
     reopenPeriodAction,
     null,
   );
-  const error = useResult(state, 'Період відкрито');
+  const t = useTranslations('periodForms');
+  const error = useResult(state, t('reopened'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="periodId" value={periodId} />
-      <FormField label="Причина відкриття" htmlFor="reason" error={error?.fieldErrors?.reason}>
+      <FormField label={t('reopenReason')} htmlFor="reason" error={error?.fieldErrors?.reason}>
         <Input id="reason" name="reason" required className="w-80" />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Відкрити період знову
+        {t('reopen')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -241,19 +254,22 @@ export function AdjustmentForm(props: {
     addAdjustmentAction,
     null,
   );
-  const error = useResult(state, 'Коригування додано');
+  const t = useTranslations('periodForms');
+  const tc = useTranslations('common');
+  const { ADJUSTMENT_KIND_LABELS } = useLabels();
+  const error = useResult(state, t('adjustmentAdded'));
   return (
     <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-7">
       <input type="hidden" name="periodId" value={props.periodId} />
-      <FormField label="Людина" htmlFor="adj-person" error={error?.fieldErrors?.personId}>
+      <FormField label={t('person')} htmlFor="adj-person" error={error?.fieldErrors?.personId}>
         <NativeSelect
           id="adj-person"
           name="personId"
-          placeholder="Оберіть"
+          placeholder={t('choose')}
           options={props.people.map((p) => ({ value: p.id, label: p.name }))}
         />
       </FormField>
-      <FormField label="Вид" htmlFor="adj-kind">
+      <FormField label={t('kind')} htmlFor="adj-kind">
         <NativeSelect
           id="adj-kind"
           name="kind"
@@ -261,10 +277,10 @@ export function AdjustmentForm(props: {
           options={toOptions(ADJUSTMENT_KIND_LABELS)}
         />
       </FormField>
-      <FormField label="Сума" htmlFor="adj-amount" error={error?.fieldErrors?.amount}>
+      <FormField label={t('amount')} htmlFor="adj-amount" error={error?.fieldErrors?.amount}>
         <Input id="adj-amount" name="amount" inputMode="decimal" />
       </FormField>
-      <FormField label="Валюта" htmlFor="adj-currency" error={error?.fieldErrors?.currency}>
+      <FormField label={t('currency')} htmlFor="adj-currency" error={error?.fieldErrors?.currency}>
         <NativeSelect
           id="adj-currency"
           name="currency"
@@ -275,7 +291,7 @@ export function AdjustmentForm(props: {
           ]}
         />
       </FormField>
-      <FormField label="Виплата" htmlFor="adj-method">
+      <FormField label={t('payout')} htmlFor="adj-method">
         <NativeSelect
           id="adj-method"
           name="payoutMethod"
@@ -286,11 +302,11 @@ export function AdjustmentForm(props: {
           ]}
         />
       </FormField>
-      <FormField label="Причина" htmlFor="adj-reason" error={error?.fieldErrors?.reason}>
+      <FormField label={t('reason')} htmlFor="adj-reason" error={error?.fieldErrors?.reason}>
         <Input id="adj-reason" name="reason" required />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Додати
+        {tc('add')}
       </Button>
       <div className="col-span-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -304,13 +320,15 @@ export function RemoveAdjustmentButton({ id, periodId }: { id: string; periodId:
     removeAdjustmentAction,
     null,
   );
-  useResult(state, 'Коригування видалено');
+  const t = useTranslations('periodForms');
+  const tc = useTranslations('common');
+  useResult(state, t('adjustmentRemoved'));
   return (
     <form action={action}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="periodId" value={periodId} />
       <Button type="submit" size="sm" variant="ghost" disabled={pending}>
-        Видалити
+        {tc('delete')}
       </Button>
     </form>
   );

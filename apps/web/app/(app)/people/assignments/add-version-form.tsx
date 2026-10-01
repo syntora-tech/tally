@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form-field';
@@ -21,10 +22,12 @@ export function AddVersionForm(props: Props) {
   );
   const formRef = useRef<HTMLFormElement>(null);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const t = useTranslations('terms');
+  const tc = useTranslations('common');
 
   useEffect(() => {
-    if (state?.ok) toast.success('Нову версію умов збережено');
-  }, [state]);
+    if (state?.ok) toast.success(t('versionSaved'));
+  }, [state, t]);
 
   return (
     <form ref={formRef} action={action} className="flex flex-col gap-3 rounded-md border p-3">
@@ -35,7 +38,11 @@ export function AddVersionForm(props: Props) {
           <AlertDescription>{state.error.message}</AlertDescription>
         </Alert>
       )}
-      <FormField label="Діє з місяця" htmlFor={`${props.side}-validFrom`} error={errors?.validFrom}>
+      <FormField
+        label={t('validFrom')}
+        htmlFor={`${props.side}-validFrom`}
+        error={errors?.validFrom}
+      >
         <Input
           id={`${props.side}-validFrom`}
           name="validFrom"
@@ -51,7 +58,7 @@ export function AddVersionForm(props: Props) {
         <PayFields prefix="" defaults={props.defaults} errors={errors} />
       )}
       <Button type="submit" size="sm" disabled={pending} className="self-start">
-        {pending ? 'Зберігаємо…' : 'Додати версію'}
+        {pending ? tc('saving') : t('addVersion')}
       </Button>
     </form>
   );

@@ -10,18 +10,18 @@ export const optionalText = z
   .preprocess(emptyToNull, z.string().trim().max(10_000).nullable().optional())
   .transform((v) => v ?? null);
 
-export const requiredText = (message = 'Обов’язкове поле') =>
+export const requiredText = (message = 'field.required') =>
   z.string({ error: message }).trim().min(1, message).max(1_000);
 
 /** Decimal as a string (never a JS number), e.g. "5500" or "47.5". */
 export const decimalString = z
   .string()
   .trim()
-  .refine((v) => parseDecimal(v).isOk(), 'Введіть число, наприклад 5500.00');
+  .refine((v) => parseDecimal(v).isOk(), 'field.number');
 
 export const nonNegativeDecimal = decimalString.refine(
   (v) => !v.startsWith('-'),
-  'Значення не може бути від’ємним',
+  'field.nonNegative',
 );
 
 export const optionalDecimal = z
@@ -31,7 +31,7 @@ export const optionalDecimal = z
 export const localDateString = z
   .string()
   .trim()
-  .refine((v) => parseLocalDate(v).isOk(), 'Невірна дата')
+  .refine((v) => parseLocalDate(v).isOk(), 'field.date')
   .transform((v) => v as LocalDate);
 
 export const optionalLocalDate = z
@@ -41,14 +41,14 @@ export const optionalLocalDate = z
 /** First day of a month, as required for term versions (A-018); also accepts `YYYY-MM`. */
 export const monthStart = z.preprocess(
   (v) => (typeof v === 'string' && /^\d{4}-\d{2}$/.test(v.trim()) ? `${v.trim()}-01` : v),
-  localDateString.refine((v) => v.endsWith('-01'), 'Дата має бути першим числом місяця'),
+  localDateString.refine((v) => v.endsWith('-01'), 'field.monthStart'),
 );
 
 export const currencyCode = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z]{3,4}$/, 'Код валюти: USD, EUR, UAH, USDT…');
+  .regex(/^[A-Z]{3,4}$/, 'field.currency');
 
 /** Tags from a comma-separated string or repeated form fields; trimmed, de-duplicated. */
 export const tagList = z
@@ -59,9 +59,7 @@ export const tagList = z
     return [...new Set(raw.map((t) => t.trim()).filter((t) => t.length > 0))];
   });
 
-export const httpUrl = z
-  .url({ protocol: /^https?$/, error: 'Посилання має починатися з http(s)://' })
-  .max(2_000);
+export const httpUrl = z.url({ protocol: /^https?$/, error: 'field.url' }).max(2_000);
 
 export const optionalHttpUrl = z
   .preprocess(emptyToNull, httpUrl.nullable().optional())

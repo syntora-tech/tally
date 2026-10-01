@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
@@ -39,15 +40,21 @@ export function ActDraftForm(props: {
   dateOverrideReason: string | null;
 }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(saveActDraftAction, null);
-  const error = useResult(state, 'Чернетку збережено');
+  const t = useTranslations('actForms');
+  const tc = useTranslations('common');
+  const error = useResult(state, t('draftSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="id" value={props.id} />
-      <FormField label="Дата акту" htmlFor="act-date" error={error?.fieldErrors?.actDate}>
+      <FormField label={t('actDate')} htmlFor="act-date" error={error?.fieldErrors?.actDate}>
         <Input id="act-date" name="actDate" type="date" defaultValue={props.actDate} />
       </FormField>
       {props.editableAmount && (
-        <FormField label="Сума, UAH" htmlFor="act-amount" error={error?.fieldErrors?.amountUah}>
+        <FormField
+          label={t('amountUah')}
+          htmlFor="act-amount"
+          error={error?.fieldErrors?.amountUah}
+        >
           <Input
             id="act-amount"
             name="amountUah"
@@ -56,7 +63,7 @@ export function ActDraftForm(props: {
           />
         </FormField>
       )}
-      <FormField label="Причина неробочої дати (власник)" htmlFor="act-override">
+      <FormField label={t('nonWorkingReason')} htmlFor="act-override">
         <Input
           id="act-override"
           name="dateOverrideReason"
@@ -65,7 +72,7 @@ export function ActDraftForm(props: {
         />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Зберегти
+        {tc('save')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -76,13 +83,14 @@ export function ActDraftForm(props: {
 
 export function IssueActForm({ id }: { id: string }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(issueActAction, null);
-  const error = useResult(state, 'Акт випущено');
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('issued'));
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={id} />
       <div>
         <Button type="submit" disabled={pending}>
-          Випустити акт і присвоїти номер
+          {t('issue')}
         </Button>
       </div>
       <ErrorAlert message={error?.message} />
@@ -92,15 +100,16 @@ export function IssueActForm({ id }: { id: string }) {
 
 export function VoidActForm({ id }: { id: string }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(voidActAction, null);
-  const error = useResult(state, 'Акт анульовано');
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('voided'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
-      <FormField label="Причина анулювання" htmlFor="act-void" error={error?.fieldErrors?.reason}>
+      <FormField label={t('voidReason')} htmlFor="act-void" error={error?.fieldErrors?.reason}>
         <Input id="act-void" name="reason" required className="w-80" />
       </FormField>
       <Button type="submit" variant="destructive" disabled={pending}>
-        Анулювати
+        {t('void')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -111,15 +120,13 @@ export function VoidActForm({ id }: { id: string }) {
 
 export function SignedUrlForm({ id, value }: { id: string; value: string | null }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(setSignedUrlAction, null);
-  const error = useResult(state, 'Посилання збережено');
+  const t = useTranslations('actForms');
+  const tc = useTranslations('common');
+  const error = useResult(state, t('linkSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
-      <FormField
-        label="Підписаний акт у Вчасно"
-        htmlFor="act-signed"
-        error={error?.fieldErrors?.signedUrl}
-      >
+      <FormField label={t('signedLink')} htmlFor="act-signed" error={error?.fieldErrors?.signedUrl}>
         <Input
           id="act-signed"
           name="signedUrl"
@@ -129,7 +136,7 @@ export function SignedUrlForm({ id, value }: { id: string; value: string | null 
         />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Зберегти
+        {tc('save')}
       </Button>
     </form>
   );
@@ -137,11 +144,12 @@ export function SignedUrlForm({ id, value }: { id: string; value: string | null 
 
 export function NewActForm(props: { contracts: { id: string; label: string }[]; today: string }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(createActAction, null);
-  const error = useResult(state, 'Акт створено');
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('created'));
   return (
     <form action={action} className="grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
       <FormField
-        label="Договір ФОП"
+        label={t('contract')}
         htmlFor="new-contract"
         error={error?.fieldErrors?.contractId}
         className="md:col-span-2"
@@ -149,37 +157,37 @@ export function NewActForm(props: { contracts: { id: string; label: string }[]; 
         <NativeSelect
           id="new-contract"
           name="contractId"
-          placeholder="Оберіть договір"
+          placeholder={t('chooseContract')}
           options={props.contracts.map((c) => ({ value: c.id, label: c.label }))}
         />
       </FormField>
-      <FormField label="Тип" htmlFor="new-type">
+      <FormField label={t('type')} htmlFor="new-type">
         <NativeSelect
           id="new-type"
           name="type"
           defaultValue="reimbursement"
           options={[
-            { value: 'reimbursement', label: 'Компенсація' },
-            { value: 'other', label: 'Інше' },
+            { value: 'reimbursement', label: t('reimbursement') },
+            { value: 'other', label: t('other') },
           ]}
         />
       </FormField>
-      <FormField label="Дата акту" htmlFor="new-date" error={error?.fieldErrors?.actDate}>
+      <FormField label={t('actDate')} htmlFor="new-date" error={error?.fieldErrors?.actDate}>
         <Input id="new-date" name="actDate" type="date" defaultValue={props.today} />
       </FormField>
-      <FormField label="Період з" htmlFor="new-from">
+      <FormField label={t('periodFrom')} htmlFor="new-from">
         <Input id="new-from" name="periodFrom" type="date" />
       </FormField>
-      <FormField label="по" htmlFor="new-to">
+      <FormField label={t('periodTo')} htmlFor="new-to">
         <Input id="new-to" name="periodTo" type="date" />
       </FormField>
-      <FormField label="Сума, UAH" htmlFor="new-amount" error={error?.fieldErrors?.amountUah}>
+      <FormField label={t('amountUah')} htmlFor="new-amount" error={error?.fieldErrors?.amountUah}>
         <Input id="new-amount" name="amountUah" inputMode="decimal" />
       </FormField>
       <div className="md:col-span-3">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
         <Button type="submit" disabled={pending}>
-          Створити чернетку
+          {t('createDraft')}
         </Button>
       </div>
     </form>

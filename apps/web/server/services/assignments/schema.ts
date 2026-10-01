@@ -48,7 +48,7 @@ const assignmentCoreShape = {
     .refine((v) => {
       const fte = toDecimal(v);
       return fte.gt(0) && fte.lte(1) && fte.decimalPlaces() <= 2;
-    }, 'FTE від 0.01 до 1'),
+    }, 'assignments.fte'),
   startsOn: localDateString,
   endsOn: optionalLocalDate,
 };
@@ -65,18 +65,18 @@ export const createAssignmentInput = z
     pay: payTermsFields,
   })
   .refine((a) => a.isInternal || a.contractId, {
-    message: 'Оберіть договір або позначте залучення як внутрішнє',
+    message: 'assignments.contractOrInternal',
     path: ['contractId'],
   })
   .refine((a) => !a.endsOn || a.endsOn >= a.startsOn, {
-    message: 'Дата завершення раніша за дату початку',
+    message: 'assignments.endBeforeStart',
     path: ['endsOn'],
   });
 
 export const updateAssignmentInput = z
   .object({ id: z.uuid(), ...assignmentCoreShape })
   .refine((a) => !a.endsOn || a.endsOn >= a.startsOn, {
-    message: 'Дата завершення раніша за дату початку',
+    message: 'assignments.endBeforeStart',
     path: ['endsOn'],
   });
 

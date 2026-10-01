@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
@@ -22,7 +23,7 @@ export async function payItemAction(
     amount: decimalField(input.amount),
     rate: decimalField(input.rate),
   });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   revalidatePath('/ledger');
   return { ok: true, data: result.value };
@@ -34,7 +35,7 @@ export async function overridePayableAction(
 ): Promise<PayrollFormState> {
   const ctx = await requireUserContext();
   const result = await overridePayable.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   return { ok: true, data: { id: result.value.id } };
 }

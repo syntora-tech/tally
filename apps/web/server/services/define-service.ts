@@ -32,7 +32,7 @@ export function defineService<S extends z.ZodType, T>(
         return err(
           serviceError(
             'validation_error',
-            'Перевірте введені дані',
+            'general.checkInput',
             z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
           ),
         );

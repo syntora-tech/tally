@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contractInput } from '@/server/services/clients/schema';
-import { contractFormToInput, describeRule } from './contract-rules';
+import { contractFormToInput } from './contract-rules';
 
 const base = {
   kind: 'client',
@@ -57,17 +57,5 @@ describe('contractFormToInput', () => {
     expect(bad.success).toBe(false);
     const fop = contractInput.safeParse({ ...base, kind: 'fop' });
     expect(fop.success).toBe(false);
-  });
-});
-
-describe('describeRule', () => {
-  it.each([
-    ['payment', { type: 'day_of_month', day: 20 }, 'до 20 числа'],
-    ['payment', { type: 'net_days', days: 15 }, 'через 15 дн. після інвойсу'],
-    ['invoice', { type: 'first_working_day_after_period' }, 'перший робочий день після періоду'],
-    ['act', { type: 'nth_working_day_after_period', n: 3 }, '3-й робочий день після періоду'],
-    ['act', { type: 'manual' }, 'вручну'],
-  ] as const)('%s %j → %s', (kind, rule, text) => {
-    expect(describeRule(kind, rule)).toBe(text);
   });
 });

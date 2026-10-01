@@ -1,26 +1,27 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listAccounts, listCategories } from '@/server/services/ledger';
 import { TransactionForm } from './transaction-form';
+import { getTranslations } from 'next-intl/server';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Нова транзакція · Tally' };
+export const generateMetadata = pageTitle('newTransaction');
 
 export default async function NewTransactionPage() {
   const ctx = await requireRole(FINANCE_ROLES);
   const accounts = (await listAccounts.run(ctx, {})).unwrapOr([]);
   const categories = (await listCategories.run(ctx, {})).unwrapOr([]);
+  const t = await getTranslations('newTransaction');
+  const tl = await getTranslations('ledger');
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
           ← Ledger
         </Link>
-        <h1 className="text-2xl font-semibold">Нова транзакція</h1>
-        <p className="text-muted-foreground">
-          Для обміну вводяться обидві фактичні суми з виписки — курс рахується з них
-        </p>
+        <h1 className="text-2xl font-semibold">{tl('newTransaction')}</h1>
+        <p className="text-muted-foreground">{t('subtitle')}</p>
       </div>
       <TransactionForm
         today={ctx.today}

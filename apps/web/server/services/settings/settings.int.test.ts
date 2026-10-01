@@ -70,7 +70,7 @@ describe('settings: calendar and numbering (5.5, 5.6)', () => {
       nextValue: '4',
       yearScoped: 'on',
     });
-    expect(lower._unsafeUnwrapErr().message).toContain('не можна зменшити');
+    expect(lower._unsafeUnwrapErr().message).toBe('db.sequenceDown');
 
     const bad = await saveSequence.run(h.ctxFor(owner), {
       key: KEY,

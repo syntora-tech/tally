@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ALLOCATION_LABELS, PERSON_STATUS_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import { savePerson, type PersonFormState } from '@/server/actions/people';
 
 export type PersonFormValues = {
@@ -38,6 +39,9 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
   const [state, action, pending] = useActionState<PersonFormState, FormData>(savePerson, null);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   const cancelHref = person?.id ? `/people/${person.id}` : '/people';
+  const t = useTranslations('personForm');
+  const tc = useTranslations('common');
+  const { ALLOCATION_LABELS, PERSON_STATUS_LABELS } = useLabels();
 
   return (
     <form action={action} className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
@@ -47,13 +51,13 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           <AlertDescription>{state.error.message}</AlertDescription>
         </Alert>
       )}
-      <FormField label="Повне ім’я" htmlFor="fullName" error={errors?.fullName}>
+      <FormField label={t('fullName')} htmlFor="fullName" error={errors?.fullName}>
         <Input id="fullName" name="fullName" defaultValue={person?.fullName} required />
       </FormField>
-      <FormField label="Коротке ім’я" htmlFor="displayName" error={errors?.displayName}>
+      <FormField label={t('displayName')} htmlFor="displayName" error={errors?.displayName}>
         <Input id="displayName" name="displayName" defaultValue={person?.displayName ?? ''} />
       </FormField>
-      <FormField label="Позиція" htmlFor="position" error={errors?.position}>
+      <FormField label={t('position')} htmlFor="position" error={errors?.position}>
         <Input
           id="position"
           name="position"
@@ -61,30 +65,21 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           placeholder="DevOps Engineer"
         />
       </FormField>
-      <FormField label="Сеньйорність" htmlFor="seniority" hint="Через кому: Lead, Senior">
+      <FormField label={t('seniority')} htmlFor="seniority" hint={t('seniorityHint')}>
         <Input id="seniority" name="seniority" defaultValue={person?.seniority.join(', ')} />
       </FormField>
-      <FormField
-        label="Стек"
-        htmlFor="stack"
-        hint="Через кому: Solidity, TypeScript, AWS"
-        className="md:col-span-2"
-      >
+      <FormField label={t('stack')} htmlFor="stack" hint={t('stackHint')} className="md:col-span-2">
         <Input id="stack" name="stack" defaultValue={person?.stack.join(', ')} />
       </FormField>
       <FormField
-        label="Домени"
+        label={t('domains')}
         htmlFor="domains"
-        hint="Через кому: DeFi, NFT"
+        hint={t('domainsHint')}
         className="md:col-span-2"
       >
         <Input id="domains" name="domains" defaultValue={person?.domains.join(', ')} />
       </FormField>
-      <FormField
-        label="Ринкова ставка, $/год"
-        htmlFor="marketRateUsd"
-        error={errors?.marketRateUsd}
-      >
+      <FormField label={t('marketRate')} htmlFor="marketRateUsd" error={errors?.marketRateUsd}>
         <Input
           id="marketRateUsd"
           name="marketRateUsd"
@@ -92,19 +87,19 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           defaultValue={editableDecimal(person?.marketRateUsd ?? null)}
         />
       </FormField>
-      <FormField label="Формат" htmlFor="allocation" error={errors?.allocation}>
+      <FormField label={t('allocation')} htmlFor="allocation" error={errors?.allocation}>
         <NativeSelect
           id="allocation"
           name="allocation"
           defaultValue={person?.allocation ?? ''}
-          placeholder="Не вказано"
+          placeholder={t('notSet')}
           options={toOptions(ALLOCATION_LABELS)}
         />
       </FormField>
       <FormField
-        label="Доступний з"
+        label={t('availableFrom')}
         htmlFor="availabilityFrom"
-        hint="Порожньо — доступний зараз"
+        hint={t('availableFromHint')}
         error={errors?.availabilityFrom}
       >
         <Input
@@ -114,7 +109,7 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           defaultValue={person?.availabilityFrom ?? ''}
         />
       </FormField>
-      <FormField label="Статус" htmlFor="status" error={errors?.status}>
+      <FormField label={t('status')} htmlFor="status" error={errors?.status}>
         <NativeSelect
           id="status"
           name="status"
@@ -122,7 +117,7 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           options={toOptions(PERSON_STATUS_LABELS)}
         />
       </FormField>
-      <FormField label="Локація" htmlFor="location">
+      <FormField label={t('location')} htmlFor="location">
         <Input
           id="location"
           name="location"
@@ -130,7 +125,7 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           placeholder="Ukraine"
         />
       </FormField>
-      <FormField label="Часовий пояс" htmlFor="timezone">
+      <FormField label={t('timezone')} htmlFor="timezone">
         <Input
           id="timezone"
           name="timezone"
@@ -138,7 +133,7 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           placeholder="UTC+3"
         />
       </FormField>
-      <FormField label="Контактна особа" htmlFor="contactOwner">
+      <FormField label={t('contactOwner')} htmlFor="contactOwner">
         <Input
           id="contactOwner"
           name="contactOwner"
@@ -146,15 +141,15 @@ export function PersonForm({ person }: { person?: PersonFormValues }) {
           placeholder="@alina_syntora"
         />
       </FormField>
-      <FormField label="Нотатки" htmlFor="notes" className="md:col-span-2">
+      <FormField label={t('notes')} htmlFor="notes" className="md:col-span-2">
         <Textarea id="notes" name="notes" defaultValue={person?.notes ?? ''} rows={3} />
       </FormField>
       <div className="flex gap-2 md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Зберігаємо…' : 'Зберегти'}
+          {pending ? tc('saving') : tc('save')}
         </Button>
         <Button variant="ghost" render={<Link href={cancelHref} />}>
-          Скасувати
+          {tc('cancel')}
         </Button>
       </div>
     </form>

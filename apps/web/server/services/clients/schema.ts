@@ -4,9 +4,9 @@ import { currencyCode, optionalLocalDate, optionalText, requiredText } from '../
 const emptyToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v);
 
 export const contactInput = z.object({
-  name: z.string().trim().min(1, 'Вкажіть ім’я контакту'),
+  name: z.string().trim().min(1, 'clients.contactName'),
   role: z.string().trim().optional(),
-  email: z.union([z.email('Невірний email'), z.literal('')]).optional(),
+  email: z.union([z.email('field.email'), z.literal('')]).optional(),
   phone: z.string().trim().optional(),
 });
 
@@ -22,7 +22,7 @@ const contactList = z.preprocess((v) => {
 }, z.array(contactInput).max(20));
 
 export const clientInput = z.object({
-  legalName: requiredText('Вкажіть юридичну назву'),
+  legalName: requiredText('clients.legalName'),
   shortName: optionalText,
   address: optionalText,
   country: optionalText,
@@ -59,7 +59,7 @@ export const CONTRACT_STATUSES = ['active', 'ended'] as const;
 export const contractInput = z
   .object({
     kind: z.enum(['client', 'fop']),
-    number: requiredText('Вкажіть номер договору'),
+    number: requiredText('contracts.number'),
     signedOn: optionalLocalDate,
     clientId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
     payeeId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
@@ -73,7 +73,7 @@ export const contractInput = z
     status: z.enum(CONTRACT_STATUSES).default('active'),
   })
   .refine((c) => (c.kind === 'client' ? c.clientId && !c.payeeId : c.payeeId && !c.clientId), {
-    message: 'Договір має бути або з клієнтом, або з одержувачем (ФОП)',
+    message: 'contracts.counterparty',
     path: ['kind'],
   });
 

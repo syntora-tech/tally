@@ -1,15 +1,16 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS, toOptions } from '@/lib/labels';
+import { toOptions } from '@/lib/labels';
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { searchPeople } from '@/server/services/people';
 import { PeopleTable, type PeopleRow } from './people-table';
+import { getTranslations } from 'next-intl/server';
+import { getLabels, localizeForUser, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Люди · Tally' };
+export const generateMetadata = pageTitle('people');
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -47,39 +48,41 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
       }))
     : [];
   const canWrite = FINANCE_ROLES.includes(ctx.actor.role);
+  const t = await getTranslations('people');
+  const { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS } = await getLabels();
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Люди</h1>
-          <p className="text-muted-foreground">Пул спеціалістів (Bench)</p>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             render={<a href={`/api/people/export?${new URLSearchParams(filters).toString()}`} />}
           >
-            Експорт CSV
+            {t('exportCsv')}
           </Button>
           {canWrite && (
             <Button variant="outline" render={<Link href="/people/payees" />}>
-              Одержувачі
+              {t('payees')}
             </Button>
           )}
-          {canWrite && <Button render={<Link href="/people/new" />}>Додати людину</Button>}
+          {canWrite && <Button render={<Link href="/people/new" />}>{t('add')}</Button>}
         </div>
       </div>
 
       <form
         method="get"
         className="grid grid-cols-2 gap-3 rounded-md border p-4 md:grid-cols-4 lg:grid-cols-5"
-        aria-label="Фільтри"
+        aria-label={t('filters')}
       >
-        <FormField label="Стек" htmlFor="f-stack" hint="Через кому: Solidity, React">
+        <FormField label={t('stack')} htmlFor="f-stack" hint={t('stackHint')}>
           <Input id="f-stack" name="stack" defaultValue={filters.stack} />
         </FormField>
-        <FormField label="Сеньйорність" htmlFor="f-seniority">
+        <FormField label={t('seniority')} htmlFor="f-seniority">
           <Input
             id="f-seniority"
             name="seniority"
@@ -87,10 +90,10 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
             placeholder="Senior"
           />
         </FormField>
-        <FormField label="Ставка до, $/год" htmlFor="f-maxRate">
+        <FormField label={t('maxRate')} htmlFor="f-maxRate">
           <Input id="f-maxRate" name="maxRate" inputMode="decimal" defaultValue={filters.maxRate} />
         </FormField>
-        <FormField label="Доступний на дату" htmlFor="f-availableOn">
+        <FormField label={t('availableOn')} htmlFor="f-availableOn">
           <Input
             id="f-availableOn"
             name="availableOn"
@@ -98,49 +101,49 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
             defaultValue={filters.availableOn}
           />
         </FormField>
-        <FormField label="Формат" htmlFor="f-allocation">
+        <FormField label={t('allocation')} htmlFor="f-allocation">
           <NativeSelect
             id="f-allocation"
             name="allocation"
             defaultValue={filters.allocation}
-            placeholder="Будь-який"
+            placeholder={t('anyMasc')}
             options={toOptions(ALLOCATION_LABELS)}
           />
         </FormField>
-        <FormField label="Локація" htmlFor="f-location">
+        <FormField label={t('location')} htmlFor="f-location">
           <Input id="f-location" name="location" defaultValue={filters.location} />
         </FormField>
-        <FormField label="Зайнятість" htmlFor="f-bench">
+        <FormField label={t('bench')} htmlFor="f-bench">
           <NativeSelect
             id="f-bench"
             name="bench"
             defaultValue={filters.bench}
-            placeholder="Будь-яка"
+            placeholder={t('anyFem')}
             options={toOptions(BENCH_LABELS)}
           />
         </FormField>
-        <FormField label="Статус" htmlFor="f-status">
+        <FormField label={t('status')} htmlFor="f-status">
           <NativeSelect
             id="f-status"
             name="status"
             defaultValue={filters.status}
-            placeholder="Будь-який"
+            placeholder={t('anyMasc')}
             options={toOptions(PERSON_STATUS_LABELS)}
           />
         </FormField>
         <div className="col-span-2 flex items-end gap-2">
-          <Button type="submit">Застосувати</Button>
+          <Button type="submit">{t('apply')}</Button>
           <Button variant="ghost" render={<Link href={`/people?availableOn=${ctx.today}`} />}>
-            Доступні зараз
+            {t('availableNow')}
           </Button>
           <Button variant="ghost" render={<Link href="/people" />}>
-            Скинути
+            {t('reset')}
           </Button>
         </div>
       </form>
 
       {result.isErr() ? (
-        <p className="text-destructive">{result.error.message}</p>
+        <p className="text-destructive">{(await localizeForUser(result.error)).message}</p>
       ) : (
         <PeopleTable rows={rows} />
       )}

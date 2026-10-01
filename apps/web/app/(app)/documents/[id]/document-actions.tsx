@@ -1,12 +1,13 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { DOC_STATUS_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import {
   linkDocumentAction,
   updateDocumentAction,
@@ -23,18 +24,14 @@ function useToast(state: UploadState, success: string) {
 
 export function LinkForm({ documentId, targets }: { documentId: string; targets: LinkTargets }) {
   const [state, action, pending] = useActionState<UploadState, FormData>(linkDocumentAction, null);
-  useToast(state, 'Прив’язку додано');
+  const t = useTranslations('documentForm');
+  useToast(state, t('linkAdded'));
   return (
     <form action={action} className="flex flex-wrap gap-2">
       <input type="hidden" name="documentId" value={documentId} />
-      <LinkTargetSelect
-        name="target"
-        targets={targets}
-        required
-        aria-label="Сутність для прив’язки"
-      />
+      <LinkTargetSelect name="target" targets={targets} required aria-label={t('entity')} />
       <Button type="submit" variant="outline" size="sm" disabled={pending}>
-        Прив’язати
+        {t('attach')}
       </Button>
     </form>
   );
@@ -55,21 +52,24 @@ export function EditDocumentForm({ doc }: { doc: DocumentMeta }) {
     updateDocumentAction,
     null,
   );
-  useToast(state, 'Документ збережено');
+  const t = useTranslations('documentForm');
+  const tc = useTranslations('common');
+  const { DOC_STATUS_LABELS } = useLabels();
+  useToast(state, t('saved'));
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <input type="hidden" name="id" value={doc.id} />
-      <FormField label="Назва" htmlFor="title" error={errors?.title}>
+      <FormField label={t('title')} htmlFor="title" error={errors?.title}>
         <Input id="title" name="title" required defaultValue={doc.title} />
       </FormField>
-      <FormField label="Номер" htmlFor="number">
+      <FormField label={t('number')} htmlFor="number">
         <Input id="number" name="number" defaultValue={doc.number ?? ''} />
       </FormField>
-      <FormField label="Дата" htmlFor="docDate">
+      <FormField label={t('date')} htmlFor="docDate">
         <Input id="docDate" name="docDate" type="date" defaultValue={doc.docDate ?? ''} />
       </FormField>
-      <FormField label="Статус" htmlFor="status">
+      <FormField label={t('status')} htmlFor="status">
         <NativeSelect
           id="status"
           name="status"
@@ -77,14 +77,14 @@ export function EditDocumentForm({ doc }: { doc: DocumentMeta }) {
           options={toOptions(DOC_STATUS_LABELS)}
         />
       </FormField>
-      <FormField label="Посилання" htmlFor="url" className="md:col-span-2" error={errors?.url}>
+      <FormField label={t('link')} htmlFor="url" className="md:col-span-2" error={errors?.url}>
         <Input id="url" name="url" type="url" defaultValue={doc.url ?? ''} />
       </FormField>
-      <FormField label="Нотатки" htmlFor="notes" className="md:col-span-2">
+      <FormField label={t('notes')} htmlFor="notes" className="md:col-span-2">
         <Textarea id="notes" name="notes" rows={2} defaultValue={doc.notes ?? ''} />
       </FormField>
       <Button type="submit" size="sm" disabled={pending} className="self-start">
-        Зберегти
+        {tc('save')}
       </Button>
     </form>
   );

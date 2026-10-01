@@ -29,7 +29,7 @@ import { z } from 'zod';
 import { ensureMonthlyActDraft } from '../acts';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { serviceError, msg } from '../errors';
 import { decimalString, localDateString, optionalText } from '../fields';
 import { bookTransaction } from '../ledger';
 import { loadCalendar } from '../periods';
@@ -165,7 +165,7 @@ export const setPayoutRate = defineService({
   name: 'payroll.setRate',
   input: z.object({
     itemId: z.uuid(),
-    rate: decimalString.refine((v) => toDecimal(v).gt(0), 'Курс має бути більший за 0'),
+    rate: decimalString.refine((v) => toDecimal(v).gt(0), 'fx.ratePositive2'),
     source: z.enum(['bank_actual', 'nbu', 'manual']).default('manual'),
   }),
   handler: async (ctx, input) => inActorScope(ctx, (tx) => applyRate(tx, ctx, input)),
@@ -181,12 +181,12 @@ async function applyRate(
     .from(payrollItem)
     .where(eq(payrollItem.id, input.itemId))
     .for('update');
-  if (!item) return err(serviceError('not_found', 'Виплату не знайдено'));
+  if (!item) return err(serviceError('not_found', 'payroll.notFound'));
   if (item.payoutMethod !== 'fiat') {
-    return err(serviceError('validation_error', 'Курс потрібен лише для виплат у гривні'));
+    return err(serviceError('validation_error', 'payroll.rateUahOnly'));
   }
   if (!toDecimal(item.paidAmount).isZero()) {
-    return err(serviceError('conflict', 'Курс виплати з оплатами змінити не можна'));
+    return err(serviceError('conflict', 'payroll.rateLocked'));
   }
   const lines = await tx
     .select({ amountUsd: payrollLine.amountUsd })
@@ -209,7 +209,10 @@ async function applyRate(
   );
   if (totalUah.isErr()) {
     return err(
-      serviceError('validation_error', `Непідтримувана валюта ${totalUah.error.currency}`),
+      serviceError(
+        'validation_error',
+        msg('payroll.unsupportedCurrency', { currency: totalUah.error.currency }),
+      ),
     );
   }
   await tx
@@ -229,9 +232,9 @@ const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
 export const payItemInput = z.object({
   itemId: z.uuid(),
-  accountId: z.uuid({ error: 'Оберіть рахунок списання' }),
+  accountId: z.uuid({ error: 'ledger.chooseFromAccount' }),
   occurredOn: localDateString,
-  amount: decimalString.refine((v) => toDecimal(v).gt(0), 'Сума має бути більша за 0'),
+  amount: decimalString.refine((v) => toDecimal(v).gt(0), 'field.positive'),
   rate: z.preprocess(emptyToUndefined, decimalString.optional()),
   rateSource: z.preprocess(emptyToUndefined, z.enum(['bank_actual', 'nbu', 'manual']).optional()),
   categoryName: z.enum(['Contractors', 'Payroll']).default('Contractors'),
@@ -272,15 +275,15 @@ export const payItem = defineService({
         .from(payrollItem)
         .innerJoin(person, eq(person.id, payrollItem.personId))
         .where(eq(payrollItem.id, input.itemId));
-      if (!item) return err(serviceError('not_found', 'Виплату не знайдено'));
+      if (!item) return err(serviceError('not_found', 'payroll.notFound'));
       const fiat = item.item.payoutMethod === 'fiat';
       const [acc] = await tx.select().from(account).where(eq(account.id, input.accountId));
-      if (!acc) return err(serviceError('not_found', 'Рахунок не знайдено'));
+      if (!acc) return err(serviceError('not_found', 'ledger.accountNotFound'));
       const accountOk = fiat ? acc.currency === 'UAH' : USD_LIKE.includes(acc.currency);
       if (!accountOk) {
         return err(
-          serviceError('validation_error', 'Рахунок не тієї валюти', {
-            accountId: [fiat ? 'Оберіть гривневий рахунок' : 'Оберіть рахунок у USD/USDT/USDC'],
+          serviceError('validation_error', 'payroll.accountCurrency', {
+            accountId: [fiat ? 'payroll.chooseUahAccount' : 'payroll.chooseUsdAccount'],
           }),
         );
       }
@@ -291,8 +294,7 @@ export const payItem = defineService({
         .where(eq(payrollLine.payrollItemId, item.item.id));
       const allReady = lines.every((l) => l.status === 'payable' || l.status === 'paid');
       const total = fiat ? item.item.totalUah : item.item.totalUsd;
-      if (total === null)
-        return err(serviceError('validation_error', 'Спершу вкажіть курс виплати'));
+      if (total === null) return err(serviceError('validation_error', 'payroll.rateFirst'));
       const payableUsd = sum(
         lines.filter((l) => l.status === 'payable' || l.status === 'paid').map((l) => l.amountUsd),
       );
@@ -304,33 +306,32 @@ export const payItem = defineService({
       const after = toDecimal(item.item.paidAmount).plus(input.amount);
       if (after.gt(payable.toDecimalPlaces(2)) && !input.overrideReason) {
         return err(
-          serviceError(
-            'validation_error',
-            'Сума більша за доступну до виплати частину — це аванс, потрібна причина',
-            { overrideReason: ['Вкажіть причину авансу'] },
-          ),
+          serviceError('validation_error', 'payroll.advanceReason', {
+            overrideReason: ['payroll.advanceReasonField'],
+          }),
         );
       }
       if (
         after.gt(payable.toDecimalPlaces(2)) &&
         !(ctx.actor.kind === 'user' && ctx.actor.role === 'owner')
       ) {
-        return err(
-          serviceError('forbidden', 'Аванс понад доступну частину може дати лише власник'),
-        );
+        return err(serviceError('forbidden', 'payroll.advanceOwnerOnly'));
       }
 
       const [cat] = await tx
         .select({ id: category.id })
         .from(category)
         .where(and(eq(category.txType, 'expense'), eq(category.name, input.categoryName)));
-      if (!cat) return err(serviceError('not_found', `Немає категорії ${input.categoryName}`));
+      if (!cat)
+        return err(
+          serviceError('not_found', msg('payroll.noCategory', { category: input.categoryName })),
+        );
       const booked = await bookTransaction(tx, {
         type: 'expense',
         occurredOn: input.occurredOn,
         categoryId: cat.id,
         description:
-          [input.description, input.overrideReason && `Аванс: ${input.overrideReason}`]
+          [input.description, input.overrideReason && `Advance: ${input.overrideReason}`]
             .filter(Boolean)
             .join(' · ') || null,
         counterparty: item.personName,

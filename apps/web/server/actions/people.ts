@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
@@ -15,6 +16,6 @@ export async function savePerson(
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = input.id ? await updatePerson.run(ctx, input) : await createPerson.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/people/${result.value.id}`);
 }

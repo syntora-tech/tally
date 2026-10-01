@@ -1,15 +1,16 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DOC_STATUS_LABELS, DOCUMENT_TYPE_LABELS, toOptions } from '@/lib/labels';
+import { toOptions } from '@/lib/labels';
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { searchDocuments } from '@/server/services/documents/registry';
 import { DocumentsTable } from './documents-table';
+import { getTranslations } from 'next-intl/server';
+import { getLabels, getLocalizeText, localizeForUser, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Документи · Tally' };
+export const generateMetadata = pageTitle('documents');
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
@@ -25,64 +26,67 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Se
   };
   const result = await searchDocuments.run(ctx, filters);
   const canWrite = FINANCE_ROLES.includes(ctx.actor.role);
+  const t = await getTranslations('documents');
+  const { DOC_STATUS_LABELS, DOCUMENT_TYPE_LABELS } = await getLabels();
+  const localize = await getLocalizeText();
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Документи</h1>
-          <p className="text-muted-foreground">Договори, SOW, акти, CV, NDA та інші документи</p>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
-        {canWrite && <Button render={<Link href="/documents/new" />}>Додати документ</Button>}
+        {canWrite && <Button render={<Link href="/documents/new" />}>{t('add')}</Button>}
       </div>
 
       <form
         method="get"
         className="grid grid-cols-2 gap-3 rounded-md border p-4 md:grid-cols-5"
-        aria-label="Фільтри"
+        aria-label={t('filters')}
       >
-        <FormField
-          label="Номер або назва"
-          htmlFor="f-q"
-          className="col-span-2"
-          hint="1003-A4 знайде «1003 - А4»"
-        >
+        <FormField label={t('q')} htmlFor="f-q" className="col-span-2" hint={t('qHint')}>
           <Input id="f-q" name="q" defaultValue={filters.q} />
         </FormField>
-        <FormField label="Тип" htmlFor="f-type">
+        <FormField label={t('type')} htmlFor="f-type">
           <NativeSelect
             id="f-type"
             name="type"
             defaultValue={filters.type}
-            placeholder="Усі"
+            placeholder={t('all')}
             options={toOptions(DOCUMENT_TYPE_LABELS)}
           />
         </FormField>
-        <FormField label="Статус" htmlFor="f-status">
+        <FormField label={t('status')} htmlFor="f-status">
           <NativeSelect
             id="f-status"
             name="status"
             defaultValue={filters.status}
-            placeholder="Усі"
+            placeholder={t('all')}
             options={toOptions(DOC_STATUS_LABELS)}
           />
         </FormField>
         <label className="flex items-end gap-2 pb-2 text-sm">
-          <input type="checkbox" name="unlinked" defaultChecked={filters.unlinked === 'on'} /> Без
-          прив’язок
+          <input type="checkbox" name="unlinked" defaultChecked={filters.unlinked === 'on'} />{' '}
+          {t('unlinked')}
         </label>
         <div className="col-span-2 flex gap-2 md:col-span-5">
-          <Button type="submit">Шукати</Button>
+          <Button type="submit">{t('search')}</Button>
           <Button variant="ghost" render={<Link href="/documents" />}>
-            Скинути
+            {t('reset')}
           </Button>
         </div>
       </form>
 
       {result.isErr() ? (
-        <p className="text-destructive">{result.error.message}</p>
+        <p className="text-destructive">{(await localizeForUser(result.error)).message}</p>
       ) : (
-        <DocumentsTable rows={result.value} />
+        <DocumentsTable
+          rows={result.value.map((d) => ({
+            ...d,
+            links: d.links.map((l) => ({ ...l, label: localize(l.label) })),
+          }))}
+        />
       )}
     </div>
   );

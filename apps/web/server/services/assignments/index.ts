@@ -151,7 +151,7 @@ export const getAssignment = defineService({
         .orderBy(desc(period.month));
       return { ...row, billing, pay, hours, margin: assignmentMargin(billing, pay, ctx.today) };
     });
-    return card ? ok(card) : err(serviceError('not_found', 'Залучення не знайдено'));
+    return card ? ok(card) : err(serviceError('not_found', 'assignments.notFound'));
   },
 });
 
@@ -199,7 +199,7 @@ export const updateAssignment = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(assignment).set(core).where(eq(assignment.id, id)).returning({ id: assignment.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Залучення не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'assignments.notFound'));
   },
 });
 
@@ -213,7 +213,7 @@ export const addBillingVersion = defineService({
     );
     return row
       ? ok({ id: input.assignmentId })
-      : err(serviceError('internal_error', 'Не вдалося зберегти'));
+      : err(serviceError('internal_error', 'general.saveFailed'));
   },
 });
 
@@ -226,6 +226,6 @@ export const addPayVersion = defineService({
     );
     return row
       ? ok({ id: input.assignmentId })
-      : err(serviceError('internal_error', 'Не вдалося зберегти'));
+      : err(serviceError('internal_error', 'general.saveFailed'));
   },
 });

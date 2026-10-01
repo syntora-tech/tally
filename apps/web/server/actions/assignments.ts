@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject, nestPrefixed } from '@/lib/form-data';
@@ -23,7 +24,7 @@ export async function saveAssignment(
   const result = input.id
     ? await updateAssignment.run(ctx, input)
     : await createAssignment.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/people/assignments/${result.value.id}`);
 }
 
@@ -35,7 +36,7 @@ export async function addTermsVersion(
   const { side, ...input } = formDataToObject(formData);
   const service = side === 'pay' ? addPayVersion : addBillingVersion;
   const result = await service.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/people/assignments/${result.value.id}`);
   return { ok: true, data: result.value };
 }

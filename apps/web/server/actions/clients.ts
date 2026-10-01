@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { redirect } from 'next/navigation';
 import { contractFormToInput } from '@/lib/contract-rules';
 import { formDataToObject } from '@/lib/form-data';
@@ -13,7 +14,7 @@ export async function saveClient(_prev: FormState, formData: FormData): Promise<
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = input.id ? await updateClient.run(ctx, input) : await createClient.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/clients/${result.value.id}`);
 }
 
@@ -23,6 +24,6 @@ export async function saveContract(_prev: FormState, formData: FormData): Promis
   const result = input.id
     ? await updateContract.run(ctx, input)
     : await createContract.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/clients/contracts/${result.value.id}`);
 }

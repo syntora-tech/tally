@@ -194,7 +194,7 @@ describe('FOP acts (6.6)', () => {
     const id = ids.acts[0] ?? '';
     await saveActDraft.run(h.ctxFor(finance), { id, actDate: '2045-08-26' });
     const saturday = await issueAct.run(h.ctxFor(finance), { id });
-    expect(saturday._unsafeUnwrapErr().message).toContain('неробочий день');
+    expect(saturday._unsafeUnwrapErr().message).toMatch(/^db\.nonWorkingDay\|/);
     await saveActDraft.run(h.ctxFor(finance), { id, actDate: '2045-08-31' });
     const issued = await issueAct.run(h.ctxFor(finance), { id });
     expect(issued._unsafeUnwrap().number).toBe('9099 - А7');

@@ -169,6 +169,6 @@ export const saveManualRate = defineService({
         })
         .returning({ id: fxRate.id }),
     );
-    return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+    return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
   },
 });

@@ -1,5 +1,4 @@
-import { formatAmount, formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Badge } from '@/components/ui/badge';
@@ -14,19 +13,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DOC_STATUS_LABELS } from '@/lib/labels';
-import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listActs } from '@/server/services/acts';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Акти ФОП · Tally' };
+export const generateMetadata = pageTitle('acts');
 
-const ACT_TYPE: Record<string, string> = {
-  monthly: 'місячний',
-  reimbursement: 'компенсація',
-  other: 'інше',
-};
+const ACT_TYPES = ['monthly', 'reimbursement', 'other'] as const;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
@@ -38,34 +32,43 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
   const result = await listActs.run(ctx, filters);
   const data = result.unwrapOr({ acts: [], summary: [] });
   const allPayees = (await listActs.run(ctx, {})).unwrapOr({ acts: [], summary: [] }).summary;
+  const [t, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
+    getTranslations('acts'),
+    getFormat(),
+    getLabels(),
+  ]);
+  const actType = (type: string) =>
+    (ACT_TYPES as readonly string[]).includes(type)
+      ? t(`type.${type as (typeof ACT_TYPES)[number]}`)
+      : type;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
-            ← Виплати
+            {t('back')}
           </Link>
-          <h1 className="text-2xl font-semibold">Реєстр актів ФОП</h1>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
         </div>
-        <Button render={<Link href="/payroll/acts/new" />}>Позачерговий акт</Button>
+        <Button render={<Link href="/payroll/acts/new" />}>{t('newAct')}</Button>
       </div>
 
       <form
         method="get"
         className="flex flex-wrap items-end gap-3 rounded-md border p-4"
-        aria-label="Фільтри"
+        aria-label={t('filters')}
       >
-        <FormField label="Контрагент" htmlFor="f-payee">
+        <FormField label={t('counterparty')} htmlFor="f-payee">
           <NativeSelect
             id="f-payee"
             name="payeeId"
             defaultValue={filters.payeeId}
-            placeholder="Усі"
+            placeholder={t('all')}
             options={allPayees.map((p) => ({ value: p.payeeId, label: p.payeeName }))}
           />
         </FormField>
-        <FormField label="Рік" htmlFor="f-year">
+        <FormField label={t('year')} htmlFor="f-year">
           <Input
             id="f-year"
             name="year"
@@ -75,7 +78,7 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
           />
         </FormField>
         <Button type="submit" variant="outline">
-          Показати
+          {t('show')}
         </Button>
       </form>
 
@@ -84,10 +87,10 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
           <Card key={s.payeeId}>
             <CardContent className="flex flex-col gap-1 pt-6 text-sm">
               <span className="font-medium">{s.payeeName}</span>
-              <span>Випущено на {formatAmount(s.total, 'UAH')}</span>
+              <span>{t('issuedFor', { amount: fmt.amount(s.total, 'UAH') })}</span>
               {s.missing.length > 0 && (
                 <span className="text-destructive" data-testid="missing-periods">
-                  Немає акту за: {s.missing.map((m) => monthTitle(`${m}-01`)).join(', ')}
+                  {t('missing', { months: s.missing.map((m) => fmt.month(`${m}-01`)).join(', ') })}
                 </span>
               )}
             </CardContent>
@@ -98,19 +101,19 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Номер</TableHead>
-            <TableHead>Дата</TableHead>
-            <TableHead>Контрагент</TableHead>
-            <TableHead>Період</TableHead>
-            <TableHead>Сума</TableHead>
-            <TableHead>Статус</TableHead>
+            <TableHead>{t('col.number')}</TableHead>
+            <TableHead>{t('col.date')}</TableHead>
+            <TableHead>{t('col.counterparty')}</TableHead>
+            <TableHead>{t('col.period')}</TableHead>
+            <TableHead>{t('col.amount')}</TableHead>
+            <TableHead>{t('col.status')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.acts.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="h-16 text-center text-muted-foreground">
-                Актів не знайдено
+                {t('empty')}
               </TableCell>
             </TableRow>
           )}
@@ -118,36 +121,35 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
             <TableRow key={a.id}>
               <TableCell>
                 <Link href={`/payroll/acts/${a.id}`} className="font-medium hover:underline">
-                  {a.number ?? 'чернетка'}
+                  {a.number ?? t('draft')}
                 </Link>
                 {a.isLegacy && (
                   <Badge variant="outline" className="ml-2">
-                    архів
+                    {t('legacy')}
                   </Badge>
                 )}
               </TableCell>
-              <TableCell>{formatUaDate(a.actDate as LocalDate)}</TableCell>
+              <TableCell>{fmt.date(a.actDate)}</TableCell>
               <TableCell>
                 {payeeName}
                 <div className="text-muted-foreground">{contractNumber}</div>
               </TableCell>
               <TableCell>
-                {ACT_TYPE[a.type]}
+                {actType(a.type)}
                 {a.periodFrom && a.periodTo && (
                   <div className="text-muted-foreground">
-                    {formatUaDate(a.periodFrom as LocalDate)}–
-                    {formatUaDate(a.periodTo as LocalDate)}
+                    {fmt.date(a.periodFrom)}–{fmt.date(a.periodTo)}
                   </div>
                 )}
               </TableCell>
-              <TableCell className="tabular-nums">{formatAmount(a.amountUah, 'UAH')}</TableCell>
+              <TableCell className="tabular-nums">{fmt.amount(a.amountUah, 'UAH')}</TableCell>
               <TableCell>
                 <Badge variant={a.status === 'draft' ? 'outline' : 'secondary'}>
                   {DOC_STATUS_LABELS[a.status] ?? a.status}
                 </Badge>
                 {a.signedUrl && (
                   <Badge variant="outline" className="ml-1">
-                    підписано
+                    {t('signed')}
                   </Badge>
                 )}
               </TableCell>

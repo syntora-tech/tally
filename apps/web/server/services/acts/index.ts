@@ -163,7 +163,7 @@ export const getAct = defineService({
         .innerJoin(contract, eq(contract.id, supplierAct.contractId))
         .where(eq(supplierAct.id, id)),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Акт не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'acts.notFound'));
   },
 });
 
@@ -171,7 +171,7 @@ export const getAct = defineService({
 export const createAct = defineService({
   name: 'acts.create',
   input: z.object({
-    contractId: z.uuid({ error: 'Оберіть договір' }),
+    contractId: z.uuid({ error: 'acts.chooseContract' }),
     type: z.enum(['reimbursement', 'other']),
     actDate: localDateString,
     periodFrom: optionalLocalDate,
@@ -183,13 +183,13 @@ export const createAct = defineService({
     inActorScope(ctx, async (tx) => {
       const [c] = await tx.select().from(contract).where(eq(contract.id, input.contractId));
       if (!c?.payeeId || c.kind !== 'fop') {
-        return err(serviceError('validation_error', 'Оберіть договір ФОП'));
+        return err(serviceError('validation_error', 'acts.chooseFopContract'));
       }
       const [row] = await tx
         .insert(supplierAct)
         .values({ ...input, payeeId: c.payeeId })
         .returning({ id: supplierAct.id });
-      return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+      return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
     }),
 });
 
@@ -205,9 +205,8 @@ export const saveActDraft = defineService({
   handler: async (ctx, { id, ...values }) =>
     inActorScope(ctx, async (tx) => {
       const [act] = await tx.select().from(supplierAct).where(eq(supplierAct.id, id));
-      if (!act) return err(serviceError('not_found', 'Акт не знайдено'));
-      if (act.status !== 'draft')
-        return err(serviceError('conflict', 'Випущений акт не змінюється'));
+      if (!act) return err(serviceError('not_found', 'acts.notFound'));
+      if (act.status !== 'draft') return err(serviceError('conflict', 'acts.issuedLocked'));
       await tx
         .update(supplierAct)
         .set({
@@ -233,15 +232,13 @@ export const issueAct = defineService({
         .innerJoin(payee, eq(payee.id, supplierAct.payeeId))
         .where(eq(supplierAct.id, id))
         .for('update', { of: supplierAct });
-      if (!row) return err(serviceError('not_found', 'Акт не знайдено'));
-      if (row.act.status !== 'draft') return err(serviceError('conflict', 'Акт уже випущено'));
+      if (!row) return err(serviceError('not_found', 'acts.notFound'));
+      if (row.act.status !== 'draft') return err(serviceError('conflict', 'acts.alreadyIssued'));
       if (!row.contract.numberSequenceKey) {
-        return err(
-          serviceError('validation_error', 'Для договору не задано нумерацію актів (Налаштування)'),
-        );
+        return err(serviceError('validation_error', 'acts.noSequence'));
       }
       const [co] = await tx.select().from(company).orderBy(asc(company.createdAt)).limit(1);
-      if (!co) return err(serviceError('conflict', 'Спершу заповніть реквізити компанії'));
+      if (!co) return err(serviceError('conflict', 'company.missingShort'));
       const [numbered] = await tx.execute<{ n: string }>(
         sql`select public.issue_number(${row.contract.numberSequenceKey}, ${row.act.actDate}::date, ${row.contract.number}) as n`,
       );
@@ -270,7 +267,7 @@ export const issueAct = defineService({
 
 export const voidAct = defineService({
   name: 'acts.void',
-  input: z.object({ id: z.uuid(), reason: requiredText('Вкажіть причину анулювання') }),
+  input: z.object({ id: z.uuid(), reason: requiredText('field.voidReason') }),
   handler: async (ctx, { id, reason }) => {
     const [row] = await inActorScope(ctx, (tx) =>
       tx
@@ -279,7 +276,7 @@ export const voidAct = defineService({
         .where(and(eq(supplierAct.id, id), eq(supplierAct.status, 'issued')))
         .returning({ id: supplierAct.id }),
     );
-    return row ? ok(row) : err(serviceError('conflict', 'Анулювати можна лише випущений акт'));
+    return row ? ok(row) : err(serviceError('conflict', 'acts.voidState'));
   },
 });
 
@@ -295,7 +292,7 @@ export const setSignedUrl = defineService({
         .where(and(eq(supplierAct.id, id), eq(supplierAct.status, 'issued')))
         .returning({ id: supplierAct.id }),
     );
-    return row ? ok(row) : err(serviceError('conflict', 'Посилання додається до випущеного акту'));
+    return row ? ok(row) : err(serviceError('conflict', 'acts.linkIssuedOnly'));
   },
 });
 

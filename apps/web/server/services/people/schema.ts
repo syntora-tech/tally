@@ -9,7 +9,7 @@ const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
 /** Profile fields shared by create/update forms and the MCP `upsert_person_profile` tool later. */
 export const personProfileInput = z.object({
-  fullName: requiredText('Вкажіть ім’я'),
+  fullName: requiredText('people.fullName'),
   displayName: optionalText,
   position: optionalText,
   seniority: tagList,

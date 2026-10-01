@@ -1,25 +1,20 @@
-import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { OWNER_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { formatUaDate, isoDayOfWeek, type LocalDate } from '@tally/domain';
+import { isoDayOfWeek, type LocalDate } from '@tally/domain';
+import { getTranslations } from 'next-intl/server';
 import { getCompany } from '@/server/services/company';
 import { listMcpCalls, listMcpClients } from '@/server/services/mcp';
 import { listCalendarExceptions, listJobs, listSequences } from '@/server/services/settings';
 import { CompanyForm } from './company-form';
 import { CreateMcpClientForm, RevokeMcpClientButton } from './mcp-forms';
 import { CalendarExceptionForm, DeleteExceptionButton, SequenceForm } from './settings-forms';
+import { getFormat, pageTitle } from '@/server/i18n';
 
-const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];
-
-const JOB_STATUS_LABELS: Record<string, string> = {
-  queued: 'у черзі',
-  running: 'виконується',
-  done: 'готово',
-  failed: 'помилка',
-};
+const JOB_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
+const WEEKDAYS = ['1', '2', '3', '4', '5', '6', '7'] as const;
 
 const DATE_TIME = new Intl.DateTimeFormat('uk-UA', {
   dateStyle: 'short',
@@ -27,7 +22,7 @@ const DATE_TIME = new Intl.DateTimeFormat('uk-UA', {
   timeZone: 'Europe/Kyiv',
 });
 
-export const metadata: Metadata = { title: 'Налаштування · Tally' };
+export const generateMetadata = pageTitle('settings');
 
 export default async function SettingsPage() {
   const ctx = await requireRole(OWNER_ROLES);
@@ -42,16 +37,20 @@ export default async function SettingsPage() {
   const clientNames = new Map(mcpClients.map((c) => [c.clientId, c.clientName]));
   const h = await headers();
   const mcpUrl = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host') ?? 'localhost:3000'}/api/mcp`;
+  const t = await getTranslations('settings');
+  const fmt = await getFormat();
+  const jobStatus = (s: string) =>
+    (JOB_STATUSES as readonly string[]).includes(s)
+      ? t(`jobStatus.${s as (typeof JOB_STATUSES)[number]}`)
+      : s;
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Налаштування</h1>
+      <h1 className="text-2xl font-semibold">{t('title')}</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Реквізити компанії</CardTitle>
-          <CardDescription>
-            Використовуються в шапках інвойсів і актів та в договорах
-          </CardDescription>
+          <CardTitle>{t('company')}</CardTitle>
+          <CardDescription>{t('companyDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <CompanyForm
@@ -73,16 +72,13 @@ export default async function SettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Робочий календар</CardTitle>
-          <CardDescription>
-            Пн–Пт робочі за замовчуванням. Тут — святкові вихідні та робочі суботи; від цього
-            залежать норма годин, дати документів і заборона випуску у неробочий день
-          </CardDescription>
+          <CardTitle>{t('calendar')}</CardTitle>
+          <CardDescription>{t('calendarDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <CalendarExceptionForm />
           {exceptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Винятків ще немає</p>
+            <p className="text-sm text-muted-foreground">{t('noExceptions')}</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {exceptions.map((e) => (
@@ -91,10 +87,10 @@ export default async function SettingsPage() {
                   className={`flex items-center gap-3 ${e.onDate.startsWith(thisYear) ? '' : 'text-muted-foreground'}`}
                 >
                   <span className="w-32 tabular-nums">
-                    {formatUaDate(e.onDate as LocalDate)},{' '}
-                    {WEEKDAYS[isoDayOfWeek(e.onDate as LocalDate) - 1]}
+                    {fmt.date(e.onDate)},{' '}
+                    {t(`weekdays.${WEEKDAYS[isoDayOfWeek(e.onDate as LocalDate) - 1] ?? '1'}`)}
                   </span>
-                  <span className="w-24">{e.isWorking ? 'робочий' : 'вихідний'}</span>
+                  <span className="w-24">{e.isWorking ? t('working') : t('dayOff')}</span>
                   <span className="flex-1">{e.reason}</span>
                   <DeleteExceptionButton onDate={e.onDate} />
                 </li>
@@ -105,11 +101,8 @@ export default async function SettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Нумерація документів</CardTitle>
-          <CardDescription>
-            Номер присвоюється лише при випуску. Лічильник можна тільки збільшити. Токени шаблону:{' '}
-            {'{seq}'} — номер, {'{yy}'}/{'{yyyy}'} — рік документа, {'{contract}'} — номер договору
-          </CardDescription>
+          <CardTitle>{t('numbering')}</CardTitle>
+          <CardDescription>{t('numberingDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           {sequences.map((s) => (
@@ -118,9 +111,10 @@ export default async function SettingsPage() {
                 <span className="font-medium">{s.key}</span>
                 <span className="text-muted-foreground">
                   {' '}
-                  · наступний: <span className="text-foreground">{s.nextNumber}</span>
-                  {s.contracts.length > 0 && ` · договори: ${s.contracts.join(', ')}`}
-                  {s.key === 'invoice' && ' · за замовчуванням для інвойсів'}
+                  {t('next')}
+                  <span className="text-foreground">{s.nextNumber}</span>
+                  {s.contracts.length > 0 && t('contracts', { list: s.contracts.join(', ') })}
+                  {s.key === 'invoice' && t('defaultForInvoices')}
                 </span>
               </div>
               <SequenceForm
@@ -134,21 +128,19 @@ export default async function SettingsPage() {
             </div>
           ))}
           <div className="flex flex-col gap-2">
-            <div className="text-sm font-medium">Нова нумерація</div>
+            <div className="text-sm font-medium">{t('newSequence')}</div>
             <SequenceForm />
           </div>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Фонові задачі</CardTitle>
-          <CardDescription>
-            Генерація файлів документів. Невдалі задачі повторюються до 3 разів із паузою
-          </CardDescription>
+          <CardTitle>{t('jobs')}</CardTitle>
+          <CardDescription>{t('jobsDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Задач ще не було</p>
+            <p className="text-sm text-muted-foreground">{t('noJobs')}</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {jobs.map((j) => (
@@ -158,7 +150,7 @@ export default async function SettingsPage() {
                   </span>
                   <span className="w-32">{j.kind}</span>
                   <span className="w-28">
-                    {JOB_STATUS_LABELS[j.status] ?? j.status}
+                    {jobStatus(j.status)}
                     {j.attempts > 1 ? ` (${String(j.attempts)})` : ''}
                   </span>
                   {j.lastError && <span className="text-destructive">{j.lastError}</span>}
@@ -170,17 +162,13 @@ export default async function SettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Підключені агенти</CardTitle>
-          <CardDescription>
-            Доступ AI-агентів (Claude, Claude Code) через MCP за адресою {mcpUrl}. Агент діє від
-            вашого імені в межах обраного профілю; кожна зміна потрапляє в журнал аудиту з позначкою
-            «агент». Відкликаний токен перестає працювати одразу
-          </CardDescription>
+          <CardTitle>{t('agents')}</CardTitle>
+          <CardDescription>{t('agentsDescription', { url: mcpUrl })}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <CreateMcpClientForm mcpUrl={mcpUrl} />
           {mcpClients.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Агентів ще не підключено</p>
+            <p className="text-sm text-muted-foreground">{t('noAgents')}</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
               {mcpClients.map((c) => (
@@ -191,22 +179,20 @@ export default async function SettingsPage() {
                     {c.clientName}
                   </span>
                   <Badge variant="outline">
-                    {c.profile === 'assistant'
-                      ? 'асистент'
-                      : c.profile === 'custom'
-                        ? 'вибірково'
-                        : 'читання'}
+                    {t(
+                      `profile.${c.profile === 'assistant' || c.profile === 'custom' ? c.profile : 'read_only'}`,
+                    )}
                   </Badge>
                   <span className="text-muted-foreground">…{c.tokenHint}</span>
                   <span className="text-muted-foreground">
                     {c.lastUsedAt
-                      ? `останній виклик ${DATE_TIME.format(c.lastUsedAt)}`
-                      : 'ще не використовувався'}
+                      ? t('lastCall', { date: DATE_TIME.format(c.lastUsedAt) })
+                      : t('neverUsed')}
                   </span>
                   {c.isActive ? (
                     <RevokeMcpClientButton clientId={c.clientId} />
                   ) : (
-                    <span className="text-muted-foreground">відкликано</span>
+                    <span className="text-muted-foreground">{t('revoked')}</span>
                   )}
                 </li>
               ))}
@@ -214,7 +200,7 @@ export default async function SettingsPage() {
           )}
           {mcpCalls.length > 0 && (
             <div className="flex flex-col gap-1">
-              <div className="text-sm font-medium">Останні виклики</div>
+              <div className="text-sm font-medium">{t('recentCalls')}</div>
               <ul className="flex flex-col gap-1 text-sm">
                 {mcpCalls.map((call) => (
                   <li key={String(call.id)} className="flex flex-wrap gap-x-3">
@@ -224,7 +210,7 @@ export default async function SettingsPage() {
                     <span className="w-48">{clientNames.get(call.clientId) ?? call.clientId}</span>
                     <span className="w-40">{call.tool}</span>
                     <span className={call.outcome === 'ok' ? '' : 'text-destructive'}>
-                      {call.outcome === 'ok' ? 'успішно' : call.outcome}
+                      {call.outcome === 'ok' ? t('callOk') : call.outcome}
                     </span>
                   </li>
                 ))}
@@ -233,10 +219,7 @@ export default async function SettingsPage() {
           )}
         </CardContent>
       </Card>
-      <p className="text-sm text-muted-foreground">
-        ID шаблонів Google Docs задаються змінними середовища або в договорі; користувачі — на
-        наступних етапах.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('footer')}</p>
     </div>
   );
 }

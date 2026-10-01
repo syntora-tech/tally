@@ -77,7 +77,7 @@ export const getClient = defineService({
         .orderBy(asc(person.fullName));
       return { client: row, contracts, activePeople };
     });
-    return card ? ok(card) : err(serviceError('not_found', 'Клієнта не знайдено'));
+    return card ? ok(card) : err(serviceError('not_found', 'clients.notFound'));
   },
 });
 
@@ -88,7 +88,7 @@ export const createClient = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.insert(client).values(input).returning({ id: client.id }),
     );
-    return row ? ok(row) : err(serviceError('internal_error', 'Не вдалося створити клієнта'));
+    return row ? ok(row) : err(serviceError('internal_error', 'clients.createFailed'));
   },
 });
 
@@ -99,7 +99,7 @@ export const updateClient = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(client).set(input).where(eq(client.id, id)).returning({ id: client.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Клієнта не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'clients.notFound'));
   },
 });
 
@@ -121,7 +121,7 @@ export const getContract = defineService({
         .leftJoin(payee, eq(payee.id, contract.payeeId))
         .where(eq(contract.id, id)),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Договір не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'contracts.notFound'));
   },
 });
 
@@ -145,7 +145,7 @@ export const listPayeeContracts = defineService({
   },
 });
 
-const NO_COMPANY = 'Спершу заповніть реквізити компанії в Налаштуваннях';
+const NO_COMPANY = 'company.missing';
 
 /** Contracts always belong to our single company (v1); client XOR payee is also enforced by I9. */
 export const createContract = defineService({
@@ -176,6 +176,6 @@ export const updateContract = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(contract).set(input).where(eq(contract.id, id)).returning({ id: contract.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Договір не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'contracts.notFound'));
   },
 });

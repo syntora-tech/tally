@@ -14,6 +14,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -28,7 +29,9 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar';
+import type { Locale } from '@/i18n/locales';
 import type { NavIcon, NavItem } from '@/lib/navigation';
+import { LanguageSwitcher } from './language-switcher';
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -47,11 +50,13 @@ type Props = {
   items: NavItem[];
   email: string;
   roleLabel: string;
+  locale: Locale;
   signOutAction: () => Promise<void>;
 };
 
-export function AppSidebar({ items, email, roleLabel, signOutAction }: Props) {
+export function AppSidebar({ items, email, roleLabel, locale, signOutAction }: Props) {
   const pathname = usePathname();
+  const t = useTranslations('nav');
 
   return (
     <Sidebar collapsible="icon">
@@ -70,7 +75,7 @@ export function AppSidebar({ items, email, roleLabel, signOutAction }: Props) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu aria-label="Модулі">
+            <SidebarMenu aria-label={t('modules')}>
               {items.map((item) => {
                 const Icon = ICONS[item.icon];
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -78,11 +83,11 @@ export function AppSidebar({ items, email, roleLabel, signOutAction }: Props) {
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       isActive={active}
-                      tooltip={item.title}
+                      tooltip={t(item.title)}
                       render={<Link href={item.href} aria-current={active ? 'page' : undefined} />}
                     >
                       <Icon />
-                      <span>{item.title}</span>
+                      <span>{t(item.title)}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -98,12 +103,13 @@ export function AppSidebar({ items, email, roleLabel, signOutAction }: Props) {
           </span>
           <span className="text-muted-foreground">{roleLabel}</span>
         </div>
+        <LanguageSwitcher locale={locale} />
         <form action={signOutAction}>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton type="submit" tooltip="Вийти">
+              <SidebarMenuButton type="submit" tooltip={t('signOut')}>
                 <LogOut />
-                <span>Вийти</span>
+                <span>{t('signOut')}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

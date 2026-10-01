@@ -1,6 +1,7 @@
 'use client';
 
 import { Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form-field';
@@ -23,26 +24,28 @@ function useFeedback(state: SettingsFormState, success: string) {
 
 export function CalendarExceptionForm() {
   const [state, action, pending] = useActionState(saveCalendarExceptionAction, null);
-  const errors = useFeedback(state, 'Виняток збережено');
+  const t = useTranslations('settingsForms');
+  const tc = useTranslations('common');
+  const errors = useFeedback(state, t('exceptionSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
-      <FormField label="Дата" htmlFor="onDate" error={errors?.onDate}>
+      <FormField label={t('date')} htmlFor="onDate" error={errors?.onDate}>
         <Input id="onDate" name="onDate" type="date" required className="w-44" />
       </FormField>
-      <FormField label="Причина" htmlFor="exception-reason" error={errors?.reason}>
+      <FormField label={t('reason')} htmlFor="exception-reason" error={errors?.reason}>
         <Input
           id="exception-reason"
           name="reason"
           required
-          placeholder="День Незалежності"
+          placeholder={t('reasonPlaceholder')}
           className="w-72"
         />
       </FormField>
       <label className="flex h-9 items-center gap-2 text-sm">
-        <input type="checkbox" name="isWorking" /> Робочий день (перенесена субота)
+        <input type="checkbox" name="isWorking" /> {t('workingDay')}
       </label>
       <Button type="submit" disabled={pending}>
-        Додати
+        {tc('add')}
       </Button>
     </form>
   );
@@ -50,11 +53,19 @@ export function CalendarExceptionForm() {
 
 export function DeleteExceptionButton({ onDate }: { onDate: string }) {
   const [state, action, pending] = useActionState(deleteCalendarExceptionAction, null);
-  useFeedback(state, 'Виняток видалено');
+  const t = useTranslations('settingsForms');
+  const tc = useTranslations('common');
+  useFeedback(state, t('exceptionDeleted'));
   return (
     <form action={action}>
       <input type="hidden" name="onDate" value={onDate} />
-      <Button type="submit" size="icon" variant="ghost" disabled={pending} aria-label="Видалити">
+      <Button
+        type="submit"
+        size="icon"
+        variant="ghost"
+        disabled={pending}
+        aria-label={tc('delete')}
+      >
         <Trash2 className="size-4" />
       </Button>
     </form>
@@ -71,18 +82,20 @@ export type SequenceValues = {
 /** New sequence, or an existing one (key fixed); the counter can only go up. */
 export function SequenceForm({ sequence }: { sequence?: SequenceValues }) {
   const [state, action, pending] = useActionState(saveSequenceAction, null);
-  const errors = useFeedback(state, 'Нумерацію збережено');
+  const t = useTranslations('settingsForms');
+  const tc = useTranslations('common');
+  const errors = useFeedback(state, t('sequenceSaved'));
   const idp = sequence ? `seq-${sequence.key}` : 'seq-new';
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       {sequence ? (
         <input type="hidden" name="key" value={sequence.key} />
       ) : (
-        <FormField label="Ключ" htmlFor={`${idp}-key`} error={errors?.key}>
+        <FormField label={t('key')} htmlFor={`${idp}-key`} error={errors?.key}>
           <Input id={`${idp}-key`} name="key" required placeholder="act:OD-1004" className="w-44" />
         </FormField>
       )}
-      <FormField label="Шаблон" htmlFor={`${idp}-template`} error={errors?.template}>
+      <FormField label={t('template')} htmlFor={`${idp}-template`} error={errors?.template}>
         <Input
           id={`${idp}-template`}
           name="template"
@@ -91,7 +104,7 @@ export function SequenceForm({ sequence }: { sequence?: SequenceValues }) {
           className="w-44"
         />
       </FormField>
-      <FormField label="Наступний №" htmlFor={`${idp}-next`} error={errors?.nextValue}>
+      <FormField label={t('nextNumber')} htmlFor={`${idp}-next`} error={errors?.nextValue}>
         <Input
           id={`${idp}-next`}
           name="nextValue"
@@ -103,10 +116,10 @@ export function SequenceForm({ sequence }: { sequence?: SequenceValues }) {
       </FormField>
       <label className="flex h-9 items-center gap-2 text-sm">
         <input type="checkbox" name="yearScoped" defaultChecked={sequence?.yearScoped ?? false} />
-        Скидати щороку
+        {t('yearly')}
       </label>
       <Button type="submit" variant={sequence ? 'outline' : 'default'} disabled={pending}>
-        {sequence ? 'Зберегти' : 'Додати'}
+        {sequence ? tc('save') : tc('add')}
       </Button>
     </form>
   );

@@ -65,7 +65,7 @@ describe('clients and contracts (spec 6.3)', () => {
       number: 'X',
       clientId: clientIds[0],
     });
-    expect(res._unsafeUnwrapErr().message).toContain('реквізити компанії');
+    expect(res._unsafeUnwrapErr().message).toBe('company.missing');
   });
 
   it('creates client and FOP contracts with default date rules', async () => {

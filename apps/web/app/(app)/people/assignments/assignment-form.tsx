@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useActionState, useState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,7 +30,7 @@ type Props = {
 };
 
 /**
- * New assignment: core fields plus the «Клієнту» / «Людині» blocks (spec 6.3). In edit mode only
+ * New assignment: core fields plus the client / person terms blocks (spec 6.3). In edit mode only
  * the core fields are editable; terms change through new versions on the assignment page.
  */
 export function AssignmentForm({ assignment, personName, contracts }: Props) {
@@ -40,6 +41,8 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   const [internal, setInternal] = useState(assignment.isInternal);
   const editing = Boolean(assignment.id);
+  const t = useTranslations('assignmentForm');
+  const tc = useTranslations('common');
 
   return (
     <form action={action} className="flex max-w-4xl flex-col gap-6">
@@ -54,7 +57,7 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
         </Alert>
       )}
       <p className="text-sm text-muted-foreground">
-        Людина: <span className="font-medium text-foreground">{personName}</span>
+        {t('person')}: <span className="font-medium text-foreground">{personName}</span>
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -68,12 +71,12 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
                 setInternal(e.target.checked);
               }}
             />
-            Внутрішнє залучення (CEO/CTO на власній компанії, без клієнта)
+            {t('internal')}
           </label>
         )}
         {!editing && !internal && (
           <FormField
-            label="Договір (SOW / Annex клієнта)"
+            label={t('contract')}
             htmlFor="contractId"
             className="md:col-span-2"
             error={errors?.contractId}
@@ -82,12 +85,12 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
               id="contractId"
               name="contractId"
               defaultValue={assignment.contractId ?? ''}
-              placeholder="Оберіть договір"
+              placeholder={t('chooseContract')}
               options={contracts}
             />
           </FormField>
         )}
-        <FormField label="Роль" htmlFor="roleTitle" error={errors?.roleTitle}>
+        <FormField label={t('role')} htmlFor="roleTitle" error={errors?.roleTitle}>
           <Input
             id="roleTitle"
             name="roleTitle"
@@ -107,7 +110,7 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
           <Input id="fte" name="fte" inputMode="decimal" defaultValue={assignment.fte} />
         </FormField>
         <div />
-        <FormField label="Початок" htmlFor="startsOn" error={errors?.startsOn}>
+        <FormField label={t('startsOn')} htmlFor="startsOn" error={errors?.startsOn}>
           <Input
             id="startsOn"
             name="startsOn"
@@ -117,9 +120,9 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
           />
         </FormField>
         <FormField
-          label="Завершення"
+          label={t('endsOn')}
           htmlFor="endsOn"
-          hint="Порожньо — без дати завершення"
+          hint={t('endsOnHint')}
           error={errors?.endsOn}
         >
           <Input id="endsOn" name="endsOn" type="date" defaultValue={assignment.endsOn ?? ''} />
@@ -130,7 +133,7 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Клієнту</CardTitle>
+              <CardTitle className="text-base">{t('toClient')}</CardTitle>
             </CardHeader>
             <CardContent>
               <BillingFields
@@ -149,7 +152,7 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Людині</CardTitle>
+              <CardTitle className="text-base">{t('toPerson')}</CardTitle>
             </CardHeader>
             <CardContent>
               <PayFields
@@ -168,16 +171,11 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
           </Card>
         </div>
       )}
-      {!editing && (
-        <p className="text-sm text-muted-foreground">
-          Перші версії умов діятимуть з першого числа місяця початку. Зміни пізніше — лише новою
-          версією.
-        </p>
-      )}
+      {!editing && <p className="text-sm text-muted-foreground">{t('firstVersionsNote')}</p>}
 
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Зберігаємо…' : 'Зберегти'}
+          {pending ? tc('saving') : tc('save')}
         </Button>
         <Button
           variant="ghost"
@@ -191,7 +189,7 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
             />
           }
         >
-          Скасувати
+          {tc('cancel')}
         </Button>
       </div>
     </form>

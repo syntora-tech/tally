@@ -223,6 +223,8 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     })) as ToolResult;
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structuredContent)).toContain('transactions.0');
+    // Agents get English text, not message keys (A-058).
+    expect(JSON.stringify(bad.structuredContent)).toContain('from: account “Missing” not found');
   });
 
   it('people and clients: written by name, read back without payee details', async () => {

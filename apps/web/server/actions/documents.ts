@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
@@ -14,7 +15,7 @@ export async function uploadPersonCv(_prev: UploadState, formData: FormData): Pr
   const ctx = await requireUserContext();
   const personId = formData.get('personId');
   const result = await uploadCv.run(ctx, { personId, file: formData.get('file') });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   if (typeof personId === 'string') revalidatePath(`/people/${personId}`);
   return { ok: true, data: result.value };
 }
@@ -36,7 +37,7 @@ export async function createDocumentAction(
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = await createDocument.run(ctx, { ...input, links: parseLinks(input.links) });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/documents/${result.value.id}`);
 }
 
@@ -46,7 +47,7 @@ export async function updateDocumentAction(
 ): Promise<UploadState> {
   const ctx = await requireUserContext();
   const result = await updateDocument.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/documents/${result.value.id}`);
   return { ok: true, data: result.value };
 }
@@ -59,7 +60,7 @@ export async function linkDocumentAction(
   const { target, documentId } = formDataToObject(formData);
   const [entityType, entityId] = typeof target === 'string' ? target.split(':') : [];
   const result = await linkDocument.run(ctx, { documentId, entityType, entityId });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/documents/${result.value.id}`);
   return { ok: true, data: result.value };
 }

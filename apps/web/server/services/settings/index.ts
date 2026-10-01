@@ -8,7 +8,7 @@ import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import { checkbox, localDateString, requiredText } from '../fields';
 
-const FORBIDDEN = serviceError('forbidden', 'Змінювати налаштування може лише власник');
+const FORBIDDEN = serviceError('forbidden', 'settings.ownerOnly');
 
 export const listCalendarExceptions = defineService({
   name: 'settings.calendar.list',
@@ -27,7 +27,7 @@ export const saveCalendarException = defineService({
   input: z.object({
     onDate: localDateString,
     isWorking: checkbox,
-    reason: requiredText('Вкажіть причину, наприклад «День Незалежності»'),
+    reason: requiredText('settings.calendarReason'),
   }),
   handler: async (ctx, input) => {
     const [row] = await inActorScope(ctx, (tx) =>
@@ -54,7 +54,7 @@ export const deleteCalendarException = defineService({
         .where(eq(workCalendarException.onDate, onDate))
         .returning({ onDate: workCalendarException.onDate }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Виняток не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'settings.exceptionNotFound'));
   },
 });
 
@@ -97,7 +97,7 @@ export const listSequences = defineService({
 const sequenceKey = z
   .string()
   .trim()
-  .regex(/^[\w:.-]{1,64}$/, 'Ключ: латиниця, цифри, «:», «-», «_», наприклад act:OD-1004');
+  .regex(/^[\w:.-]{1,64}$/, 'settings.sequenceKey');
 
 /**
  * Create or adjust a sequence (5.6). The counter may only move forward — the DB rejects a
@@ -107,11 +107,14 @@ export const saveSequence = defineService({
   name: 'settings.sequences.save',
   input: z.object({
     key: sequenceKey,
-    template: requiredText('Вкажіть шаблон').refine(
+    template: requiredText('settings.templateRequired').refine(
       (t) => t.includes('{seq}'),
-      'Шаблон має містити {seq}',
+      'settings.templateSeq',
     ),
-    nextValue: z.coerce.number({ error: 'Вкажіть число' }).int('Ціле число').min(1, 'Щонайменше 1'),
+    nextValue: z.coerce
+      .number({ error: 'field.numberRequired' })
+      .int('field.integer')
+      .min(1, 'field.atLeastOne'),
     yearScoped: checkbox,
   }),
   handler: async (ctx, input) => {

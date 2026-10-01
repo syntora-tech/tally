@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useActionState, useState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { DOCUMENT_TYPE_LABELS, toOptions } from '@/lib/labels';
+import { toOptions, useLabels } from '@/lib/labels';
 import { createDocumentAction, type UploadState } from '@/server/actions/documents';
 import { labelOf, LinkTargetSelect, type LinkTargets } from './link-target-select';
 
@@ -29,6 +30,9 @@ export function DocumentForm({ targets, initialLinks, initialType, cancelHref }:
   const [links, setLinks] = useState<string[]>(initialLinks);
   const [picked, setPicked] = useState('');
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const t = useTranslations('documentForm');
+  const tc = useTranslations('common');
+  const { DOCUMENT_TYPE_LABELS } = useLabels();
 
   const addLink = () => {
     if (picked && !links.includes(picked)) setLinks([...links, picked]);
@@ -52,7 +56,7 @@ export function DocumentForm({ targets, initialLinks, initialType, cancelHref }:
           <AlertDescription>{state.error.message}</AlertDescription>
         </Alert>
       )}
-      <FormField label="Тип" htmlFor="type" error={errors?.type}>
+      <FormField label={t('type')} htmlFor="type" error={errors?.type}>
         <NativeSelect
           id="type"
           name="type"
@@ -60,44 +64,37 @@ export function DocumentForm({ targets, initialLinks, initialType, cancelHref }:
           options={toOptions(DOCUMENT_TYPE_LABELS)}
         />
       </FormField>
-      <FormField label="Назва" htmlFor="title" error={errors?.title}>
-        <Input id="title" name="title" required placeholder="NDA з Creditor Group" />
+      <FormField label={t('title')} htmlFor="title" error={errors?.title}>
+        <Input id="title" name="title" required placeholder={t('titlePlaceholder')} />
       </FormField>
-      <FormField label="Номер" htmlFor="number" error={errors?.number}>
+      <FormField label={t('number')} htmlFor="number" error={errors?.number}>
         <Input id="number" name="number" placeholder="1003 - А8" />
       </FormField>
-      <FormField label="Дата документа" htmlFor="docDate" error={errors?.docDate}>
+      <FormField label={t('docDate')} htmlFor="docDate" error={errors?.docDate}>
         <Input id="docDate" name="docDate" type="date" />
       </FormField>
-      <FormField label="Файл (до 4 МБ)" htmlFor="file" error={errors?.file}>
+      <FormField label={t('file')} htmlFor="file" error={errors?.file}>
         <Input id="file" name="file" type="file" />
       </FormField>
-      <FormField
-        label="Або посилання"
-        htmlFor="url"
-        hint="Вчасно, Google Drive тощо"
-        error={errors?.url}
-      >
+      <FormField label={t('url')} htmlFor="url" hint={t('urlHint')} error={errors?.url}>
         <Input id="url" name="url" type="url" placeholder="https://" />
       </FormField>
-      <FormField label="Нотатки" htmlFor="notes" className="md:col-span-2">
+      <FormField label={t('notes')} htmlFor="notes" className="md:col-span-2">
         <Textarea id="notes" name="notes" rows={2} />
       </FormField>
 
       <fieldset className="flex flex-col gap-2 md:col-span-2">
-        <legend className="mb-1 text-sm font-medium">Прив’язки</legend>
-        <div className="flex flex-wrap gap-2" aria-label="Прив’язки документа">
+        <legend className="mb-1 text-sm font-medium">{t('links')}</legend>
+        <div className="flex flex-wrap gap-2" aria-label={t('linksAria')}>
           {links.length === 0 && (
-            <span className="text-sm text-muted-foreground">
-              Без прив’язок — документ потрапить у загальну папку
-            </span>
+            <span className="text-sm text-muted-foreground">{t('noLinks')}</span>
           )}
           {links.map((l) => (
             <Badge key={l} variant="secondary" className="gap-1">
               {labelOf(targets, l)}
               <button
                 type="button"
-                aria-label={`Прибрати ${labelOf(targets, l)}`}
+                aria-label={t('remove', { label: labelOf(targets, l) })}
                 onClick={() => {
                   setLinks(links.filter((x) => x !== l));
                 }}
@@ -114,21 +111,21 @@ export function DocumentForm({ targets, initialLinks, initialType, cancelHref }:
             onChange={(e) => {
               setPicked(e.target.value);
             }}
-            aria-label="Сутність для прив’язки"
+            aria-label={t('entity')}
           />
           <Button type="button" variant="outline" onClick={addLink} disabled={!picked}>
-            Прив’язати
+            {t('attach')}
           </Button>
         </div>
-        {errors?.links && <p className="text-sm text-destructive">Перевірте прив’язки</p>}
+        {errors?.links && <p className="text-sm text-destructive">{t('checkLinks')}</p>}
       </fieldset>
 
       <div className="flex gap-2 md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Зберігаємо…' : 'Додати документ'}
+          {pending ? tc('saving') : t('submit')}
         </Button>
         <Button variant="ghost" render={<Link href={cancelHref} />}>
-          Скасувати
+          {tc('cancel')}
         </Button>
       </div>
     </form>

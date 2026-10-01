@@ -143,7 +143,7 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
       type: 'fixed',
       amount: '5300',
     });
-    expect(res._unsafeUnwrapErr().message).toBe('Версія умов з цієї дати вже існує');
+    expect(res._unsafeUnwrapErr().message).toBe('db.versionExists');
   });
 
   it('accepts internal assignments without a contract and billing none', async () => {
@@ -180,9 +180,7 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
       type: 'hourly',
       rate: '47',
     });
-    expect(mid._unsafeUnwrapErr().fieldErrors?.validFrom?.[0]).toBe(
-      'Дата має бути першим числом місяця',
-    );
+    expect(mid._unsafeUnwrapErr().fieldErrors?.validFrom?.[0]).toBe('field.monthStart');
   });
 
   it('viewer sees no assignments or terms', async () => {

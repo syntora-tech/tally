@@ -8,8 +8,8 @@ import { serviceError } from '../errors';
 import { optionalText, requiredText } from '../fields';
 
 export const companyInput = z.object({
-  nameEn: requiredText('Вкажіть назву англійською'),
-  nameUa: requiredText('Вкажіть назву українською'),
+  nameEn: requiredText('company.nameEn'),
+  nameUa: requiredText('company.nameUa'),
   legalCode: optionalText,
   addressEn: optionalText,
   addressUa: optionalText,
@@ -51,6 +51,6 @@ export const saveCompany = defineService({
         : await tx.insert(company).values(input).returning({ id: company.id });
       return row;
     });
-    return saved ? ok(saved) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+    return saved ? ok(saved) : err(serviceError('forbidden', 'general.forbidden'));
   },
 });

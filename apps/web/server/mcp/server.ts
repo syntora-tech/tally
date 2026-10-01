@@ -10,6 +10,7 @@ import type { LocalDate } from '@tally/domain';
 import { z } from 'zod';
 import type { ServiceConfig, ServiceContext } from '../services/context';
 import type { ServiceError } from '../services/errors';
+import { localizeForAgent } from './localize';
 import type { McpClient } from './store';
 import { RATE_LIMITS, toolsFor, type ToolDef } from './tools';
 
@@ -169,7 +170,7 @@ export function createMcpServer(session: McpSession): McpServer {
       outcome: outcome.isOk() ? 'ok' : outcome.error.code,
       durationMs: Date.now() - started,
     });
-    if (outcome.isErr()) return failure(outcome.error);
+    if (outcome.isErr()) return failure(localizeForAgent(outcome.error));
 
     const value = JSON.parse(JSON.stringify(tool.present(outcome.value))) as unknown;
     if (key && args.dryRun !== true) {

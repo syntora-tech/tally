@@ -3,6 +3,8 @@ packages:
   - packages/*
   - scripts/import-legacy
 allowBuilds:
+  '@parcel/watcher': false
+  '@swc/core': false
   esbuild: true
   unrs-resolver: false
 minimumReleaseAgeExclude:

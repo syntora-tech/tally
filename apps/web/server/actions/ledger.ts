@@ -1,5 +1,6 @@
 'use server';
 
+import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject, nestPrefixed } from '@/lib/form-data';
@@ -22,7 +23,7 @@ export async function createTransactionAction(
   const ctx = await requireUserContext();
   const input = nestPrefixed(formDataToObject(formData), ['from', 'to', 'fee']);
   const result = await createTransaction.run(ctx, input);
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   redirect('/ledger');
 }
@@ -33,7 +34,7 @@ export async function deleteTransactionAction(
 ): Promise<LedgerFormState> {
   const ctx = await requireUserContext();
   const result = await deleteTransaction.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   return { ok: true, data: result.value };
 }
@@ -44,7 +45,7 @@ export async function saveAccountAction(
 ): Promise<LedgerFormState> {
   const ctx = await requireUserContext();
   const result = await saveAccount.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   revalidatePath('/ledger/accounts');
   return { ok: true, data: result.value };
@@ -56,7 +57,7 @@ export async function saveCategoryAction(
 ): Promise<LedgerFormState> {
   const ctx = await requireUserContext();
   const result = await saveCategory.run(ctx, formDataToObject(formData));
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger/categories');
   return { ok: true, data: result.value };
 }
@@ -71,7 +72,7 @@ export async function saveManualRateAction(
     ...input,
     rate: typeof input.rate === 'string' ? input.rate.replace(',', '.') : input.rate,
   });
-  if (result.isErr()) return { ok: false, error: result.error };
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger/rates');
   return { ok: true, data: result.value };
 }

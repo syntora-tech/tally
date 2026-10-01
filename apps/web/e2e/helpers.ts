@@ -22,7 +22,7 @@ export async function signIn(page: Page, email: string) {
   await clearMailbox();
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Надіслати посилання для входу' }).click();
+  await page.getByRole('button', { name: 'Send a sign-in link' }).click();
   await expect(page.getByRole('status')).toBeVisible();
   await page.goto(await waitForMagicLink(email));
   await expect(page).toHaveURL(/\/dashboard$/);

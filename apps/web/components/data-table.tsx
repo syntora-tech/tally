@@ -20,6 +20,7 @@ import {
 } from '@tanstack/react-table';
 import { toDecimal } from '@tally/domain';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -78,10 +79,11 @@ type Props<T extends RowData> = {
 export function DataTable<T extends RowData>({
   columns,
   data,
-  searchPlaceholder = 'Пошук…',
-  emptyText = 'Немає записів',
+  searchPlaceholder,
+  emptyText,
   rowHref,
 }: Props<T>) {
+  const t = useTranslations('common');
   const router = useRouter();
   const [search, setSearch] = useState('');
   const table = useTable({
@@ -101,8 +103,8 @@ export function DataTable<T extends RowData>({
             setSearch(e.target.value);
             table.setGlobalFilter(e.target.value);
           }}
-          placeholder={searchPlaceholder}
-          aria-label={searchPlaceholder}
+          placeholder={searchPlaceholder ?? t('search')}
+          aria-label={searchPlaceholder ?? t('search')}
           className="pl-8"
         />
       </div>
@@ -146,7 +148,7 @@ export function DataTable<T extends RowData>({
                   colSpan={columns.length}
                   className="h-20 text-center text-muted-foreground"
                 >
-                  {emptyText}
+                  {emptyText ?? t('empty')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -174,7 +176,7 @@ export function DataTable<T extends RowData>({
         </Table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Показано {table.getRowModel().rows.length} з {data.length}
+        {t('shown', { shown: table.getRowModel().rows.length, total: data.length })}
       </p>
     </div>
   );

@@ -1,9 +1,10 @@
 'use client';
 
-import { formatUaDate, type LocalDate } from '@tally/domain';
 import { Plus, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { useFormat } from '@/lib/format';
 import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -68,7 +69,8 @@ export function InvoiceEditForm(props: {
     saveInvoiceAction,
     null,
   );
-  const error = useResult(state, props.revising ? 'Нову редакцію збережено' : 'Чернетку збережено');
+  const t = useTranslations('invoiceForms');
+  const error = useResult(state, props.revising ? t('revisionSaved') : t('draftSaved'));
   const [lines, setLines] = useState(props.lines);
   const [nextKey, setNextKey] = useState(0);
 
@@ -76,7 +78,11 @@ export function InvoiceEditForm(props: {
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="id" value={props.invoiceId} />
       <div className="flex flex-wrap items-end gap-3">
-        <FormField label="Дата інвойсу" htmlFor="issueDate" error={error?.fieldErrors?.issueDate}>
+        <FormField
+          label={t('invoiceDate')}
+          htmlFor="issueDate"
+          error={error?.fieldErrors?.issueDate}
+        >
           <Input
             id="issueDate"
             name="issueDate"
@@ -85,7 +91,7 @@ export function InvoiceEditForm(props: {
             className="w-44"
           />
         </FormField>
-        <FormField label="Причина дати поза правилом (власник)" htmlFor="dateOverrideReason">
+        <FormField label={t('dateOverride')} htmlFor="dateOverrideReason">
           <Input
             id="dateOverrideReason"
             name="dateOverrideReason"
@@ -98,10 +104,10 @@ export function InvoiceEditForm(props: {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Опис (EN)</TableHead>
-              <TableHead>Опис (UA)</TableHead>
-              <TableHead className="w-28">К-сть</TableHead>
-              <TableHead className="w-32">Ціна</TableHead>
+              <TableHead>{t('descEn')}</TableHead>
+              <TableHead>{t('descUa')}</TableHead>
+              <TableHead className="w-28">{t('qty')}</TableHead>
+              <TableHead className="w-32">{t('price')}</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -113,14 +119,14 @@ export function InvoiceEditForm(props: {
                   <Input
                     name={`lines.${String(i)}.descriptionEn`}
                     defaultValue={l.descriptionEn}
-                    aria-label="Опис англійською"
+                    aria-label={t('descEnAria')}
                   />
                 </TableCell>
                 <TableCell>
                   <Input
                     name={`lines.${String(i)}.descriptionUa`}
                     defaultValue={l.descriptionUa}
-                    aria-label="Опис українською"
+                    aria-label={t('descUaAria')}
                   />
                 </TableCell>
                 <TableCell>
@@ -128,7 +134,7 @@ export function InvoiceEditForm(props: {
                     name={`lines.${String(i)}.quantity`}
                     defaultValue={l.quantity}
                     inputMode="decimal"
-                    aria-label="Кількість"
+                    aria-label={t('qtyAria')}
                   />
                 </TableCell>
                 <TableCell>
@@ -136,7 +142,7 @@ export function InvoiceEditForm(props: {
                     name={`lines.${String(i)}.unitPrice`}
                     defaultValue={l.unitPrice}
                     inputMode="decimal"
-                    aria-label="Ціна"
+                    aria-label={t('price')}
                   />
                 </TableCell>
                 <TableCell>
@@ -144,7 +150,7 @@ export function InvoiceEditForm(props: {
                     type="button"
                     size="icon"
                     variant="ghost"
-                    aria-label="Видалити рядок"
+                    aria-label={t('removeLine')}
                     onClick={() => {
                       setLines(lines.filter((x) => x.key !== l.key));
                     }}
@@ -177,11 +183,11 @@ export function InvoiceEditForm(props: {
             setNextKey(nextKey + 1);
           }}
         >
-          <Plus className="size-4" /> Рядок
+          <Plus className="size-4" /> {t('addLine')}
         </Button>
       </div>
       {props.revising && (
-        <FormField label="Причина зміни" htmlFor="reason" error={error?.fieldErrors?.reason}>
+        <FormField label={t('changeReason')} htmlFor="reason" error={error?.fieldErrors?.reason}>
           <Input id="reason" name="reason" required className="max-w-xl" />
         </FormField>
       )}
@@ -189,7 +195,7 @@ export function InvoiceEditForm(props: {
       {error?.fieldErrors?.lines && <ErrorAlert message={error.fieldErrors.lines[0]} />}
       <div>
         <Button type="submit" disabled={pending}>
-          {props.revising ? 'Зберегти нову редакцію' : 'Зберегти чернетку'}
+          {props.revising ? t('saveRevision') : t('saveDraft')}
         </Button>
       </div>
     </form>
@@ -210,7 +216,9 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
     issueInvoiceAction,
     null,
   );
-  const error = useResult(state, 'Інвойс випущено');
+  const t = useTranslations('invoiceForms');
+  const fmt = useFormat();
+  const error = useResult(state, t('issued'));
   const [preview, setPreview] = useState(props.preview);
   const [checking, startCheck] = useTransition();
 
@@ -218,7 +226,11 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="id" value={props.invoiceId} />
       <div className="flex flex-wrap items-end gap-3">
-        <FormField label="Дата випуску" htmlFor="issue-date" error={error?.fieldErrors?.issueDate}>
+        <FormField
+          label={t('issueDate')}
+          htmlFor="issue-date"
+          error={error?.fieldErrors?.issueDate}
+        >
           <Input
             id="issue-date"
             name="issueDate"
@@ -234,29 +246,29 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
             }}
           />
         </FormField>
-        <FormField label="Причина неробочої дати (власник)" htmlFor="issue-override">
+        <FormField label={t('nonWorkingReason')} htmlFor="issue-override">
           <Input id="issue-override" name="dateOverrideReason" className="w-72" />
         </FormField>
       </div>
       <p className="text-sm text-muted-foreground">
-        За правилом договору: {formatUaDate(preview.suggestedDate as LocalDate)}. Оплатити до:{' '}
-        {formatUaDate(preview.dueDate as LocalDate)}.{checking && ' Перевіряю…'}
+        {t('byRule', { date: fmt.date(preview.suggestedDate), due: fmt.date(preview.dueDate) })}
+        {checking && t('checking')}
       </p>
-      {!preview.isWorkingDay && (
-        <ErrorAlert message="Обрана дата — неробочий день. Випуск можливий лише власником із причиною." />
-      )}
+      {!preview.isWorkingDay && <ErrorAlert message={t('nonWorkingDay')} />}
       {preview.earlierThanPrevious && preview.previous && (
         <Alert role="status">
           <AlertDescription>
-            Дата раніша за попередній випущений документ цієї нумерації ({preview.previous.number},{' '}
-            {formatUaDate(preview.previous.issueDate as LocalDate)}).
+            {t('earlier', {
+              number: preview.previous.number ?? '',
+              date: fmt.date(preview.previous.issueDate),
+            })}
           </AlertDescription>
         </Alert>
       )}
       <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
       <div>
         <Button type="submit" disabled={pending}>
-          Випустити й присвоїти номер
+          {t('issue')}
         </Button>
       </div>
     </form>
@@ -268,19 +280,16 @@ export function VoidForm({ invoiceId }: { invoiceId: string }) {
     voidInvoiceAction,
     null,
   );
-  const error = useResult(state, 'Інвойс анульовано');
+  const t = useTranslations('invoiceForms');
+  const error = useResult(state, t('voided'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={invoiceId} />
-      <FormField
-        label="Причина анулювання"
-        htmlFor="void-reason"
-        error={error?.fieldErrors?.reason}
-      >
+      <FormField label={t('voidReason')} htmlFor="void-reason" error={error?.fieldErrors?.reason}>
         <Input id="void-reason" name="reason" required className="w-80" />
       </FormField>
       <Button type="submit" variant="destructive" disabled={pending}>
-        Анулювати
+        {t('void')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -294,13 +303,14 @@ export function ReissueForm({ invoiceId }: { invoiceId: string }) {
     reissueInvoiceAction,
     null,
   );
-  const error = useResult(state, 'Створено нову чернетку');
+  const t = useTranslations('invoiceForms');
+  const error = useResult(state, t('reissued'));
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={invoiceId} />
       <div>
         <Button type="submit" variant="outline" disabled={pending}>
-          Перевипустити (нова чернетка)
+          {t('reissue')}
         </Button>
       </div>
       <ErrorAlert message={error?.message} />
@@ -314,15 +324,16 @@ export function SignedCopyForm({ invoiceId }: { invoiceId: string }) {
     attachSignedInvoiceAction,
     null,
   );
-  const error = useResult(state, 'Підписану копію збережено');
+  const t = useTranslations('invoiceForms');
+  const error = useResult(state, t('signedSaved'));
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="invoiceId" value={invoiceId} />
-      <FormField label="Підписаний файл" htmlFor="signed-file" error={error?.fieldErrors?.file}>
+      <FormField label={t('signedFile')} htmlFor="signed-file" error={error?.fieldErrors?.file}>
         <Input id="signed-file" name="file" type="file" accept="application/pdf,image/*" />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
-        Завантажити підписану
+        {t('uploadSigned')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -336,13 +347,14 @@ export function RegeneratePdfForm({ invoiceId }: { invoiceId: string }) {
     regenerateInvoicePdfAction,
     null,
   );
-  const error = useResult(state, 'PDF поставлено в чергу');
+  const t = useTranslations('invoiceForms');
+  const error = useResult(state, t('pdfQueued'));
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={invoiceId} />
       <div>
         <Button type="submit" size="sm" variant="outline" disabled={pending}>
-          Перегенерувати PDF
+          {t('regenerate')}
         </Button>
       </div>
       <ErrorAlert message={error?.message} />
@@ -363,11 +375,12 @@ export function AllocatePaymentForm(props: {
   outstanding: string;
   candidates: PaymentCandidate[];
 }) {
+  const t = useTranslations('invoiceForms');
   // A full payment removes this form, so the toast fires before the page re-renders.
   const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
     async (prev, formData) => {
       const result = await allocatePaymentAction(prev, formData);
-      if (result?.ok) toast.success('Оплату зараховано');
+      if (result?.ok) toast.success(t('paymentAllocated'));
       return result;
     },
     null,
@@ -376,16 +389,12 @@ export function AllocatePaymentForm(props: {
   const [selected, setSelected] = useState('');
   const candidate = props.candidates.find((c) => c.id === selected);
   if (props.candidates.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Немає нерозподілених надходжень — спершу додайте дохід у Ledger
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{t('noCandidates')}</p>;
   }
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="invoiceId" value={props.invoiceId} />
-      <FormField label="Надходження" htmlFor="pay-tx" error={error?.fieldErrors?.transactionId}>
+      <FormField label={t('receipt')} htmlFor="pay-tx" error={error?.fieldErrors?.transactionId}>
         <select
           id="pay-tx"
           name="transactionId"
@@ -395,7 +404,7 @@ export function AllocatePaymentForm(props: {
           }}
           className="h-9 max-w-md rounded-md border border-input bg-transparent px-2.5 text-sm"
         >
-          <option value="">Оберіть транзакцію</option>
+          <option value="">{t('chooseTx')}</option>
           {props.candidates.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
@@ -404,7 +413,7 @@ export function AllocatePaymentForm(props: {
         </select>
       </FormField>
       <FormField
-        label="Сума в валюті інвойсу"
+        label={t('amountInvoiceCurrency')}
         htmlFor="pay-amount"
         error={error?.fieldErrors?.amount}
       >
@@ -418,12 +427,12 @@ export function AllocatePaymentForm(props: {
         />
       </FormField>
       {candidate?.needsRate && (
-        <FormField label="Курс (одиниць надходження за 1)" htmlFor="pay-rate">
+        <FormField label={t('rate')} htmlFor="pay-rate">
           <Input id="pay-rate" name="fxRate" inputMode="decimal" required className="w-36" />
         </FormField>
       )}
       <Button type="submit" disabled={pending || !selected}>
-        Зарахувати оплату
+        {t('allocate')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
@@ -437,13 +446,14 @@ export function RemoveAllocationButton({ id, invoiceId }: { id: string; invoiceI
     removeAllocationAction,
     null,
   );
-  useResult(state, 'Розподіл знято');
+  const t = useTranslations('invoiceForms');
+  useResult(state, t('allocationRemoved'));
   return (
     <form action={action}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="invoiceId" value={invoiceId} />
       <Button type="submit" size="sm" variant="ghost" disabled={pending}>
-        Зняти
+        {t('remove')}
       </Button>
     </form>
   );

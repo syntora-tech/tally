@@ -1,11 +1,12 @@
 import { LINK_ENTITY_TYPES, type LinkEntityType } from '@tally/db/schema';
-import type { Metadata } from 'next';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { linkTargets } from '@/server/services/documents/registry';
 import { DocumentForm } from '../document-form';
+import { getTranslations } from 'next-intl/server';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Новий документ · Tally' };
+export const generateMetadata = pageTitle('newDocument');
 
 const BACK: Partial<Record<LinkEntityType, (id: string) => string>> = {
   person: (id) => `/people/${id}`,
@@ -22,6 +23,7 @@ export default async function NewDocumentPage({
 }) {
   const ctx = await requireRole(FINANCE_ROLES);
   const { entityType, entityId, type } = await searchParams;
+  const t = await getTranslations('documents');
   const targets = (await linkTargets.run(ctx, {}))._unsafeUnwrap();
   const validEntity =
     entityType && entityId && (LINK_ENTITY_TYPES as readonly string[]).includes(entityType)
@@ -30,7 +32,7 @@ export default async function NewDocumentPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Новий документ</h1>
+      <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
       <DocumentForm
         targets={targets}
         initialLinks={validEntity ? [`${validEntity.type}:${validEntity.id}`] : []}

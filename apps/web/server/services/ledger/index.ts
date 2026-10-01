@@ -58,8 +58,8 @@ const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
 export const accountInput = z.object({
   id: z.preprocess(emptyToUndefined, z.uuid().optional()),
-  name: requiredText('Вкажіть назву'),
-  kind: z.enum(['bank', 'crypto', 'cash'], { error: 'Оберіть тип' }),
+  name: requiredText('field.name'),
+  kind: z.enum(['bank', 'crypto', 'cash'], { error: 'field.kind' }),
   currency: currencyCode,
   network: optionalText,
   openingBalance: decimalString,
@@ -75,10 +75,10 @@ export const saveAccount = defineService({
     inActorScope(ctx, async (tx) => {
       if (!id) {
         const [row] = await tx.insert(account).values(values).returning({ id: account.id });
-        return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+        return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
       }
       const [current] = await tx.select().from(account).where(eq(account.id, id));
-      if (!current) return err(serviceError('not_found', 'Рахунок не знайдено'));
+      if (!current) return err(serviceError('not_found', 'ledger.accountNotFound'));
       if (current.currency !== values.currency) {
         const [used] = await tx
           .select({ id: posting.id })
@@ -87,8 +87,8 @@ export const saveAccount = defineService({
           .limit(1);
         if (used) {
           return err(
-            serviceError('validation_error', 'Валюту рахунку з проводками змінити не можна', {
-              currency: ['Валюту рахунку з проводками змінити не можна'],
+            serviceError('validation_error', 'ledger.currencyLocked', {
+              currency: ['ledger.currencyLocked'],
             }),
           );
         }
@@ -98,7 +98,7 @@ export const saveAccount = defineService({
         .set(values)
         .where(eq(account.id, id))
         .returning({ id: account.id });
-      return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+      return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
     }),
 });
 
@@ -115,12 +115,12 @@ export const listCategories = defineService({
 
 export const saveCategory = defineService({
   name: 'ledger.categories.save',
-  input: z.object({ txType: z.enum(TX_TYPES), name: requiredText('Вкажіть назву') }),
+  input: z.object({ txType: z.enum(TX_TYPES), name: requiredText('field.name') }),
   handler: async (ctx, input) => {
     const [row] = await inActorScope(ctx, (tx) =>
       tx.insert(category).values(input).returning({ id: category.id }),
     );
-    return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+    return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
   },
 });
 
@@ -197,7 +197,10 @@ export const listTransactions = defineService({
   },
 });
 
-const leg = z.object({ accountId: z.uuid({ error: 'Оберіть рахунок' }), amount: decimalString });
+const leg = z.object({
+  accountId: z.uuid({ error: 'ledger.chooseAccount' }),
+  amount: decimalString,
+});
 const optionalLeg = z.preprocess(
   (v) => (v && typeof v === 'object' && !('accountId' in v && v.accountId) ? undefined : v),
   leg.optional(),
@@ -207,7 +210,7 @@ export const transactionInput = z
   .object({
     type: z.enum(TX_TYPES),
     occurredOn: localDateString,
-    categoryId: z.uuid({ error: 'Оберіть категорію' }),
+    categoryId: z.uuid({ error: 'ledger.chooseCategory' }),
     description: optionalText,
     counterparty: optionalText,
     externalRef: optionalText,
@@ -222,19 +225,19 @@ export const transactionInput = z
     const need = (key: 'from' | 'to', message: string) => {
       if (!t[key]) c.addIssue({ code: 'custom', path: [key, 'accountId'], message });
     };
-    if (t.type === 'revenue') need('to', 'Оберіть рахунок надходження');
-    if (t.type === 'expense') need('from', 'Оберіть рахунок списання');
+    if (t.type === 'revenue') need('to', 'ledger.chooseToAccount');
+    if (t.type === 'expense') need('from', 'ledger.chooseFromAccount');
     if (TWO_LEG_TYPES.includes(t.type)) {
-      need('from', 'Оберіть рахунок списання');
-      need('to', 'Оберіть рахунок зарахування');
+      need('from', 'ledger.chooseFromAccount');
+      need('to', 'ledger.chooseDestinationAccount');
     }
     if (t.type === 'adjustment' && Boolean(t.from) === Boolean(t.to)) {
-      c.addIssue({ code: 'custom', path: ['to', 'accountId'], message: 'Оберіть один рахунок' });
+      c.addIssue({ code: 'custom', path: ['to', 'accountId'], message: 'ledger.chooseOneAccount' });
     }
     for (const key of ['from', 'to', 'fee'] as const) {
       const amount = t[key]?.amount;
       if (amount !== undefined && !toDecimal(amount).gt(0)) {
-        c.addIssue({ code: 'custom', path: [key, 'amount'], message: 'Сума має бути більша за 0' });
+        c.addIssue({ code: 'custom', path: [key, 'amount'], message: 'field.positive' });
       }
     }
   });
@@ -305,15 +308,13 @@ export const deleteTransaction = defineService({
         .where(eq(allocation.transactionId, id))
         .limit(1);
       if (linked) {
-        return err(
-          serviceError('conflict', 'Транзакцію розподілено на документи — спершу зніміть розподіл'),
-        );
+        return err(serviceError('conflict', 'ledger.txAllocated'));
       }
       const [row] = await tx
         .delete(transaction)
         .where(eq(transaction.id, id))
         .returning({ id: transaction.id });
-      return row ? ok(row) : err(serviceError('not_found', 'Транзакцію не знайдено'));
+      return row ? ok(row) : err(serviceError('not_found', 'ledger.txNotFound'));
     }),
 });
 

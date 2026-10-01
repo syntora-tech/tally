@@ -1,16 +1,18 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getContract } from '@/server/services/clients';
 import { ContractForm, type ContractFormValues } from '../../contract-form';
+import { getTranslations } from 'next-intl/server';
+import { pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Редагування договору · Tally' };
+export const generateMetadata = pageTitle('editContract');
 
 type Rule = ContractFormValues['paymentDueRule'];
 
 export default async function EditContractPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireRole(FINANCE_ROLES);
+  const t = await getTranslations('contracts');
   const { id } = await params;
   const result = await getContract.run(ctx, { id });
   if (result.isErr()) notFound();
@@ -18,7 +20,7 @@ export default async function EditContractPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Договір {c.number}</h1>
+      <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
       <ContractForm
         counterpartyName={clientName ?? payeeName ?? ''}
         contract={{

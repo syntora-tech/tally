@@ -1,5 +1,5 @@
-import { addMonths, formatAmount, formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
+import { addMonths } from '@tally/domain';
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
@@ -15,26 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  BILLING_TYPE_LABELS,
-  PAY_TYPE_LABELS,
-  PAYOUT_METHOD_LABELS,
-  PRORATION_LABELS,
-  RELEASE_POLICY_LABELS,
-} from '@/lib/labels';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getAssignment } from '@/server/services/assignments';
 import { AddVersionForm } from '../add-version-form';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Залучення · Tally' };
-
-const monthLabel = new Intl.DateTimeFormat('uk-UA', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const month = (d: string) => monthLabel.format(new Date(`${d}T00:00:00Z`));
+export const generateMetadata = pageTitle('assignment');
 
 export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireRole(FINANCE_ROLES);
@@ -55,6 +42,20 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   const nextMonth = addMonths(ctx.today, 1).slice(0, 7);
   const [lastBilling] = billing;
   const [lastPay] = pay;
+  const [t, tc, fmt, labels] = await Promise.all([
+    getTranslations('assignment'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
+  const {
+    BILLING_TYPE_LABELS,
+    PAY_TYPE_LABELS,
+    PAYOUT_METHOD_LABELS,
+    PRORATION_LABELS,
+    RELEASE_POLICY_LABELS,
+  } = labels;
+  const month = fmt.month;
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,7 +67,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             </Link>
             {' · '}
             {a.isInternal ? (
-              'Внутрішнє'
+              t('internal')
             ) : (
               <Link href={`/clients/${clientId ?? ''}`} className="hover:underline">
                 {clientName}
@@ -75,50 +76,47 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </h1>
           <p className="text-muted-foreground">
             {[a.roleTitle, a.sowRef, contractNumber].filter(Boolean).join(' · ')} · FTE {a.fte} ·{' '}
-            {formatUaDate(a.startsOn as LocalDate)} —{' '}
-            {a.endsOn ? formatUaDate(a.endsOn as LocalDate) : 'без дати завершення'}
+            {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
           </p>
         </div>
         <Button variant="outline" render={<Link href={`/people/assignments/${a.id}/edit`} />}>
-          Редагувати
+          {tc('edit')}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Маржа за умовами</CardTitle>
+          <CardTitle className="text-base">{t('marginTitle')}</CardTitle>
           <CardDescription>
-            Орієнтовно: білінг і ЗП за повний місяць (
-            {margin ? `${month(margin.month)}, норма ${margin.workHours} год` : 'поточний місяць'}).
-            Фактична маржа — з годинами на Етапі 2.
+            {t('marginDescription', {
+              basis: margin
+                ? t('marginBasis', { month: month(margin.month), hours: margin.workHours })
+                : t('currentMonth'),
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {margin ? (
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <div className="text-muted-foreground">Клієнту</div>
+                <div className="text-muted-foreground">{t('toClient')}</div>
                 <div className="text-lg font-medium">
-                  {formatAmount(margin.billing, margin.currency)}
+                  {fmt.amount(margin.billing, margin.currency)}
                 </div>
               </div>
               <div>
-                <div className="text-muted-foreground">Людині</div>
-                <div className="text-lg font-medium">
-                  {formatAmount(margin.pay, margin.currency)}
-                </div>
+                <div className="text-muted-foreground">{t('toPerson')}</div>
+                <div className="text-lg font-medium">{fmt.amount(margin.pay, margin.currency)}</div>
               </div>
               <div>
-                <div className="text-muted-foreground">Маржа</div>
+                <div className="text-muted-foreground">{t('margin')}</div>
                 <div className="text-lg font-semibold" data-testid="assignment-margin">
-                  {formatAmount(margin.margin, margin.currency)}
+                  {fmt.amount(margin.margin, margin.currency)}
                 </div>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Недостатньо даних або різні валюти білінгу й ЗП.
-            </p>
+            <p className="text-sm text-muted-foreground">{t('noMargin')}</p>
           )}
         </CardContent>
       </Card>
@@ -126,16 +124,16 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Клієнту — версії умов</CardTitle>
+            <CardTitle className="text-base">{t('billingVersions')}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>З місяця</TableHead>
-                  <TableHead>Тип</TableHead>
-                  <TableHead>Ставка</TableHead>
-                  <TableHead>Деталі</TableHead>
+                  <TableHead>{t('fromMonth')}</TableHead>
+                  <TableHead>{t('type')}</TableHead>
+                  <TableHead>{t('rate')}</TableHead>
+                  <TableHead>{t('details')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -144,7 +142,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                     <TableCell>{month(b.validFrom)}</TableCell>
                     <TableCell>{BILLING_TYPE_LABELS[b.type]}</TableCell>
                     <TableCell>
-                      {b.type === 'none' ? '—' : formatAmount(b.rate, b.currency)}
+                      {b.type === 'none' ? '—' : fmt.amount(b.rate, b.currency)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {b.type === 'fixed_monthly' ? PRORATION_LABELS[b.prorationPolicy] : ''}{' '}
@@ -171,16 +169,16 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Людині — версії умов</CardTitle>
+            <CardTitle className="text-base">{t('payVersions')}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>З місяця</TableHead>
-                  <TableHead>Тип</TableHead>
-                  <TableHead>Сума</TableHead>
-                  <TableHead>Деталі</TableHead>
+                  <TableHead>{t('fromMonth')}</TableHead>
+                  <TableHead>{t('type')}</TableHead>
+                  <TableHead>{t('amount')}</TableHead>
+                  <TableHead>{t('details')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -189,12 +187,12 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                     <TableCell>{month(p.validFrom)}</TableCell>
                     <TableCell>{PAY_TYPE_LABELS[p.type]}</TableCell>
                     <TableCell>
-                      {p.type === 'included' ? '—' : formatAmount(p.amount, p.currency)}
+                      {p.type === 'included' ? '—' : fmt.amount(p.amount, p.currency)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {PAYOUT_METHOD_LABELS[p.payoutMethod]} ·{' '}
                       {RELEASE_POLICY_LABELS[p.releasePolicy]}
-                      {p.graceDays > 0 ? ` · +${p.graceDays} р.д.` : ''}
+                      {p.graceDays > 0 ? t('graceDays', { days: p.graceDays }) : ''}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -219,32 +217,32 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Години</CardTitle>
-          <CardDescription>Редагування годин з’явиться в майстрі періоду (Етап 2).</CardDescription>
+          <CardTitle className="text-base">{t('hours')}</CardTitle>
+          <CardDescription>{t('hoursDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           {hours.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Годин ще немає</p>
+            <p className="text-sm text-muted-foreground">{t('noHours')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Місяць</TableHead>
-                  <TableHead>Години</TableHead>
-                  <TableHead>Норма</TableHead>
-                  <TableHead>Джерело</TableHead>
+                  <TableHead>{t('month')}</TableHead>
+                  <TableHead>{t('hours')}</TableHead>
+                  <TableHead>{t('norm')}</TableHead>
+                  <TableHead>{t('source')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hours.map((h) => (
                   <TableRow key={h.month}>
                     <TableCell>{month(h.month)}</TableCell>
-                    <TableCell>{formatAmount(h.hours)}</TableCell>
+                    <TableCell>{fmt.amount(h.hours)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatAmount(h.workHours)}
+                      {fmt.amount(h.workHours)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {h.source === 'import' ? 'імпорт' : 'вручну'}
+                      {h.source === 'import' ? t('sourceImport') : t('sourceManual')}
                     </TableCell>
                   </TableRow>
                 ))}

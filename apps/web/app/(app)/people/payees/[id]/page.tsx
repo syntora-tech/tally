@@ -1,33 +1,17 @@
-import { formatUaDate, type LocalDate } from '@tally/domain';
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CONTRACT_STATUS_LABELS, PAYEE_KIND_LABELS } from '@/lib/labels';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listPayeeContracts } from '@/server/services/clients';
 import { getPayee } from '@/server/services/payees';
+import { getTranslations } from 'next-intl/server';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
-export const metadata: Metadata = { title: 'Одержувач · Tally' };
-
-const FIELD_LABELS: Record<string, string> = {
-  kind: 'Тип',
-  legal_name_ua: 'Назва (UA)',
-  legal_name_en: 'Назва (EN)',
-  tax_id: 'ІПН',
-  edr_record: 'Запис ЄДР',
-  edr_date: 'Дата ЄДР',
-  address_ua: 'Адреса',
-  iban: 'IBAN',
-  bank_name: 'Банк',
-  wallet_address: 'Гаманець',
-  wallet_network: 'Мережа',
-  person_id: 'Людина',
-};
+export const generateMetadata = pageTitle('payee');
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -45,6 +29,12 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
   if (result.isErr()) notFound();
   const { payee: p, personName } = result.value;
   const contracts = (await listPayeeContracts.run(ctx, { payeeId: p.id })).unwrapOr([]);
+  const [t, tc, fmt, { CONTRACT_STATUS_LABELS, PAYEE_KIND_LABELS }] = await Promise.all([
+    getTranslations('payees.card'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,23 +45,23 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href={`/people/payees/${p.id}/edit`} />}>
-            Редагувати
+            {tc('edit')}
           </Button>
           <Button render={<Link href={`/clients/contracts/new?payeeId=${p.id}`} />}>
-            Новий договір
+            {t('newContract')}
           </Button>
         </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Реквізити</CardTitle>
+            <CardTitle className="text-base">{t('details')}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl>
-              <Row label="Назва (EN)" value={p.legalNameEn} />
+              <Row label={t('nameEn')} value={p.legalNameEn} />
               <Row
-                label="Людина"
+                label={t('person')}
                 value={
                   personName && p.personId ? (
                     <Link className="hover:underline" href={`/people/${p.personId}`}>
@@ -80,20 +70,20 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
                   ) : null
                 }
               />
-              <Row label="ІПН / РНОКПП" value={p.taxId} />
+              <Row label={t('taxId')} value={p.taxId} />
               <Row
-                label="Запис у ЄДР"
+                label={t('edr')}
                 value={
-                  [p.edrRecord, p.edrDate && formatUaDate(p.edrDate as LocalDate)]
-                    .filter(Boolean)
-                    .join(' від ') || null
+                  p.edrRecord && p.edrDate
+                    ? t('edrOf', { record: p.edrRecord, date: fmt.date(p.edrDate) })
+                    : (p.edrRecord ?? (p.edrDate ? fmt.date(p.edrDate) : null))
                 }
               />
-              <Row label="Адреса" value={p.addressUa} />
+              <Row label={t('address')} value={p.addressUa} />
               <Row label="IBAN" value={p.iban} />
-              <Row label="Банк" value={p.bankName} />
+              <Row label={t('bank')} value={p.bankName} />
               <Row
-                label="Гаманець"
+                label={t('wallet')}
                 value={[p.walletAddress, p.walletNetwork].filter(Boolean).join(' · ') || null}
               />
             </dl>
@@ -102,11 +92,11 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Договори з ФОП</CardTitle>
+              <CardTitle className="text-base">{t('contracts')}</CardTitle>
             </CardHeader>
             <CardContent>
               {contracts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Договорів ще немає</p>
+                <p className="text-sm text-muted-foreground">{t('noContracts')}</p>
               ) : (
                 <ul className="flex flex-col gap-2 text-sm">
                   {contracts.map((c) => (
@@ -119,8 +109,7 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
                       </Link>
                       {c.signedOn && (
                         <span className="text-muted-foreground">
-                          {' '}
-                          від {formatUaDate(c.signedOn as LocalDate)}
+                          {t('of', { date: fmt.date(c.signedOn) })}
                         </span>
                       )}
                       {c.status !== 'active' && (
@@ -136,7 +125,7 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
             </CardContent>
           </Card>
           <LinkedDocuments ctx={ctx} entityType="payee" entityId={p.id} canAdd />
-          <AuditHistory ctx={ctx} tableName="payee" rowId={p.id} fieldLabels={FIELD_LABELS} />
+          <AuditHistory ctx={ctx} tableName="payee" rowId={p.id} />
         </div>
       </div>
     </div>

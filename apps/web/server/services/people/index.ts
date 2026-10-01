@@ -103,7 +103,7 @@ export const getPerson = defineService({
         defaultPayee: row.payeeId ? { id: row.payeeId, name: row.payeeName ?? '' } : null,
       } satisfies PersonCard;
     });
-    return card ? ok(card) : err(serviceError('not_found', 'Людину не знайдено'));
+    return card ? ok(card) : err(serviceError('not_found', 'people.notFound'));
   },
 });
 
@@ -114,7 +114,7 @@ export const createPerson = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.insert(person).values(input).returning({ id: person.id }),
     );
-    return row ? ok(row) : err(serviceError('internal_error', 'Не вдалося створити запис'));
+    return row ? ok(row) : err(serviceError('internal_error', 'general.createFailed'));
   },
 });
 
@@ -125,6 +125,6 @@ export const updatePerson = defineService({
     const [row] = await inActorScope(ctx, (tx) =>
       tx.update(person).set(input).where(eq(person.id, id)).returning({ id: person.id }),
     );
-    return row ? ok(row) : err(serviceError('not_found', 'Людину не знайдено'));
+    return row ? ok(row) : err(serviceError('not_found', 'people.notFound'));
   },
 });

@@ -26,9 +26,9 @@ import { optionalHttpUrl, optionalLocalDate, optionalText, requiredText } from '
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export const uploadFile = z
-  .instanceof(File, { error: 'Оберіть файл' })
-  .refine((f) => f.size > 0, 'Файл порожній')
-  .refine((f) => f.size <= MAX_UPLOAD_BYTES, 'Файл більший за 4 МБ');
+  .instanceof(File, { error: 'documents.chooseFile' })
+  .refine((f) => f.size > 0, 'documents.emptyFile')
+  .refine((f) => f.size <= MAX_UPLOAD_BYTES, 'documents.tooLarge');
 
 const optionalFile = z.preprocess(
   // An untouched file input still posts an empty File; treat it as "no file".
@@ -44,7 +44,7 @@ export const documentLinkInput = z.object({
 export const createDocumentInput = z
   .object({
     type: z.enum(DOCUMENT_TYPES),
-    title: requiredText('Вкажіть назву'),
+    title: requiredText('field.name'),
     number: optionalText,
     docDate: optionalLocalDate,
     url: optionalHttpUrl,
@@ -52,7 +52,7 @@ export const createDocumentInput = z
     file: optionalFile,
     links: z.array(documentLinkInput).max(20).default([]),
   })
-  .refine((d) => d.file ?? d.url, { message: 'Додайте файл або посилання', path: ['file'] });
+  .refine((d) => d.file ?? d.url, { message: 'documents.fileOrUrl', path: ['file'] });
 
 type LinkInput = z.output<typeof documentLinkInput>;
 
@@ -190,7 +190,7 @@ export function documentServices(getStorage: () => DocumentStorage) {
       personId: z.uuid(),
       file: uploadFile.refine(
         (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
-        'CV має бути у форматі PDF',
+        'documents.cvPdf',
       ),
     }),
     handler: async (ctx, { personId, file }) => {
@@ -215,7 +215,7 @@ export function documentServices(getStorage: () => DocumentStorage) {
           .limit(1);
         return { current: current ?? null };
       });
-      if (!found) return err(serviceError('not_found', 'Людину не знайдено'));
+      if (!found) return err(serviceError('not_found', 'people.notFound'));
 
       const created = await insertDocument(ctx, getStorage(), {
         type: 'cv',
@@ -241,7 +241,7 @@ export function documentServices(getStorage: () => DocumentStorage) {
     input: z.object({ invoiceId: z.uuid(), file: uploadFile }),
     handler: async (ctx, { invoiceId, file }) => {
       const target = await signedCopyTarget(ctx, invoiceId);
-      if (!target) return err(serviceError('not_found', 'Випущений інвойс не знайдено'));
+      if (!target) return err(serviceError('not_found', 'documents.issuedInvoiceNotFound'));
       const created = await insertDocument(ctx, getStorage(), {
         type: 'invoice',
         title: `Invoice ${target.number} (signed)`,

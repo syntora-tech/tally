@@ -90,34 +90,38 @@ test('stage 2: period → draft invoice → issue with number → revision keeps
   await signIn(page, E2E_OWNER_EMAIL);
 
   await page.goto('/periods');
-  await page.getByLabel('Місяць').fill(MONTH);
-  await page.getByRole('button', { name: 'Відкрити період' }).click();
+  await page.getByLabel('Month').fill(MONTH);
+  await page.getByRole('button', { name: 'Open period' }).click();
   await expect(page).toHaveURL(/\/periods\/[0-9a-f-]+$/);
 
-  await page.getByLabel(`Години: ${personName}, ${clientName}`).fill('176');
-  await page.getByRole('button', { name: 'Зберегти години' }).click();
-  await expect(page.getByText('Години збережено')).toBeVisible();
+  await page.getByLabel(`Hours: ${personName}, ${clientName}`).fill('176');
+  await page.getByRole('button', { name: 'Save hours' }).click();
+  await expect(page.getByText('Hours saved')).toBeVisible();
 
   page.once('dialog', (d) => void d.accept());
-  await page.getByRole('button', { name: 'Закрити період' }).click();
-  const draftLink = page.getByRole('link', { name: `${clientName} — чернетка` });
+  await page.getByRole('button', { name: 'Close period' }).click();
+  const draftLink = page.getByRole('link', { name: `${clientName} — draft` });
   await expect(draftLink).toBeVisible();
   // 9.2 invoice column: 176 h × 47 $/h.
-  await expect(draftLink.locator('..')).toContainText(/8\s272\.00/);
+  await expect(draftLink.locator('..')).toContainText(/8,272\.00/);
 
   await draftLink.click();
-  await expect(page.getByRole('heading', { name: /Чернетка інвойсу/ })).toBeVisible();
-  await expect(page.getByLabel('Дата випуску')).toHaveValue('2036-04-01');
-  await page.getByRole('button', { name: 'Випустити й присвоїти номер' }).click();
-  await expect(page.getByRole('heading', { name: /Інвойс № E1\/36/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Invoice draft/ })).toBeVisible();
+  await expect(page.getByLabel('Issue date')).toHaveValue('2036-04-01');
+  await page.getByRole('button', { name: 'Issue and assign a number' }).click();
+  await expect(page.getByRole('heading', { name: /Invoice No\. E1\/36/ })).toBeVisible();
 
-  await page.getByLabel('Кількість').fill('170');
-  await page.getByLabel('Причина зміни').fill('Client corrected hours');
-  await page.getByRole('button', { name: 'Зберегти нову редакцію' }).click();
-  await expect(page.getByRole('heading', { name: /Інвойс № E1\/36/ })).toContainText('редакція 2');
+  await page.getByLabel('Quantity').fill('170');
+  await page.getByLabel('Reason for the change').fill('Client corrected hours');
+  await page.getByRole('button', { name: 'Save new revision' }).click();
+  await expect(page.getByRole('heading', { name: /Invoice No\. E1\/36/ })).toContainText(
+    'revision 2',
+  );
   await expect(page.getByText('Client corrected hours')).toBeVisible();
-  await expect(page.getByText(/7\s990\.00/).first()).toBeVisible();
+  await expect(page.getByText(/7,990\.00/).first()).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText('Файл редакції 2 згенеровано')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('The file for revision 2 is generated')).toBeVisible({
+    timeout: 15_000,
+  });
 });

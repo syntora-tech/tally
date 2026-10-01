@@ -137,14 +137,14 @@ describe('invoice payments (6.5, I7)', () => {
       transactionId: uahTx,
       amount: '400',
     });
-    expect(noRate._unsafeUnwrapErr().message).toContain('вкажіть курс');
+    expect(noRate._unsafeUnwrapErr().message).toMatch(/^db\.allocationCurrency\|/);
     const over = await allocateToInvoice.run(h.ctxFor(finance), {
       invoiceId: ids.invoice,
       transactionId: uahTx,
       amount: '450',
       fxRate: '44',
     });
-    expect(over._unsafeUnwrapErr().message).toContain('залишок інвойсу');
+    expect(over._unsafeUnwrapErr().message).toMatch(/^db\.overInvoice\|/);
     const paid = await allocateToInvoice.run(h.ctxFor(finance), {
       invoiceId: ids.invoice,
       transactionId: uahTx,
