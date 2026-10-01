@@ -1,4 +1,4 @@
-import { formatAmount, formatUaDate, type LocalDate } from '@tally/domain';
+import { formatAmount, formatUaDate, sum, type LocalDate } from '@tally/domain';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -14,12 +14,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS } from '@/lib/labels';
+import { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS } from '@/lib/labels';
 import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getPeriodOverview } from '@/server/services/periods';
-import { CloseForm, HoursCsvForm, HoursForm, ParamsForm, ReopenForm } from './period-forms';
+import {
+  AdjustmentForm,
+  CloseForm,
+  HoursCsvForm,
+  HoursForm,
+  ParamsForm,
+  RemoveAdjustmentButton,
+  ReopenForm,
+} from './period-forms';
 
 export const metadata: Metadata = { title: 'Період · Tally' };
 
@@ -52,7 +60,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const result = await getPeriodOverview.run(ctx, { periodId: id });
   if (result.isErr()) notFound();
-  const { period: p, assignments, preview, invoices } = result.value;
+  const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
   const closed = p.status === 'closed';
   const billingText = (a: (typeof assignments)[number]) => {
     const b = preview.rows.find((r) => r.assignmentId === a.assignmentId)?.billing;
@@ -160,9 +168,65 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
       <Step
         n={4}
         title="Коригування"
-        description="Бонуси, утримання й компенсації з причиною з’являться разом із виплатами (Етап 3)"
+        description="Бонус, утримання чи компенсація з причиною; UAH додається до виплати після конвертації"
       >
-        <p className="text-sm text-muted-foreground">—</p>
+        <div className="flex flex-col gap-4">
+          {adjustments.length > 0 && (
+            <ul className="flex flex-col gap-1 text-sm">
+              {adjustments.map(({ adjustment: a, personName }) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{personName}</span>
+                  <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
+                  <span className="tabular-nums">{formatAmount(a.amount, a.currency)}</span>
+                  {a.payoutMethod === 'crypto' && <Badge variant="outline">crypto</Badge>}
+                  <span className="text-muted-foreground">{a.reason}</span>
+                  {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!closed && (
+            <AdjustmentForm
+              periodId={p.id}
+              people={[
+                ...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries(),
+              ]
+                .filter(([id]) => id)
+                .map(([id, name]) => ({ id, name }))}
+            />
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Виплата</TableHead>
+                <TableHead>Спосіб</TableHead>
+                <TableHead>USD</TableHead>
+                <TableHead>UAH ≈ з коригуваннями</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {plan.map((i) => (
+                <TableRow key={`${i.personId}:${i.payoutMethod}`}>
+                  <TableCell>{i.personName}</TableCell>
+                  <TableCell>{i.payoutMethod === 'crypto' ? 'crypto' : 'fiat'}</TableCell>
+                  <TableCell>{formatAmount(i.totalUsd)}</TableCell>
+                  <TableCell>{i.totalUahApprox ? formatAmount(i.totalUahApprox) : '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={2}>Разом до виплати</TableCell>
+                <TableCell>{formatAmount(sum(plan.map((i) => i.totalUsd)))}</TableCell>
+                <TableCell data-testid="total-pay-uah">
+                  {p.referenceFxUsdUah
+                    ? formatAmount(sum(plan.map((i) => i.totalUahApprox ?? '0')))
+                    : '—'}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
       </Step>
 
       <Step
@@ -171,7 +235,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
         description={
           closed
             ? 'Години незмінні. Відкрити знову може лише власник із причиною.'
-            : 'Створює чернетки інвойсів: один інвойс на договір, рядки — залучення з годинами'
+            : 'Створює чернетки інвойсів (один на договір) і виплати; статуси рядків — за оплатою клієнта (5.3)'
         }
       >
         <div className="flex flex-col gap-4">
@@ -179,6 +243,14 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
             ctx.actor.role === 'owner' && <ReopenForm periodId={p.id} />
           ) : (
             <CloseForm periodId={p.id} />
+          )}
+          {payroll.length > 0 && (
+            <p className="text-sm">
+              Виплат створено: {payroll.length}.{' '}
+              <Link href={`/payroll?period=${p.id}`} className="underline">
+                Перейти до виплат
+              </Link>
+            </p>
           )}
           {invoices.length > 0 && (
             <ul className="flex flex-col gap-1 text-sm">

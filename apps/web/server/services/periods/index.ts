@@ -5,7 +5,9 @@ import {
   client,
   contract,
   invoice,
+  adjustment,
   invoiceLine,
+  payrollItem,
   payTerms,
   period,
   person,
@@ -17,6 +19,7 @@ import {
   draftLine,
   dueDate,
   isActiveInMonth,
+  payrollPlan,
   periodPreview,
   sum,
   toDecimal,
@@ -32,7 +35,15 @@ import { z } from 'zod';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
-import { monthStart, nonNegativeDecimal, optionalDecimal, requiredText } from '../fields';
+import {
+  currencyCode,
+  decimalString,
+  monthStart,
+  nonNegativeDecimal,
+  optionalDecimal,
+  requiredText,
+} from '../fields';
+import { createPayroll, dropPayroll, loadAdjustments, toPlanAdjustments } from './payroll';
 
 export async function loadCalendar(tx: DbTransaction): Promise<WorkCalendar> {
   const rows = await tx
@@ -81,6 +92,7 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
     : [[], [], []];
   const assignments: PeriodAssignment[] = active.map((r) => ({
     assignmentId: r.assignment.id,
+    personId: r.assignment.personId,
     personName: r.personName,
     clientName: r.assignment.isInternal ? null : r.clientName,
     contractId: r.assignment.contractId,
@@ -104,6 +116,9 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
         amount: t.amount,
         currency: t.currency,
         validFrom: t.validFrom as LocalDate,
+        payoutMethod: t.payoutMethod,
+        releasePolicy: t.releasePolicy,
+        graceDays: t.graceDays,
       })),
     hours: hours.find((h) => h.assignmentId === r.assignment.id)?.hours ?? null,
   }));
@@ -194,10 +209,26 @@ export const getPeriodOverview = defineService({
         .innerJoin(client, eq(client.id, invoice.clientId))
         .where(eq(invoice.periodId, periodId))
         .orderBy(clientLabel);
+      const adjustments = await loadAdjustments(tx, periodId);
+      const payroll = await tx
+        .select({ item: payrollItem, personName: person.fullName })
+        .from(payrollItem)
+        .innerJoin(person, eq(person.id, payrollItem.personId))
+        .where(eq(payrollItem.periodId, periodId))
+        .orderBy(person.fullName);
       return {
         period: p,
         assignments,
         preview: periodPreview(month, p.workHours, p.referenceFxUsdUah, assignments),
+        plan: payrollPlan(
+          month,
+          p.workHours,
+          p.referenceFxUsdUah,
+          assignments,
+          toPlanAdjustments(adjustments),
+        ),
+        adjustments,
+        payroll,
         invoices,
       };
     });
@@ -340,12 +371,22 @@ export const closePeriod = defineService({
         created++;
       }
 
+      const adjustments = toPlanAdjustments(await loadAdjustments(tx, periodId));
+      const payrollItems = await createPayroll(tx, {
+        periodId,
+        plan: payrollPlan(month, p.workHours, p.referenceFxUsdUah, assignments, adjustments),
+        assignments,
+        timesheetIds,
+        today: ctx.today,
+        cal,
+      });
+
       const closedBy = ctx.actor.kind === 'user' ? ctx.actor.userId : null;
       await tx
         .update(period)
         .set({ status: 'closed', closedAt: new Date(), closedBy })
         .where(eq(period.id, periodId));
-      return ok({ id: periodId, draftInvoices: created });
+      return ok({ id: periodId, draftInvoices: created, payrollItems });
     });
     return result;
   },
@@ -358,12 +399,53 @@ export const reopenPeriod = defineService({
   handler: async (ctx, { periodId, reason }) => {
     const [row] = await inActorScope(ctx, async (tx) => {
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
-      return tx
+      const rows = await tx
         .update(period)
         .set({ status: 'open', closedAt: null, closedBy: null })
         .where(and(eq(period.id, periodId), eq(period.status, 'closed')))
         .returning({ id: period.id });
+      if (rows.length) await dropPayroll(tx, periodId);
+      return rows;
     });
     return row ? ok(row) : err(serviceError('conflict', 'Період не закритий або не знайдений'));
+  },
+});
+
+/** Step 4 (6.4): bonus, deduction or compensation with a reason; closed periods refuse it (I6). */
+export const addAdjustment = defineService({
+  name: 'periods.addAdjustment',
+  input: z.object({
+    periodId: z.uuid(),
+    personId: z.uuid({ error: 'Оберіть людину' }),
+    payoutMethod: z.enum(['fiat', 'crypto']).default('fiat'),
+    kind: z.enum(['bonus', 'deduction', 'trip_reimbursement', 'correction', 'other']),
+    amount: decimalString.refine((v) => !toDecimal(v).isZero(), 'Сума не може бути нульовою'),
+    currency: currencyCode.refine(
+      (c) => ['USD', 'USDT', 'USDC', 'UAH'].includes(c),
+      'Валюта: USD або UAH',
+    ),
+    reason: requiredText('Вкажіть причину'),
+  }),
+  handler: async (ctx, input) => {
+    const amount =
+      input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .insert(adjustment)
+        .values({ ...input, amount })
+        .returning({ id: adjustment.id }),
+    );
+    return row ? ok(row) : err(serviceError('forbidden', 'Недостатньо прав для цієї дії'));
+  },
+});
+
+export const removeAdjustment = defineService({
+  name: 'periods.removeAdjustment',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx.delete(adjustment).where(eq(adjustment.id, id)).returning({ id: adjustment.id }),
+    );
+    return row ? ok(row) : err(serviceError('not_found', 'Коригування не знайдено'));
   },
 });

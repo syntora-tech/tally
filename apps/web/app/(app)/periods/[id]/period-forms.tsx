@@ -2,10 +2,11 @@
 
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { FormField } from '@/components/form-field';
+import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ADJUSTMENT_KIND_LABELS, toOptions } from '@/lib/labels';
 import {
   Table,
   TableBody,
@@ -15,7 +16,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  addAdjustmentAction,
   closePeriodAction,
+  removeAdjustmentAction,
   reopenPeriodAction,
   saveHoursAction,
   updatePeriodAction,
@@ -213,6 +216,89 @@ export function ReopenForm({ periodId }: { periodId: string }) {
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
       </div>
+    </form>
+  );
+}
+
+export function AdjustmentForm(props: {
+  periodId: string;
+  people: { id: string; name: string }[];
+}) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    addAdjustmentAction,
+    null,
+  );
+  const error = useResult(state, 'Коригування додано');
+  return (
+    <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-7">
+      <input type="hidden" name="periodId" value={props.periodId} />
+      <FormField label="Людина" htmlFor="adj-person" error={error?.fieldErrors?.personId}>
+        <NativeSelect
+          id="adj-person"
+          name="personId"
+          placeholder="Оберіть"
+          options={props.people.map((p) => ({ value: p.id, label: p.name }))}
+        />
+      </FormField>
+      <FormField label="Вид" htmlFor="adj-kind">
+        <NativeSelect
+          id="adj-kind"
+          name="kind"
+          defaultValue="bonus"
+          options={toOptions(ADJUSTMENT_KIND_LABELS)}
+        />
+      </FormField>
+      <FormField label="Сума" htmlFor="adj-amount" error={error?.fieldErrors?.amount}>
+        <Input id="adj-amount" name="amount" inputMode="decimal" />
+      </FormField>
+      <FormField label="Валюта" htmlFor="adj-currency" error={error?.fieldErrors?.currency}>
+        <NativeSelect
+          id="adj-currency"
+          name="currency"
+          defaultValue="UAH"
+          options={[
+            { value: 'UAH', label: 'UAH' },
+            { value: 'USD', label: 'USD' },
+          ]}
+        />
+      </FormField>
+      <FormField label="Виплата" htmlFor="adj-method">
+        <NativeSelect
+          id="adj-method"
+          name="payoutMethod"
+          defaultValue="fiat"
+          options={[
+            { value: 'fiat', label: 'fiat' },
+            { value: 'crypto', label: 'crypto' },
+          ]}
+        />
+      </FormField>
+      <FormField label="Причина" htmlFor="adj-reason" error={error?.fieldErrors?.reason}>
+        <Input id="adj-reason" name="reason" required />
+      </FormField>
+      <Button type="submit" variant="outline" disabled={pending}>
+        Додати
+      </Button>
+      <div className="col-span-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function RemoveAdjustmentButton({ id, periodId }: { id: string; periodId: string }) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    removeAdjustmentAction,
+    null,
+  );
+  useResult(state, 'Коригування видалено');
+  return (
+    <form action={action}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="periodId" value={periodId} />
+      <Button type="submit" size="sm" variant="ghost" disabled={pending}>
+        Видалити
+      </Button>
     </form>
   );
 }

@@ -112,7 +112,8 @@ begin
      where l.payroll_item_id = p_item and l.status <> 'paid';
   elsif v_paid > 0 then
     v_status := 'partially_paid';
-  elsif v_lines > 0 and v_ready = v_lines then
+  elsif v_ready = v_lines then
+    -- Includes items made only of adjustments: nothing waits for a client.
     v_status := 'payable';
   elsif v_ready > 0 then
     v_status := 'partially_payable';

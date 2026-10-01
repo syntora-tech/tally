@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingTermsInput, PayTermsInput } from './billing';
 import { parseLocalDate, type LocalDate } from './local-date';
-import { draftLine, periodPreview, type PeriodAssignment } from './period';
+import { sum } from './money';
+import { draftLine, payrollPlan, periodPreview, type PeriodAssignment } from './period';
 
 const d = (s: string): LocalDate => parseLocalDate(s)._unsafeUnwrap();
 const JAN = d('2026-01-01');
@@ -107,6 +108,57 @@ describe('periodPreview — spec 9.2 etalon, July 2026', () => {
   it('skips assignments not active in the month', () => {
     const ended = { ...july[2], assignmentId: 'old', endsOn: d('2026-06-30') } as PeriodAssignment;
     expect(periodPreview(d('2026-07-01'), '184', null, [ended]).rows).toHaveLength(0);
+  });
+});
+
+describe('payrollPlan — spec 9.2 payroll columns', () => {
+  const withMethods = july.map((x) => ({
+    ...x,
+    personId: x.personName,
+    pay: x.pay.map((p) => ({
+      ...p,
+      payoutMethod:
+        x.clientName === 'Trady' || x.clientName === 'Boosty' || x.personName === 'Anton'
+          ? ('crypto' as const)
+          : ('fiat' as const),
+    })),
+  }));
+  const plan = payrollPlan(d('2026-07-01'), '184', '44.48', withMethods, [
+    { personId: 'Vladyslav', payoutMethod: 'fiat', amount: '3325', currency: 'UAH' },
+  ]);
+
+  it('groups lines per person × payout method and adds the CTO adjustment', () => {
+    const vlad = plan.filter((i) => i.personId === 'Vladyslav');
+    expect(vlad.map((i) => [i.payoutMethod, i.totalUsd, i.totalUahApprox])).toEqual([
+      ['fiat', '2020.00', '93174.60'],
+      ['crypto', '5000.00', '222400.00'],
+    ]);
+    expect(plan.find((i) => i.personId === 'Wita' && i.payoutMethod === 'crypto')?.lines).toEqual([
+      {
+        assignmentId: 'Wita:Boosty',
+        amountUsd: '0.00',
+        releasePolicy: 'on_payment_or_due',
+        graceDays: 0,
+      },
+    ]);
+  });
+
+  it('totals match 9.2: 15 690.00 USD and 701 216.20 UAH', () => {
+    expect(sum(plan.map((i) => i.totalUsd)).toFixed(2)).toBe('15690.00');
+    expect(sum(plan.map((i) => i.totalUahApprox ?? '0')).toFixed(2)).toBe('701216.20');
+  });
+
+  it('an adjustment without lines forms its own item', () => {
+    const only = payrollPlan(
+      d('2026-07-01'),
+      '184',
+      '44.48',
+      [],
+      [{ personId: 'x', payoutMethod: 'fiat', amount: '100', currency: 'USD' }],
+    );
+    expect(only).toMatchObject([
+      { personId: 'x', lines: [], totalUsd: '100.00', totalUahApprox: '4448.00' },
+    ]);
   });
 });
 

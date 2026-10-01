@@ -6,9 +6,11 @@ import { parseCsv } from '@/lib/csv-parse';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import {
+  addAdjustment,
   closePeriod,
   importHours,
   openPeriod,
+  removeAdjustment,
   reopenPeriod,
   updatePeriod,
 } from '../services/periods';
@@ -100,5 +102,31 @@ export async function reopenPeriodAction(
   const result = await reopenPeriod.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: result.error };
   revalidatePath(`/periods/${result.value.id}`);
+  return { ok: true, data: result.value };
+}
+
+export async function addAdjustmentAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await addAdjustment.run(ctx, {
+    ...input,
+    amount: typeof input.amount === 'string' ? input.amount.replace(',', '.') : input.amount,
+  });
+  if (result.isErr()) return { ok: false, error: result.error };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  return { ok: true, data: result.value };
+}
+
+export async function removeAdjustmentAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const result = await removeAdjustment.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: result.error };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
   return { ok: true, data: result.value };
 }

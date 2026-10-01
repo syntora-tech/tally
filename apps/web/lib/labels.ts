@@ -135,3 +135,11 @@ export const FX_SOURCE_LABELS: Record<string, string> = {
   nbu: 'НБУ',
   manual: 'вручну',
 };
+
+export const ADJUSTMENT_KIND_LABELS: Record<string, string> = {
+  bonus: 'Бонус',
+  deduction: 'Утримання',
+  trip_reimbursement: 'Компенсація поїздки',
+  correction: 'Коригування',
+  other: 'Інше',
+};

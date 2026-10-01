@@ -1,4 +1,5 @@
 import {
+  adjustment,
   assignment,
   billingTerms,
   client,
@@ -6,16 +7,25 @@ import {
   contract,
   invoice,
   invoiceLine,
+  payrollItem,
+  payrollLine,
   payTerms,
   period,
   person,
   timesheet,
 } from '@tally/db/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { sum } from '@tally/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
-import { closePeriod, getPeriodOverview, openPeriod, reopenPeriod, setHours } from '.';
+import {
+  addAdjustment,
+  closePeriod,
+  getPeriodOverview,
+  openPeriod,
+  reopenPeriod,
+  setHours,
+} from '.';
 
 // A far-future July with the same calendar shape as July 2026 (23 weekdays → 184 h) keeps the test
 // independent from real periods in the shared local database.
@@ -139,6 +149,8 @@ afterAll(() =>
           sql`select set_config('app.actor', 'system:test', true), set_config('app.reason', 'test cleanup', true)`,
         );
         await tx.update(period).set({ status: 'open' }).where(eq(period.id, ids.period));
+        await tx.delete(payrollItem).where(eq(payrollItem.periodId, ids.period));
+        await tx.delete(adjustment).where(eq(adjustment.periodId, ids.period));
         await tx.delete(timesheet).where(eq(timesheet.periodId, ids.period));
         await tx.delete(period).where(eq(period.id, ids.period));
       });
@@ -191,6 +203,26 @@ describe('period wizard (spec 6.4)', () => {
     expect(total((r) => r.payUahApprox)).toBe('454585.60');
   });
 
+  it('step 4: an adjustment adds to the UAH preview of its item', async () => {
+    const ceo = ids.people[3] ?? '';
+    const res = await addAdjustment.run(h.ctxFor(finance), {
+      periodId: ids.period,
+      personId: ceo,
+      kind: 'bonus',
+      amount: '3325',
+      currency: 'UAH',
+      reason: 'legacy correction',
+    });
+    expect(res.isOk()).toBe(true);
+    const overview = (
+      await getPeriodOverview.run(h.ctxFor(finance), { periodId: ids.period })
+    )._unsafeUnwrap();
+    const mine = overview.plan.filter((i) => ids.people.includes(i.personId));
+    expect(sum(mine.map((i) => i.totalUsd)).toFixed(2)).toBe('10220.00');
+    expect(sum(mine.map((i) => i.totalUahApprox ?? '0')).toFixed(2)).toBe('457910.60');
+    expect(mine.find((i) => i.personId === ceo)?.totalUahApprox).toBe('93174.60');
+  });
+
   it('closing creates one draft invoice per contract with 5.1 lines', async () => {
     const res = await closePeriod.run(h.ctxFor(finance), { periodId: ids.period });
     expect(res._unsafeUnwrap().draftInvoices).toBe(3);
@@ -217,6 +249,41 @@ describe('period wizard (spec 6.4)', () => {
     const trady = lines.find((l) => l.amount === '5500.00000000');
     expect(trady).toMatchObject({ quantity: '1.00', unitPrice: '5500.00000000' });
     expect(lines.every((l) => l.timesheetId !== null)).toBe(true);
+  });
+
+  it('closing creates payroll: client work waits for the invoice, internal work is payable', async () => {
+    const items = await h.db
+      .select()
+      .from(payrollItem)
+      .where(and(eq(payrollItem.periodId, ids.period), inArray(payrollItem.personId, ids.people)));
+    expect(items).toHaveLength(4);
+    const lines = await h.db
+      .select()
+      .from(payrollLine)
+      .where(
+        inArray(
+          payrollLine.payrollItemId,
+          items.map((i) => i.id),
+        ),
+      );
+    const byAssignment = (key: string) =>
+      lines.find((l) => l.assignmentId === ids.assignments[key]);
+    expect(byAssignment('ceo')).toMatchObject({ status: 'payable', fundingSource: 'company' });
+    expect(byAssignment('ideasoft')).toMatchObject({
+      status: 'awaiting_client',
+      amountUsd: '3000.00000000',
+    });
+    expect(byAssignment('ideasoft')?.fundedByInvoiceLineId).not.toBeNull();
+    expect(items.find((i) => i.personId === ids.people[3])?.status).toBe('payable');
+    const adj = await addAdjustment.run(h.ctxFor(finance), {
+      periodId: ids.period,
+      personId: ids.people[3] ?? '',
+      kind: 'bonus',
+      amount: '1',
+      currency: 'USD',
+      reason: 'late',
+    });
+    expect(adj._unsafeUnwrapErr().code).toBe('closed_period');
   });
 
   it('I6: hours of a closed period cannot change', async () => {
@@ -248,5 +315,10 @@ describe('period wizard (spec 6.4)', () => {
     const invoices = await h.db.select().from(invoice).where(eq(invoice.periodId, ids.period));
     expect(invoices).toHaveLength(3);
     expect(invoices.map((i) => i.total)).toContain('450.00000000');
+    const items = await h.db
+      .select()
+      .from(payrollItem)
+      .where(and(eq(payrollItem.periodId, ids.period), inArray(payrollItem.personId, ids.people)));
+    expect(items).toHaveLength(4);
   });
 });

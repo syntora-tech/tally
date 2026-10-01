@@ -8,9 +8,26 @@ import { isAssignmentActive } from './bench';
 import { endOfMonth, type LocalDate } from './local-date';
 import { Decimal, roundHalfUp, sum, toDecimal, type DecimalInput } from './money';
 import { effectiveVersion } from './terms';
+import {
+  payrollTotalUah,
+  payrollTotalUsd,
+  type AdjustmentInput,
+  type PayoutMethod,
+  type ReleasePolicy,
+} from './payroll';
+
+export type PeriodPayTerms = PayTermsInput & {
+  validFrom: LocalDate;
+  currency: string;
+  payoutMethod?: PayoutMethod;
+  releasePolicy?: ReleasePolicy;
+  graceDays?: number;
+};
 
 export type PeriodAssignment = {
   assignmentId: string;
+  /** Groups payroll items (5.2); defaults to the name in tests that do not need it. */
+  personId?: string;
   personName: string;
   clientName: string | null;
   contractId: string | null;
@@ -19,7 +36,7 @@ export type PeriodAssignment = {
   startsOn: LocalDate;
   endsOn: LocalDate | null;
   billing: (BillingTermsInput & { validFrom: LocalDate; currency: string })[];
-  pay: (PayTermsInput & { validFrom: LocalDate; currency: string })[];
+  pay: PeriodPayTerms[];
   hours: string | null;
 };
 
@@ -133,3 +150,82 @@ export function draftLine(
 }
 
 export { isAssignmentActive };
+
+export type PlanAdjustment = AdjustmentInput & { personId: string; payoutMethod: PayoutMethod };
+
+export type PlanLine = {
+  assignmentId: string;
+  amountUsd: string;
+  releasePolicy: ReleasePolicy;
+  graceDays: number;
+};
+
+export type PlanItem = {
+  personId: string;
+  personName: string;
+  payoutMethod: PayoutMethod;
+  lines: PlanLine[];
+  adjustments: AdjustmentInput[];
+  totalUsd: string;
+  /** At the reference rate; the real rate is set at payout (5.4). */
+  totalUahApprox: string | null;
+};
+
+/**
+ * Payroll for a month (5.2): one line per active assignment with pay terms (`included` gives a zero
+ * line for transparency), grouped into items per person × payout method; adjustments without
+ * lines still form an item.
+ */
+export function payrollPlan(
+  month: LocalDate,
+  workHours: DecimalInput,
+  referenceFx: DecimalInput | null,
+  assignments: readonly PeriodAssignment[],
+  adjustments: readonly PlanAdjustment[],
+): PlanItem[] {
+  const items = new Map<string, PlanItem>();
+  const itemFor = (personId: string, personName: string, method: PayoutMethod) => {
+    const key = `${personId}:${method}`;
+    let item = items.get(key);
+    if (!item) {
+      item = {
+        personId,
+        personName,
+        payoutMethod: method,
+        lines: [],
+        adjustments: [],
+        totalUsd: '0',
+        totalUahApprox: null,
+      };
+      items.set(key, item);
+    }
+    return item;
+  };
+  for (const a of assignments) {
+    if (!isActiveInMonth(a, month)) continue;
+    const terms = effectiveVersion(a.pay, month);
+    if (!terms) continue;
+    itemFor(a.personId ?? a.personName, a.personName, terms.payoutMethod ?? 'fiat').lines.push({
+      assignmentId: a.assignmentId,
+      amountUsd: payrollLineAmount(terms, a.hours ?? '0', workHours).toFixed(2),
+      releasePolicy: terms.releasePolicy ?? 'on_payment_or_due',
+      graceDays: terms.graceDays ?? 0,
+    });
+  }
+  const names = new Map(assignments.map((a) => [a.personId ?? a.personName, a.personName]));
+  for (const adj of adjustments) {
+    itemFor(adj.personId, names.get(adj.personId) ?? '', adj.payoutMethod).adjustments.push({
+      amount: adj.amount,
+      currency: adj.currency,
+    });
+  }
+  return [...items.values()].map((item) => {
+    const lines = item.lines.map((l) => l.amountUsd);
+    const uah = referenceFx === null ? null : payrollTotalUah(lines, item.adjustments, referenceFx);
+    return {
+      ...item,
+      totalUsd: payrollTotalUsd(lines, item.adjustments).toFixed(2),
+      totalUahApprox: uah?.isOk() ? uah.value.toFixed(2) : null,
+    };
+  });
+}

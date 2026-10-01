@@ -17,6 +17,10 @@ test.beforeAll(async () => {
   const { db, sql: client } = createDb(dbUrl(), { max: 1 });
   try {
     await db.execute(sql`
+      insert into public.company (name_en, name_ua)
+      select 'E2E company', 'E2E компанія' where not exists (select 1 from public.company)
+    `);
+    await db.execute(sql`
       with co as (select id from public.company order by created_at limit 1),
       seq as (
         insert into public.number_sequence (key, template) values (${SEQUENCE}, 'E{seq}/{yy}')
