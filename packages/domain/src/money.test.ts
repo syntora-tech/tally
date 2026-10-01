@@ -64,6 +64,7 @@ describe('formatAmount', () => {
 
   it('groups thousands with a narrow no-break space and keeps a dot decimal', () => {
     expect(formatAmount('93174.6', 'UAH')).toBe(`93${nb}174.60${nb}UAH`);
+    expect(formatAmount('1234567.891', 'USD', { grouping: 'comma' })).toBe(`1,234,567.89${nb}USD`);
     expect(formatAmount('1000000')).toBe(`1${nb}000${nb}000.00`);
   });
 
