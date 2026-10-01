@@ -46,7 +46,15 @@ select throws_ok($$ update public.invoice_line set quantity = 1 where invoice_id
   'TL001', null, 'lines are frozen outside a revision');
 
 -- Any payment freezes the invoice.
-update public.invoice set status = 'partially_paid', paid_amount = 1000 where id = 'b0000000-0000-0000-0000-000000000008';
+insert into public.account (id, name, kind, currency, opening_date)
+  values ('a8000000-0000-0000-0000-000000000001', 'T8 USD', 'bank', 'USD', '2032-01-01');
+insert into public.transaction (id, occurred_on, type, category_id)
+  select 'c8000000-0000-0000-0000-000000000001', '2032-04-10', 'revenue', id from public.category
+   where tx_type = 'revenue' and name = 'Client Revenue';
+insert into public.posting (transaction_id, account_id, amount, currency)
+  values ('c8000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000001', 1000, 'USD');
+insert into public.allocation (transaction_id, amount, currency, invoice_id)
+  values ('c8000000-0000-0000-0000-000000000001', 1000, 'USD', 'b0000000-0000-0000-0000-000000000008');
 select set_config('app.reason', 'try after payment', true);
 select throws_ok($$ update public.invoice set total = 1, revision = 3 where id = 'b0000000-0000-0000-0000-000000000008' $$,
   'TL001', null, 'paid invoices cannot be revised');

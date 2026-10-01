@@ -183,10 +183,7 @@ describe('invoices (spec 6.5, A-044)', () => {
   });
 
   it('freezes the invoice after any payment', async () => {
-    await h.db
-      .update(invoice)
-      .set({ status: 'partially_paid', paidAmount: '100' })
-      .where(eq(invoice.id, id()));
+    await h.payInvoice(id(), '100', '2037-08-10');
     const res = await saveInvoice.run(h.ctxFor(finance), {
       id: id(),
       issueDate: '2037-08-04',

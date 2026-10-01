@@ -12,7 +12,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, rolePolicies } from './_common';
-import { accountKind, txType } from './enums';
+import { accountKind, fxSource, txType } from './enums';
+import { invoice } from './invoices';
 
 /** Bank account, wallet or cash box (spec 6.7); balance = opening + Σ postings. */
 export const account = pgTable(
@@ -107,3 +108,54 @@ export type Account = typeof account.$inferSelect;
 export type Category = typeof category.$inferSelect;
 export type Transaction = typeof transaction.$inferSelect;
 export type Posting = typeof posting.$inferSelect;
+
+/** Daily rates (5.4): `rate` = units of `quote` per 1 `base`, e.g. USD→UAH 44.48. */
+export const fxRate = pgTable(
+  'fx_rate',
+  {
+    ...baseColumns,
+    onDate: date({ mode: 'string' }).notNull(),
+    base: text().notNull(),
+    quote: text().notNull(),
+    rate: numeric({ precision: 18, scale: 6 }).notNull(),
+    source: fxSource().notNull(),
+  },
+  (t) => [
+    unique('fx_rate_key').on(t.onDate, t.base, t.quote, t.source),
+    check('fx_rate_positive_check', sql`${t.rate} > 0`),
+    currencyCheck('fx_rate_base_check', t.base),
+    currencyCheck('fx_rate_quote_check', t.quote),
+    ...rolePolicies('fx_rate', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+/**
+ * Links money in the Ledger to what it settles (I7, I9). `amount` is in the target's currency;
+ * when the transaction's currency differs, `fx_rate` = transaction units per 1 target unit.
+ */
+export const allocation = pgTable(
+  'allocation',
+  {
+    ...baseColumns,
+    legacyRef: text(),
+    transactionId: uuid()
+      .notNull()
+      .references(() => transaction.id, { onDelete: 'cascade' }),
+    amount: numeric({ precision: 20, scale: 8 }).notNull(),
+    currency: text().notNull(),
+    invoiceId: uuid().references(() => invoice.id),
+    fxRate: numeric({ precision: 18, scale: 6 }),
+    fxSource: fxSource(),
+  },
+  (t) => [
+    unique('allocation_legacy_ref_key').on(t.legacyRef),
+    check('allocation_amount_check', sql`${t.amount} > 0`),
+    check('allocation_target_check', sql`num_nonnulls(${t.invoiceId}) = 1`),
+    index('allocation_transaction_idx').on(t.transactionId),
+    index('allocation_invoice_idx').on(t.invoiceId),
+    ...rolePolicies('allocation', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+export type FxRate = typeof fxRate.$inferSelect;
+export type Allocation = typeof allocation.$inferSelect;

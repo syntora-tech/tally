@@ -183,6 +183,20 @@
       "when": 1790844630714,
       "tag": "20261001085030_ledger_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790844739323,
+      "tag": "20261001085219_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790844745035,
+      "tag": "20261001085225_allocation_invariants",
+      "breakpoints": true
     }
   ]
 }

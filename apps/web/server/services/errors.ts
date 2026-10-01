@@ -77,6 +77,27 @@ export function mapDbError(error: unknown): ServiceError | null {
         'validation_error',
         'Неправильна форма транзакції: перевірте суми, знаки й комісію для цього типу',
       );
+    case 'TL050':
+      return serviceError('validation_error', 'У транзакції немає основної проводки');
+    case 'TL051':
+      return serviceError(
+        'validation_error',
+        `Валюти не збігаються (${pg.detail ?? ''}) — вкажіть курс або оберіть іншу транзакцію`,
+      );
+    case 'TL052':
+      return serviceError('conflict', 'Цю транзакцію не можна розподілити на обраний документ');
+    case 'TL053':
+      return serviceError(
+        'validation_error',
+        `Сума більша за залишок інвойсу (${pg.detail ?? ''})`,
+      );
+    case 'TL054':
+      return serviceError(
+        'validation_error',
+        `Сума більша за нерозподілений залишок транзакції (${pg.detail ?? ''})`,
+      );
+    case 'TL055':
+      return serviceError('conflict', 'Оплата інвойсу змінюється лише через розподіл транзакцій');
     case 'TL020':
       return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
     case 'TL021':

@@ -65,8 +65,9 @@ select throws_ok($$ update public.invoice_line set amount = 1 $$, 'TL001', null,
 select throws_ok($$ delete from public.invoice where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL001', null, 'I1: cannot delete');
 select lives_ok($$ update public.invoice set pdf_file_id = 'drive-1' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'generated file id set once');
 select throws_ok($$ update public.invoice set pdf_file_id = 'drive-2' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL001', null, 'file id cannot be replaced');
-select lives_ok($$ update public.invoice set status = 'paid', paid_amount = 7896 where id = 'a0000000-0000-0000-0000-000000000007' $$, 'status moves forward');
-select throws_ok($$ update public.invoice set status = 'issued' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL002', null, 'status never goes back');
+select throws_ok($$ update public.invoice set status = 'paid', paid_amount = 7896 where id = 'a0000000-0000-0000-0000-000000000007' $$,
+  'TL055', null, 'I7: paid_amount comes only from allocations');
+select throws_ok($$ update public.invoice set status = 'paid' where id = 'a0000000-0000-0000-0000-000000000007' $$, 'TL002', null, 'payment status follows paid_amount');
 
 -- I2: one issued number per invoice.
 insert into public.invoice (id, client_id, contract_id, issue_date, due_date)
