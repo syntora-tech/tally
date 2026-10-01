@@ -112,3 +112,26 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
   void: 'Анульовано',
   written_off: 'Списано',
 };
+
+export const TX_TYPE_LABELS: Record<string, string> = {
+  revenue: 'Дохід',
+  expense: 'Витрата',
+  transfer: 'Переказ',
+  fx_exchange: 'Обмін валюти',
+  crypto_buy: 'Купівля крипти',
+  crypto_sell: 'Продаж крипти',
+  crypto_swap: 'Обмін крипти',
+  adjustment: 'Коригування',
+};
+
+export const ACCOUNT_KIND_LABELS: Record<string, string> = {
+  bank: 'Банк',
+  crypto: 'Крипто',
+  cash: 'Готівка',
+};
+
+export const FX_SOURCE_LABELS: Record<string, string> = {
+  bank_actual: 'фактичний обмін',
+  nbu: 'НБУ',
+  manual: 'вручну',
+};
