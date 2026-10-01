@@ -1,4 +1,5 @@
 import type { Model } from './model';
+import type { LedgerModel } from './sources/ledger';
 import type { WriteStats } from './writer';
 
 const TABLE_LABELS: Record<string, string> = {
@@ -14,11 +15,15 @@ const TABLE_LABELS: Record<string, string> = {
   period: 'Періоди',
   timesheet: 'Години',
   invoice: 'Інвойси (legacy)',
+  account: 'Рахунки Ledger',
+  transaction: 'Транзакції Ledger',
+  fx_rate: 'Курси',
 };
 
 /** import-report.md (spec 8): counts, unmapped names, anomalies with source rows, assignments. */
 export function renderReport(input: {
   model: Model;
+  ledger?: LedgerModel | null;
   stats: WriteStats | null;
   dryRun: boolean;
   problems: string[];
@@ -65,10 +70,31 @@ export function renderReport(input: {
   }
   out.push('');
 
-  out.push(`## Аномалії (${model.anomalies.length})`, '');
-  if (model.anomalies.length === 0) out.push('Немає.');
-  for (const a of model.anomalies) out.push(`- \`${a.code}\` · ${a.ref} — ${a.message}`);
+  const anomalies = [...model.anomalies, ...(input.ledger?.anomalies ?? [])];
+  out.push(`## Аномалії (${anomalies.length})`, '');
+  if (anomalies.length === 0) out.push('Немає.');
+  for (const a of anomalies) out.push(`- \`${a.code}\` · ${a.ref} — ${a.message}`);
   out.push('');
+
+  if (input.ledger) {
+    const l = input.ledger;
+    out.push(
+      '## Звірка Ledger (8.3)',
+      '',
+      `Залишки за аркушем Balances, допуск 0.01. Транзакцій: ${String(l.transactions.length)}.`,
+      '',
+      '| Рахунок | Валюта | Balances | Розраховано | ✓ |',
+      '| --- | --- | --- | --- | --- |',
+    );
+    for (const r of l.reconciliation)
+      out.push(
+        `| ${r.account} | ${r.currency} | ${r.expected ?? '—'} | ${r.computed} | ${r.ok ? '✅' : '❌'} |`,
+      );
+    out.push(
+      `| **Treasury** | USD | ${l.treasuryUsd.expected ?? '—'} | ${l.treasuryUsd.computed} | ${l.treasuryUsd.expected === l.treasuryUsd.computed ? '✅' : '❌'} |`,
+      '',
+    );
+  }
 
   if (model.invoices.length) {
     out.push(

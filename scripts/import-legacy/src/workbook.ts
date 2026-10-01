@@ -44,15 +44,20 @@ export function readBook(path: string, sourceId: string): Book {
 export type LegacyBooks = {
   bench: Book | null;
   calc: Book | null;
+  /** Optional: imported when present (stage 3). */
+  ledger: Book | null;
+  acts: Book | null;
   missing: string[];
 };
 
 const PATTERNS = {
   bench: /bench/i,
   calc: /calculations/i,
+  ledger: /ledger/i,
+  acts: /реестр|реєстр|acts/i,
 } as const;
 
-/** Finds the source workbooks by name; ledger, registry and trips are read in later stages. */
+/** Finds the source workbooks by name; trips are read in a later stage. */
 export function loadBooks(dir: string): LegacyBooks {
   const files = readdirSync(dir).filter(
     (f) => f.toLowerCase().endsWith('.xlsx') && !f.startsWith('~$'),
@@ -60,9 +65,13 @@ export function loadBooks(dir: string): LegacyBooks {
   const pick = (re: RegExp) => files.find((f) => re.test(f)) ?? null;
   const bench = pick(PATTERNS.bench);
   const calc = pick(PATTERNS.calc);
+  const ledger = pick(PATTERNS.ledger);
+  const acts = pick(PATTERNS.acts);
   return {
     bench: bench ? readBook(join(dir, bench), 'bench') : null,
     calc: calc ? readBook(join(dir, calc), 'calc') : null,
+    ledger: ledger ? readBook(join(dir, ledger), 'ledger') : null,
+    acts: acts ? readBook(join(dir, acts), 'acts') : null,
     missing: [!bench && 'Bench', !calc && 'Calculations for invoices'].filter(
       (x): x is string => typeof x === 'string',
     ),

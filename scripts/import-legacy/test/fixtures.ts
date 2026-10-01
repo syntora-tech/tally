@@ -188,3 +188,97 @@ export const ACT_SHEET: Row[] = [
     'Виконавець:\nФОП ЩУРКО ВІТАЛІЯ РОМАНІВНА\nІПН: 3589310400\nАдреса: Україна, 82446, Львівська обл.,\nСтрийський р-н\nР/р:\nАТ "УНІВЕРСАЛ БАНК”,\nUA623220010000026005340140170',
   ],
 ];
+
+/** A miniature `Syntora_Ledger` with the anomalies the importer must handle (A10, A11). */
+export function ledgerBook(): Book {
+  const wb = XLSX.utils.book_new();
+  const add = (name: string, rows: Row[]) => {
+    XLSX.utils.book_append_sheet(wb, sheet(rows), name);
+  };
+  add('Accounts', [
+    ['Account ID', 'Account Name', 'Type', 'Currency', 'Network', 'Opening Balance'],
+    [1, 'Privat USD', 'Bank', 'USD', null, 3901.78],
+    [2, 'Privat EUR', 'Bank', 'EUR', null, 0],
+    [3, 'Crypto ETH - USDC', 'Crypto', 'USDC', 'ETH', 959.922092],
+  ]);
+  add('Categories', [
+    ['Type', 'Category'],
+    ['Revenue', 'Client Revenue'],
+    ['Expense', 'Software / Tools'],
+    ['FX Exchange', 'FX Exchange'],
+  ]);
+  const header = [
+    'Date',
+    'Type',
+    'Category',
+    'From Account',
+    'To Account',
+    'Amount From',
+    'Currency From',
+    'Amount To',
+    'Currency To',
+    'FX Rate',
+    'Fee Amount',
+    'Fee Account',
+    'Description',
+  ];
+  add('Transactions', [
+    header,
+    [
+      46023,
+      'Revenue',
+      'Client Revenue',
+      null,
+      'Privat USD',
+      null,
+      null,
+      2000,
+      'USD',
+      null,
+      5,
+      'Privat USD',
+      'Client pays',
+    ],
+    [
+      46029,
+      'Expense',
+      'Software / Tools',
+      'Crypto ETH - USDC',
+      null,
+      100,
+      'USD',
+      null,
+      null,
+      null,
+      null,
+      null,
+      'Bonus',
+    ],
+    [
+      46038,
+      'FX Exchange',
+      'FX Exchange',
+      'Privat USD',
+      'Privat EUR',
+      1400.2,
+      'USD',
+      1400.2 / 1.168,
+      'EUR',
+      1.168,
+    ],
+    [],
+  ]);
+  add('Balances', [
+    ['Account Name', 'Type', 'Currency', 'Opening', 'In', 'Out', 'Fees', 'Current Balance'],
+    ['Privat USD', 'Bank', 'USD', 3901.78, 0, 0, 0, 4496.58],
+    ['Privat EUR', 'Bank', 'EUR', 0, 0, 0, 0, 1198.8013698630139],
+    ['Crypto ETH - USDC', 'Crypto', 'USDC', 959.922092, 0, 0, 0, 859.922092],
+  ]);
+  add('FX_Rates', [
+    ['Date', 'Currency', 'Rate to USD'],
+    [46057, 'USD', 1],
+    [46057, 'EUR', 1.168],
+    [46057, 'UAH', 0.02325581395],
+  ]);
+  return { file: 'ledger', sheets: sheetFromWorkbook('ledger', wb) };
+}

@@ -1,24 +1,30 @@
 import type { Db, DbTransaction } from '@tally/db';
 import {
+  account,
   assignment,
   billingTerms,
+  category,
   client,
   company,
   contract,
   document,
   documentLink,
+  fxRate,
   invoice,
   invoiceLine,
   payee,
   payTerms,
   period,
   person,
+  posting,
   timesheet,
+  transaction,
 } from '@tally/db/schema';
 import { parseDecimal } from '@tally/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { Model } from './model';
+import type { LedgerModel } from './sources/ledger';
 
 export type TableStats = { inserted: number; updated: number; unchanged: number };
 export type WriteStats = Record<string, TableStats>;
@@ -100,7 +106,7 @@ function need(map: Map<string, string>, key: string | null, what: string): strin
 export async function writeModel(
   db: Db,
   model: Model,
-  options: { dryRun: boolean },
+  options: { dryRun: boolean; ledger?: LedgerModel | null },
 ): Promise<WriteStats> {
   const stats: WriteStats = {};
   try {
@@ -332,10 +338,87 @@ export async function writeModel(
         st.inserted++;
       }
 
+      if (options.ledger) await writeLedger(tx, options.ledger, stats);
+
       if (options.dryRun) throw new DryRunRollback();
     });
   } catch (error) {
     if (!(error instanceof DryRunRollback)) throw error;
   }
   return stats;
+}
+
+/**
+ * Ledger (spec 8.1): accounts by legacy_ref, categories by (type, name), transactions with their
+ * postings inserted once — an imported transaction is never rewritten. I4/I5 are checked by the
+ * database when the import commits.
+ */
+async function writeLedger(tx: DbTransaction, ledger: LedgerModel, stats: WriteStats) {
+  const categoryIds = new Map<string, string>();
+  for (const c of ledger.categories) {
+    await tx.insert(category).values({ txType: c.type, name: c.name }).onConflictDoNothing();
+  }
+  for (const c of await tx.select().from(category)) categoryIds.set(`${c.txType}:${c.name}`, c.id);
+
+  const accountIds = new Map<string, string>();
+  for (const a of ledger.accounts) {
+    const { ref, ...values } = a;
+    accountIds.set(
+      a.name,
+      await upsert(
+        tx,
+        account,
+        'account',
+        ref,
+        { ...values, openingDate: ledger.openingDate },
+        stats,
+      ),
+    );
+  }
+
+  const st = statFor(stats, 'transaction');
+  for (const t of ledger.transactions) {
+    const [existing] = await tx
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(eq(transaction.legacyRef, t.ref));
+    if (existing) {
+      st.unchanged++;
+      continue;
+    }
+    const categoryId =
+      categoryIds.get(`${t.type}:${t.category}`) ??
+      (await tx.select().from(category).where(eq(category.txType, t.type)).limit(1))[0]?.id;
+    if (!categoryId) throw new Error(`Import: no category for ${t.type}`);
+    const [row] = await tx
+      .insert(transaction)
+      .values({
+        legacyRef: t.ref,
+        occurredOn: t.occurredOn,
+        type: t.type,
+        categoryId,
+        description: t.description,
+      })
+      .returning({ id: transaction.id });
+    if (!row) throw new Error('Transaction insert returned no row');
+    await tx.insert(posting).values(
+      t.postings.map((p) => {
+        const accountId = accountIds.get(p.account) ?? '';
+        const currency = ledger.accounts.find((a) => a.name === p.account)?.currency ?? '';
+        return { transactionId: row.id, accountId, amount: p.amount, currency, isFee: p.isFee };
+      }),
+    );
+    st.inserted++;
+  }
+
+  const rs = statFor(stats, 'fx_rate');
+  for (const r of ledger.rates) {
+    const inserted = await tx
+      .insert(fxRate)
+      .values({ ...r, source: 'manual' })
+      .onConflictDoNothing()
+      .returning({ id: fxRate.id });
+    if (inserted.length) rs.inserted++;
+    else rs.unchanged++;
+  }
 }

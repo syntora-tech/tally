@@ -3,7 +3,6 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createDb } from '@tally/db';
 import {
-  addMonths,
   defaultInvoiceDate,
   localDateInZone,
   parseLocalDate,
@@ -15,8 +14,9 @@ import { aliasesSchema, draftAliases } from './aliases';
 import { buildModel } from './model';
 import { renderReport } from './report';
 import { parseBench } from './sources/bench';
-import { parseCalc } from './sources/calc';
+import { MONTH_SHEETS, parseCalc } from './sources/calc';
 import { parseHeaders } from './sources/headers';
+import { parseLedger } from './sources/ledger';
 import { loadBooks } from './workbook';
 import { writeModel } from './writer';
 
@@ -37,6 +37,10 @@ const cwd = process.env.INIT_CWD ?? process.cwd();
 const dir = isAbsolute(values.dir) ? values.dir : resolve(cwd, values.dir);
 const dryRun = values['dry-run'];
 
+/**
+ * Months whose hours (and payroll) are imported: the owner chose "this and the previous month"
+ * when the files were current (A-036), so by default the two latest months the workbook has.
+ */
 function hoursMonths(): LocalDate[] {
   if (values['hours-months']) {
     return values['hours-months']
@@ -46,8 +50,10 @@ function hoursMonths(): LocalDate[] {
   const today = process.env.APP_TODAY
     ? parseLocalDate(process.env.APP_TODAY)._unsafeUnwrap()
     : localDateInZone(new Date());
-  const current = startOfMonth(today);
-  return [addMonths(current, -1), current];
+  const available = Object.values(MONTH_SHEETS)
+    .filter((m) => m <= startOfMonth(today))
+    .sort();
+  return available.slice(-2);
 }
 
 async function main(): Promise<number> {
@@ -88,6 +94,7 @@ async function main(): Promise<number> {
         new WorkCalendar([]),
       );
   const model = buildModel(sources, aliases, { hoursMonths: months, legacyInvoiceDate });
+  const ledger = books.ledger ? parseLedger(books.ledger) : null;
   const problems = [...bench.problems, ...calc.problems];
   const unmapped = Object.values(model.unmapped).flat();
 
@@ -100,7 +107,7 @@ async function main(): Promise<number> {
       'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
     const { db, sql } = createDb(url, { max: 1 });
     try {
-      stats = unmapped.length === 0 ? await writeModel(db, model, { dryRun }) : null;
+      stats = unmapped.length === 0 ? await writeModel(db, model, { dryRun, ledger }) : null;
     } finally {
       await sql.end();
     }
@@ -109,7 +116,7 @@ async function main(): Promise<number> {
   const reportPath = join(dir, 'import-report.md');
   writeFileSync(
     reportPath,
-    renderReport({ model, stats, dryRun, problems, generatedAt: new Date().toISOString() }),
+    renderReport({ model, ledger, stats, dryRun, problems, generatedAt: new Date().toISOString() }),
   );
   console.log(`Звіт: ${reportPath}`);
   if (unmapped.length) {
