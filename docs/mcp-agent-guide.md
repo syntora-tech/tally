@@ -1,22 +1,22 @@
-# Tally MCP: інструкція для агента
+# Tally MCP: guide for agents
 
-Цей документ — для AI-агента (Claude Code, Claude, Cowork), який читає й вносить дані Tally через MCP: Ledger, людей і клієнтів. Рішення й обмеження — `docs/assumptions.md` A-054, A-055, A-056. Як влаштовані клієнти, договори, залучення й проєкти і що заводити окремо, а що приміткою — **`docs/agent-projects-guide.md`**, прочитайте до того, як вносити людей і клієнтів.
+This document is for an AI agent (Claude Code, Claude, Cowork) that reads and enters Tally data over MCP: the Ledger, people and clients. Decisions and limits: `docs/assumptions.md` A-054, A-055, A-056. How clients, contracts, assignments and projects fit together, and what gets its own record versus a note: **`docs/agent-projects-guide.md`** — read it before entering people and clients.
 
-## 1. Що це
+## 1. What it is
 
-Tally — бек-офіс Syntora.Tech. MCP-сервер `tally` дає агенту читати й записувати рахунки, категорії, курси й транзакції Ledger, а також профілі людей (Bench) і клієнтів. Агент діє від імені власника токена: ті самі права (RLS), кожна зміна потрапляє в журнал аудиту з позначкою «агент».
+Tally is the Syntora.Tech back-office. The `tally` MCP server lets an agent read and write Ledger accounts, categories, rates and transactions, plus people (Bench) profiles and clients. The agent acts as the token owner: the same permissions (RLS), and every change lands in the audit log marked “agent”.
 
-| Середовище            | Адреса MCP                                    |
-| --------------------- | --------------------------------------------- |
-| Локально (`pnpm dev`) | `http://localhost:3000/api/mcp`               |
-| Preview (Vercel)      | `https://tally-taupe-beta.vercel.app/api/mcp` |
+| Environment        | MCP URL                                       |
+| ------------------ | --------------------------------------------- |
+| Local (`pnpm dev`) | `http://localhost:3000/api/mcp`               |
+| Preview (Vercel)   | `https://tally-taupe-beta.vercel.app/api/mcp` |
 
-Транспорт — Streamable HTTP без сесій. Авторизація — заголовок `Authorization: Bearer <токен>`.
+Transport: Streamable HTTP without sessions. Authorization: `Authorization: Bearer <token>` header. Error messages from the server are always in English.
 
-## 2. Підключення
+## 2. Connecting
 
-1. Власник відкриває Tally → **Налаштування → Підключені агенти**, вводить назву (наприклад «Claude Code — Ledger»), обирає доступ **«Асистент: читання й запис (Ledger, люди, клієнти)»** і натискає «Створити токен». Токен показується **один раз**, далі його видно лише за останніми 4 символами.
-2. Токен — це пароль. Не вставляйте його в чат, код, коміти чи файли репозиторію. Передайте через змінну середовища:
+1. The owner opens Tally → **Settings → Connected agents**, enters a name (e.g. “Claude Code — Ledger”), picks **“Assistant: read and write (Ledger, people, clients)”** and clicks “Create token”. The token is shown **once**; afterwards only its last 4 characters are visible.
+2. The token is a password. Never paste it into chat, code, commits or repository files. Pass it through an environment variable:
 
    ```bash
    export TALLY_MCP_TOKEN='tally_pat_…'
@@ -24,7 +24,7 @@ Tally — бек-офіс Syntora.Tech. MCP-сервер `tally` дає аген
      --header "Authorization: Bearer $TALLY_MCP_TOKEN"
    ```
 
-   Або у `.mcp.json` (Claude Code підставляє змінні середовища):
+   Or in `.mcp.json` (Claude Code expands environment variables):
 
    ```json
    {
@@ -38,180 +38,180 @@ Tally — бек-офіс Syntora.Tech. MCP-сервер `tally` дає аген
    }
    ```
 
-3. Перевірка: `get_balances` повертає список рахунків (можливо, порожній).
+3. Check: `get_balances` returns the list of accounts (possibly empty).
 
-Відповіді сервера: `401` — немає або невідомий токен; `403` — токен відкликано (попросіть власника створити новий).
+Server responses: `401` — missing or unknown token; `403` — the token was revoked (ask the owner for a new one).
 
 ## 3. Tools
 
-| Tool                    | Тип   | Що робить                                                                                                                                            |
-| ----------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_balances`          | read  | Рахунки: `name`, `kind`, `currency`, `network`, `openingBalance`, `openingDate`, `balance` (= opening + усі проводки)                                |
-| `list_categories`       | read  | Категорії: `txType`, `name`, `id`                                                                                                                    |
-| `list_transactions`     | read  | Журнал з проводками; фільтри `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). У відповіді `externalRef`                            |
-| `list_fx_rates`         | read  | Збережені курси: `onDate`, `base`, `quote`, `rate`, `source`                                                                                         |
-| `upsert_accounts`       | write | Створює або оновлює рахунки за точною назвою (≤ 100)                                                                                                 |
-| `upsert_categories`     | write | Додає категорії за (`txType`, `name`) (≤ 200); наявні — `existing`                                                                                   |
-| `set_fx_rates`          | write | Ручні курси (≤ 500); той самий день і пара перезаписуються                                                                                           |
-| `add_transactions`      | write | Транзакції пакетом (≤ 500) з дедуплікацією за `externalRef`                                                                                          |
-| `search_people`         | read  | Люди з фільтрами Bench: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; без реквізитів одержувачів |
-| `get_person`            | read  | Профіль людини за `id` і поточне завантаження (`load`, `bench`)                                                                                      |
-| `list_clients`          | read  | Клієнти: `legalName`, `shortName`, `country`, `defaultCurrency`, кількість договорів                                                                 |
-| `upsert_person_profile` | write | Створює або частково оновлює профілі людей (≤ 200)                                                                                                   |
-| `upsert_clients`        | write | Створює або частково оновлює клієнтів (≤ 100)                                                                                                        |
+| Tool                    | Kind  | What it does                                                                                                                               |
+| ----------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `openingBalance`, `openingDate`, `balance` (= opening + all postings)                     |
+| `list_categories`       | read  | Categories: `txType`, `name`, `id`                                                                                                         |
+| `list_transactions`     | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`      |
+| `list_fx_rates`         | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                  |
+| `upsert_accounts`       | write | Creates or updates accounts by exact name (≤ 100)                                                                                          |
+| `upsert_categories`     | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                       |
+| `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                 |
+| `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                            |
+| `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data |
+| `get_person`            | read  | A person's profile by `id` and current load (`load`, `bench`)                                                                              |
+| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts                                                       |
+| `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                       |
+| `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                               |
 
-Видаляти чи змінювати транзакції через MCP неможливо — так задумано. Так само через MCP немає реквізитів одержувачів (ФОП, ІПН, IBAN, гаманці), договорів, ставок білінгу й ЗП, призначень людей на проєкти — це лише в UI. Помилку виправляє людина в UI (`/ledger`), після чого рядок можна внести повторно.
+Deleting or changing transactions over MCP is impossible by design. Likewise MCP has no access to payee details (FOP, tax IDs, IBANs, wallets), contracts, billing and pay rates, or assignments of people to projects — those are UI only. A mistake is fixed by a person in the UI (`/ledger`), after which the row can be entered again.
 
-## 4. Правила для кожного виклику
+## 4. Rules for every call
 
-- **Гроші** — рядки-децимали: `"1400.20"`, `"0.001"`. Ніколи не числа JSON.
-- **Дати** — `YYYY-MM-DD`.
-- **Write-tools** вимагають `idempotencyKey`: унікальний рядок 8–200 символів на кожну логічну операцію. Повтор із тим самим ключем протягом 7 днів поверне перший результат і нічого не запише вдруге. Для нового запису — новий ключ.
-- **`dryRun: true`** виконує все, включно з перевірками БД, і відкочує. Спершу завжди `dryRun`, потім той самий пакет без `dryRun` з новим ключем.
-- **Пакет — усе або нічого.** Якщо хоч один елемент невалідний, нічого не записано, а `error.fieldErrors` містить ключі на зразок `transactions.3` (індекс елемента з нуля) з поясненням українською.
-- Помилка повертається як `isError: true` з `{ "error": { "code", "message", "fieldErrors"? } }`. Коди: `validation_error`, `forbidden`, `conflict`, `not_found`, `rate_limited` (є `retryAfter` у секундах).
-- **Ліміти:** 120 read і 30 write викликів на хвилину.
-- Великий обсяг ділите на пакети до 500 транзакцій.
+- **Money** is a decimal string: `"1400.20"`, `"0.001"`. Never a JSON number.
+- **Dates** are `YYYY-MM-DD`.
+- **Write tools** require `idempotencyKey`: a unique string of 8–200 characters per logical operation. Repeating the same key within 7 days returns the first result and writes nothing again. A new write needs a new key.
+- **`dryRun: true`** runs everything, database checks included, and rolls back. Always `dryRun` first, then the same batch without `dryRun` and with a new key.
+- **A batch is all-or-nothing.** If any item is invalid, nothing is written and `error.fieldErrors` holds keys like `transactions.3` (zero-based item index) with an explanation.
+- An error comes back as `isError: true` with `{ "error": { "code", "message", "fieldErrors"? } }`. Codes: `validation_error`, `forbidden`, `conflict`, `not_found`, `rate_limited` (with `retryAfter` in seconds).
+- **Limits:** 120 read and 30 write calls per minute.
+- Split large volumes into batches of up to 500 transactions.
 
-## 5. Модель транзакцій
+## 5. Transaction model
 
-Кожна транзакція — це подія з проводками. Суми в `from` / `to` / `fee` завжди **додатні** у валюті рахунку, знак визначає роль ноги:
+Every transaction is an event with postings. Amounts in `from` / `to` / `fee` are always **positive** in the account currency; the leg sets the sign:
 
-| `type`                                     | Обов'язкові ноги             | Приклад                                      |
-| ------------------------------------------ | ---------------------------- | -------------------------------------------- |
-| `revenue`                                  | `to`                         | Надходження від клієнта                      |
-| `expense`                                  | `from`                       | Оплата підрядника, податки                   |
-| `transfer`                                 | `from` + `to`                | Між своїми рахунками                         |
-| `fx_exchange`                              | `from` + `to`                | Обмін USD → EUR: дві фактичні суми з виписки |
-| `crypto_buy`, `crypto_sell`, `crypto_swap` | `from` + `to`                | Фіат ↔ крипта, крипта ↔ крипта               |
-| `adjustment`                               | рівно одна з `from` або `to` | Коригування залишку                          |
+| `type`                                     | Required legs                | Example                                                  |
+| ------------------------------------------ | ---------------------------- | -------------------------------------------------------- |
+| `revenue`                                  | `to`                         | Client payment received                                  |
+| `expense`                                  | `from`                       | Contractor payment, taxes                                |
+| `transfer`                                 | `from` + `to`                | Between our own accounts                                 |
+| `fx_exchange`                              | `from` + `to`                | USD → EUR exchange: both actual amounts from a statement |
+| `crypto_buy`, `crypto_sell`, `crypto_swap` | `from` + `to`                | Fiat ↔ crypto, crypto ↔ crypto                           |
+| `adjustment`                               | exactly one of `from` / `to` | Balance correction                                       |
 
-- `fee` — необов'язкова комісія; завжди списується (від'ємна проводка) з указаного рахунку.
-- `account` — точна назва рахунку або його `id`.
-- `category` — назва категорії **того самого типу** (або `id`).
-- Валюта береться з рахунку. Окремого поля валюти в транзакції немає (інваріант I4).
-- `externalRef` — обов'язковий стабільний унікальний ключ. Якщо такий уже є в системі (зокрема серед імпортованих legacy-записів), елемент повертається як `duplicate`, і другий запис не створюється.
+- `fee` is an optional fee; it is always debited (a negative posting) from the given account.
+- `account` is the exact account name or its `id`.
+- `category` is the name of a category **of the same type** (or its `id`).
+- The currency comes from the account. A transaction has no currency field (invariant I4).
+- `externalRef` is a required stable unique key. If it already exists (including imported legacy records), the item comes back as `duplicate` and no second record is created.
 
-## 6. Перенесення `Syntora Ledger.xlsx`
+## 6. Moving `Syntora Ledger.xlsx`
 
-Файл містить реальні фінансові дані: читайте його лише локально, не копіюйте нікуди, крім Tally, і не комітьте. Порядок: **категорії → рахунки → курси → транзакції → звірка.**
+The file holds real financial data: read it only locally, copy it nowhere except into Tally, and never commit it. Order: **categories → accounts → rates → transactions → reconciliation.**
 
-### 6.1 Перед початком
+### 6.1 Before starting
 
-Викличте `get_balances`, `list_categories`, `list_transactions` (`limit: 1000`). Якщо рахунки чи транзакції вже є, не дублюйте: рахунки оновляться за назвою, транзакції відсіються за `externalRef`.
+Call `get_balances`, `list_categories`, `list_transactions` (`limit: 1000`). If accounts or transactions already exist, do not duplicate them: accounts are updated by name, transactions are filtered by `externalRef`.
 
-### 6.2 Категорії — аркуш `Categories`
+### 6.2 Categories — sheet `Categories`
 
-Колонки: `Type`, `Category`. Тип у `txType`: `Revenue` → `revenue`, `Expense` → `expense`, `Transfer` → `transfer`, `FX Exchange` → `fx_exchange`, `Crypto Buy` → `crypto_buy`, `Crypto Sell` → `crypto_sell`, `Crypto Swap` → `crypto_swap`, `Adjustment` → `adjustment`. Один виклик `upsert_categories`. Категорія `Bad Debt` (expense) уже існує в системі.
+Columns: `Type`, `Category`. Type to `txType`: `Revenue` → `revenue`, `Expense` → `expense`, `Transfer` → `transfer`, `FX Exchange` → `fx_exchange`, `Crypto Buy` → `crypto_buy`, `Crypto Sell` → `crypto_sell`, `Crypto Swap` → `crypto_swap`, `Adjustment` → `adjustment`. One `upsert_categories` call. The `Bad Debt` (expense) category already exists.
 
-### 6.3 Рахунки — аркуш `Accounts`
+### 6.3 Accounts — sheet `Accounts`
 
-Колонки: `Account ID` (не потрібна), `Account Name` → `name`, `Type` (`Bank` / `Crypto` / `Cash`) → `kind` малими літерами, `Currency` → `currency`, `Network` → `network` (лише для крипти), `Opening Balance` → `openingBalance` рядком.
+Columns: `Account ID` (not needed), `Account Name` → `name`, `Type` (`Bank` / `Crypto` / `Cash`) → `kind` in lower case, `Currency` → `currency`, `Network` → `network` (crypto only), `Opening Balance` → `openingBalance` as a string.
 
-`openingDate` — дата **найранішої** транзакції аркуша `Transactions` (у цьому файлі `2026-01-01`), однакова для всіх рахунків.
+`openingDate` is the date of the **earliest** transaction on the `Transactions` sheet (`2026-01-01` in this file), the same for all accounts.
 
-### 6.4 Курси — аркуш `FX_Rates`
+### 6.4 Rates — sheet `FX_Rates`
 
-Колонки: `Date`, `Currency`, `Rate to USD` (скільки USD коштує 1 одиниця валюти). Рядки `USD`, `USDT`, `USDC` пропускайте. Перетворення:
+Columns: `Date`, `Currency`, `Rate to USD` (how many USD one unit costs). Skip `USD`, `USDT`, `USDC` rows. Conversion:
 
-- `UAH` з `Rate to USD = x` → `{ base: "USD", quote: "UAH", rate: 1/x }`, округлити до 6 знаків. Наприклад, `0.0232558…` → `"43.000000"`.
-- Інша валюта (`EUR`) → `{ base: "EUR", quote: "USD", rate: x }`, округлити до 6 знаків.
+- `UAH` with `Rate to USD = x` → `{ base: "USD", quote: "UAH", rate: 1/x }`, rounded to 6 places. E.g. `0.0232558…` → `"43.000000"`.
+- Another currency (`EUR`) → `{ base: "EUR", quote: "USD", rate: x }`, rounded to 6 places.
 
-### 6.5 Транзакції — аркуш `Transactions`
+### 6.5 Transactions — sheet `Transactions`
 
-Колонки за літерами Excel:
+Columns by Excel letter:
 
-| Колонка | Назва                   | Куди                                                  |
-| ------- | ----------------------- | ----------------------------------------------------- |
-| A       | Date                    | `occurredOn`                                          |
-| B       | Type                    | `type` (мапінг як у 6.2)                              |
-| C       | Category                | `category`                                            |
-| D       | From Account            | `from.account`                                        |
-| E       | To Account              | `to.account`                                          |
-| F       | Amount From             | `from.amount`                                         |
-| G       | Currency From           | лише для перевірки                                    |
-| H       | Amount To               | `to.amount`                                           |
-| I       | Currency To             | лише для перевірки                                    |
-| J       | FX Rate                 | не вносити: курс обміну виводиться з двох сум         |
-| K       | Fee Amount              | `fee.amount`                                          |
-| L       | Fee Account             | `fee.account`; якщо порожня — рахунок з D, інакше з E |
-| M       | Description             | `description`                                         |
-| N, O    | USD Value, FX Gain/Loss | не вносити: це формули                                |
+| Column | Name                    | Goes to                                                    |
+| ------ | ----------------------- | ---------------------------------------------------------- |
+| A      | Date                    | `occurredOn`                                               |
+| B      | Type                    | `type` (mapping as in 6.2)                                 |
+| C      | Category                | `category`                                                 |
+| D      | From Account            | `from.account`                                             |
+| E      | To Account              | `to.account`                                               |
+| F      | Amount From             | `from.amount`                                              |
+| G      | Currency From           | check only                                                 |
+| H      | Amount To               | `to.amount`                                                |
+| I      | Currency To             | check only                                                 |
+| J      | FX Rate                 | do not enter: the exchange rate comes from the two amounts |
+| K      | Fee Amount              | `fee.amount`                                               |
+| L      | Fee Account             | `fee.account`; if empty — the account from D, else E       |
+| M      | Description             | `description`                                              |
+| N, O   | USD Value, FX Gain/Loss | do not enter: formulas                                     |
 
-Правила:
+Rules:
 
-1. **Дата** в xlsx — серійне число Excel. `YYYY-MM-DD` = 1899-12-30 + ціла частина числа днів (наприклад, `46023` → `2026-01-01`).
-2. **Порожні рядки** (немає ні дати, ні типу) пропускайте. Аркуш має ~800 рядків, але заповнених лише кілька десятків.
-3. **`externalRef`** = `ledger:Transactions:R<номер рядка в Excel>`, де заголовок — рядок 1, перша транзакція — `R2`. Саме такі ключі має локальний імпорт, тож повторне внесення не дублює записи.
-4. **Ноги за типом** (таблиця в розділі 5): `revenue` — `to` = (E, H); `expense` — `from` = (D, F); двосторонні типи — обидві. Якщо в `revenue` заповнена лише ліва сторона (D, F) або в `expense` лише права (E, H), беріть заповнену. Нульові суми не вносьте.
-5. **Валюта рахунку головна.** Якщо G або I не збігається з валютою рахунку (наприклад, `USD` на гаманці `USDT`), вносьте суму як є у валюті рахунку і занотуйте рядок для власника.
-6. **Округлення фіату.** Для рахунків у USD, EUR, UAH округлюйте суми до 2 знаків: формули на кшталт `1400.2/1.168` дають хвости (`1198.80137` → `"1198.80"`). Крипту не округлюйте.
-7. **Від'ємні суми** в колонках беріть за модулем: знак задає нога.
+1. **Dates** in the xlsx are Excel serial numbers. `YYYY-MM-DD` = 1899-12-30 + the whole number of days (e.g. `46023` → `2026-01-01`).
+2. **Empty rows** (no date and no type) are skipped. The sheet has ~800 rows but only a few dozen are filled.
+3. **`externalRef`** = `ledger:Transactions:R<Excel row number>`, where the header is row 1 and the first transaction is `R2`. The local import uses exactly these keys, so entering again creates no duplicates.
+4. **Legs by type** (table in section 5): `revenue` — `to` = (E, H); `expense` — `from` = (D, F); two-leg types — both. If a `revenue` row has only the left side (D, F) filled, or an `expense` only the right side (E, H), take the filled one. Do not enter zero amounts.
+5. **The account currency wins.** If G or I differs from the account currency (e.g. `USD` on a `USDT` wallet), enter the amount as is in the account currency and note the row for the owner.
+6. **Fiat rounding.** For USD, EUR and UAH accounts round amounts to 2 places: formulas like `1400.2/1.168` leave tails (`1198.80137` → `"1198.80"`). Do not round crypto.
+7. **Negative amounts** in the columns are taken as absolute values: the leg sets the sign.
 
-Порядок: `add_transactions` з `dryRun: true` → виправити помилки за `transactions.<i>` → той самий пакет без `dryRun` з новим `idempotencyKey`. Повторний запуск безпечний: наявні записи повернуться як `duplicate`.
+Sequence: `add_transactions` with `dryRun: true` → fix errors by `transactions.<i>` → the same batch without `dryRun` and with a new `idempotencyKey`. A rerun is safe: existing records come back as `duplicate`.
 
-### 6.6 Звірка
+### 6.6 Reconciliation
 
-Після внесення викличте `get_balances` і порівняйте `balance` кожного рахунку з колонкою `Current Balance` аркуша `Balances` (допуск 0.01; для EUR очікуйте `0`, бо хвіст `0.00137` прибрано округленням). Еталон на цьому файлі:
+After entering, call `get_balances` and compare each account's `balance` with the `Current Balance` column of the `Balances` sheet (tolerance 0.01; expect `0` for EUR because rounding removes the `0.00137` tail). Reference values for this file:
 
-| Рахунок            | Залишок         |
+| Account            | Balance         |
 | ------------------ | --------------- |
-| Privat USD         | 9 522.01 USD    |
+| Privat USD         | 9,522.01 USD    |
 | Privat EUR         | 0 EUR           |
-| Privat UAH         | 18 477.98 UAH   |
-| Crypto ETH - USDT  | 1 203 USDT      |
+| Privat UAH         | 18,477.98 UAH   |
+| Crypto ETH - USDT  | 1,203 USDT      |
 | Crypto ETH - USDC  | 157.922092 USDC |
-| Crypto TRON - USDT | 11 129.57 USDT  |
+| Crypto TRON - USDT | 11,129.57 USDT  |
 
-Treasury: сума залишків у USD за останніми курсами (`EUR × 1.168`, `UAH ÷ 43`) = **22 442.22 USD**.
+Treasury: the sum of balances in USD at the latest rates (`EUR × 1.168`, `UAH ÷ 43`) = **22,442.22 USD**.
 
-Розбіжність не виправляйте самостійно коригувальними транзакціями — опишіть її власнику: рахунок, очікувано, отримано, підозрілі рядки.
+Do not fix a mismatch yourself with adjusting transactions — describe it to the owner: account, expected, actual, suspicious rows.
 
-## 7. Люди та клієнти
+## 7. People and clients
 
-### 7.1 Люди — `upsert_person_profile`
+### 7.1 People — `upsert_person_profile`
 
-Профіль для Bench: хто є, що вміє, коли вільний. Поля:
+The Bench profile: who the person is, what they know, when they are free. Fields:
 
-| Поле                                                                       | Формат                                                           |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `fullName`                                                                 | Повне ім'я; обов'язкове для нової людини                         |
-| `displayName`, `position`, `location`, `timezone`, `contactOwner`, `notes` | Текст                                                            |
-| `seniority`, `stack`, `domains`                                            | Масиви рядків: `["React", "Node"]`                               |
-| `marketRateUsd`                                                            | Ринкова ставка, USD/год, рядок-децимал                           |
-| `allocation`                                                               | `full_time` або `part_time`                                      |
-| `availabilityFrom`                                                         | `YYYY-MM-DD`                                                     |
-| `status`                                                                   | `active`, `bench`, `inactive` (для нової людини типово `active`) |
+| Field                                                                      | Format                                                            |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `fullName`                                                                 | Full name; required for a new person                              |
+| `displayName`, `position`, `location`, `timezone`, `contactOwner`, `notes` | Text                                                              |
+| `seniority`, `stack`, `domains`                                            | String arrays: `["React", "Node"]`                                |
+| `marketRateUsd`                                                            | Market rate, USD/h, decimal string                                |
+| `allocation`                                                               | `full_time` or `part_time`                                        |
+| `availabilityFrom`                                                         | `YYYY-MM-DD`                                                      |
+| `status`                                                                   | `active`, `bench`, `inactive` (a new person defaults to `active`) |
 
-- Пошук наявної людини — за `id`, а без нього — за `fullName` без урахування регістру. Якщо збігається кілька людей, повернеться помилка з проханням передати `id`.
-- **Оновлення часткове:** змінюються лише передані поля, решта лишається як є. Масив (`stack` тощо) замінюється цілком, тож щоб додати навичку, передайте повний новий список.
-- Перейменування — лише з `id`: без нього `fullName` слугує ключем пошуку й не змінюється.
-- Перед записом перевірте `search_people`, щоб не створити дубль з іншим написанням імені. Якщо сумніваєтесь, чи це та сама людина, — спитайте власника.
-- Ставки, які людина отримує (ЗП), і на яких клієнтів вона працює, тут не вносяться.
+- An existing person is matched by `id`, otherwise by `fullName` case-insensitively. If several people match, you get an error asking for the `id`.
+- **Updates are partial:** only the fields sent change, the rest stays. An array (`stack` etc.) is replaced as a whole, so to add a skill send the full new list.
+- Renaming needs the `id`: without it `fullName` is the lookup key and does not change.
+- Check `search_people` before writing so you do not create a duplicate under another spelling. If unsure whether it is the same person, ask the owner.
+- What the person is paid and which clients they work for is not entered here.
 
-### 7.2 Клієнти — `upsert_clients`
+### 7.2 Clients — `upsert_clients`
 
-| Поле                              | Формат                                                                       |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `legalName`                       | Юридична назва; обов'язкова для нового клієнта                               |
-| `shortName`, `address`, `country` | Текст                                                                        |
-| `bankDetails`                     | Банківські реквізити клієнта для шапки інвойсу, текст                        |
-| `contacts`                        | Масив `{ name, role?, email?, phone? }`; якщо переданий, замінює весь список |
-| `defaultCurrency`                 | `USD`, `EUR`, … (для нового клієнта типово `USD`)                            |
+| Field                             | Format                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| `legalName`                       | Legal name; required for a new client                                          |
+| `shortName`, `address`, `country` | Text                                                                           |
+| `bankDetails`                     | The client's bank details for the invoice header, text                         |
+| `contacts`                        | Array of `{ name, role?, email?, phone? }`; when sent, replaces the whole list |
+| `defaultCurrency`                 | `USD`, `EUR`, … (a new client defaults to `USD`)                               |
 
-Правила пошуку, часткового оновлення й перейменування — як у людей, з ключем `legalName`. Договори з клієнтом і ставки білінгу додає людина в UI.
+Matching, partial updates and renaming work as for people, with `legalName` as the key. Contracts with the client and billing rates are added by a person in the UI.
 
-## 8. Звіт власнику
+## 8. Report to the owner
 
-Наприкінці коротко повідомте:
+At the end, report briefly:
 
-- скільки створено й скільки `duplicate` по кожному tool;
-- таблицю звірки;
-- рядки з розбіжністю валют і округленнями;
-- усе, що пропущено, з причиною.
+- how many were created and how many `duplicate`, per tool;
+- the reconciliation table;
+- rows with currency mismatches and roundings;
+- everything skipped, with the reason.
 
-## 9. Чого не робити
+## 9. Do not
 
-- Не вигадувати суми, дати чи курси. Не «підганяти» залишок коригуваннями без явного дозволу власника.
-- Не створювати рахунки, категорії, людей чи клієнтів «про всяк випадок». Лише ті, що є у джерелі або вказав власник.
-- Не логувати й не зберігати токен; не комітити xlsx чи вивантаження з нього.
+- Do not invent amounts, dates or rates. Do not “fit” a balance with adjustments without the owner's explicit permission.
+- Do not create accounts, categories, people or clients “just in case” — only those in the source or named by the owner.
+- Do not log or store the token; do not commit the xlsx or exports from it.

@@ -16,7 +16,8 @@ Internal back-office for Syntora.Tech: ledger, payroll, invoices, FOP acts, benc
 
 ## Language
 
-- UI text: Ukrainian. Dates `ДД.ММ.РРРР`, amounts with currency (`@tally/domain` formatters).
+- UI: English by default, Ukrainian via the language switcher (next-intl, cookie `tally_locale`, A-058). Every UI string lives in `apps/web/messages/{en,uk}.json` (same keys — a unit test checks it); use `useTranslations` / `getTranslations`, enum labels via `useLabels()` / `getLabels()`, money and dates via `useFormat()` / `getFormat()` (`1,234.56` in English, `1 234.56` in Ukrainian, dates `DD.MM.YYYY`).
+- Service errors carry message keys of the `errors` namespace (`msg(key, values)`); Server Actions return them localized (`localizeForUser`), MCP always in English. Legal documents stay as their templates: invoices EN/UA, FOP acts UA.
 - Code, comments, identifiers, logs, error messages, commit messages: English.
 - Comments only for non-obvious _why_.
 

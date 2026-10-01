@@ -1,119 +1,119 @@
-# Клієнти, договори, проєкти: як це влаштовано в Tally
+# Clients, contracts, projects: how Tally models them
 
-Інструкція для агента, який заводить у Tally клієнтів, людей і їхню роботу на проєктах. Технічне підключення та tools — `docs/mcp-agent-guide.md`. Правила, на яких це побудовано: специфікація розділи 3, 5.1–5.3, 6.3–6.4; рішення A-054…A-057 у `docs/assumptions.md`.
+A guide for an agent that enters clients, people and their project work into Tally. Technical connection and tools: `docs/mcp-agent-guide.md`. The rules behind it: spec sections 3, 5.1–5.3, 6.3–6.4; decisions A-054…A-057 in `docs/assumptions.md`. UI labels below are the English UI (the default language).
 
-## 1. Модель одним абзацом
+## 1. The model in one paragraph
 
-Є **одна наша компанія** (ТОВ «СІНТОРА»). У неї є **договори**: з **клієнтами** (MSA / Contract) і з **ФОП** (одержувачами виплат). Центр усього — **залучення** (`assignment`): «людина × договір клієнта» з роллю, SOW/Annex, FTE і датами. Кожне залучення має дві незалежні **версії умов**: скільки беремо з клієнта (`billing_terms`) і скільки платимо людині (`pay_terms`). Щомісяця (**період**) на залучення вносяться **години** і, за потреби, **примітка «який проєкт»**. Із цього система сама робить інвойси й виплати.
-
-```
-Компанія ─┬─ Договір клієнта (MSA №…) ── Клієнт
-          │        └─ Залучення: людина, роль, SOW/Annex, FTE, дати
-          │              ├─ Умови клієнту (версії з місяця)
-          │              ├─ Умови людині (версії з місяця)
-          │              └─ Табель за місяць: години + примітка «проєкт»
-          └─ Договір ФОП (OD-…) ── Одержувач (payee) ← кому фактично платимо
-```
-
-## 2. Сутності
-
-| Сутність              | Що це                                                                                                                                                            | Як заводиться                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| **Компанія**          | Наша юрособа: реквізити EN/UA, директор, банк. Одна на всю систему, підставляється в усі договори                                                                | Налаштування → Реквізити компанії (лише власник) |
-| **Клієнт**            | Контрагент, якому виставляємо інвойси: юр. назва, коротка назва, адреса, країна, банківські реквізити, контакти, валюта за замовчуванням                         | MCP `upsert_clients` або UI «Клієнти»            |
-| **Договір клієнта**   | MSA / Contract з номером і датою. Задає валюту, правила дати інвойсу, строку оплати, шаблон і нумерацію. **Один інвойс = один договір × місяць**                 | Лише UI: картка клієнта → «Новий договір»        |
-| **Людина**            | Спеціаліст: позиція, сеньйорність, стек, домени, ринкова ставка, доступність, локація, статус                                                                    | MCP `upsert_person_profile` або UI «Люди»        |
-| **Одержувач (payee)** | Кому юридично йдуть гроші: ФОП (ПІБ, ІПН, IBAN) або криптогаманець. **Може бути не тією ж людиною**, що працює: за CTO отримує ФОП іншої особи                   | Лише UI, лише власник: «Люди → Одержувачі»       |
-| **Договір ФОП**       | Договір з одержувачем-ФОП (`OD-1002` тощо); по ньому щомісяця йде акт                                                                                            | Лише UI: картка одержувача → «Новий договір»     |
-| **Залучення**         | Людина на договорі клієнта: договір, SOW/Annex, роль, FTE (0 < FTE ≤ 1), початок, кінець. Або внутрішнє (CEO/CTO на своїй компанії) — без договору й без білінгу | Лише UI: картка людини → «Нове залучення»        |
-| **Умови клієнту**     | Тип `hourly` / `fixed_monthly` / `none`, ставка, валюта, канал інвойсу (fiat / crypto), політика неповного місяця                                                | Разом із залученням; зміни — «Додати версію»     |
-| **Умови людині**      | Тип `fixed` / `hourly` / `included`, сума, валюта, спосіб виплати (fiat / crypto), коли можна виплатити, додаткові дні                                           | Разом із залученням; зміни — «Додати версію»     |
-| **Період**            | Календарний місяць: норма годин, довідковий курс, статус `open` / `closed`                                                                                       | UI «Періоди»                                     |
-| **Табель**            | Години за залучення × місяць + примітка «проєкт»                                                                                                                 | UI «Періоди» → крок 2 (форма або CSV)            |
-
-Через MCP зараз записуються лише **клієнти й люди** (і Ledger). Договори, залучення, умови, одержувачі, періоди та години вносить людина в UI. Агент готує для неї дані (розділ 6).
-
-## 3. Головне правило: що окремо, а що примітка
-
-| Ситуація                                                                                                     | Як оформити                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Новий клієнт                                                                                                 | Новий **клієнт**                                                                                                                                                                                   |
-| Окремий юридичний договір з клієнтом (свій номер, дата, умови оплати)                                        | Новий **договір**                                                                                                                                                                                  |
-| SOW / Annex / Statement of Work під уже наявним MSA                                                          | **Не** новий договір. Номер SOW/Annex пишеться в полі «SOW / Annex» залучення                                                                                                                      |
-| Людина починає працювати на клієнта                                                                          | Нове **залучення** на договорі цього клієнта                                                                                                                                                       |
-| Та сама людина на тому самому договорі, але **інша ставка, інший тип оплати, інша роль або інший SOW/Annex** | Окреме **залучення** — кожне має свої умови й окремий рядок в інвойсі                                                                                                                              |
-| Та сама людина, той самий SOW і ті самі умови, але **кілька проєктів** (наприклад, у Boosty під одним SOW)   | **Одне** залучення. Проєкт пишеться щомісяця в **примітці табеля** («Проєкт / примітка»). Якщо людина за місяць працювала на кількох проєктах, перелічіть їх у примітці: «Mobile app, Admin panel» |
-| Людина паралельно на двох клієнтах                                                                           | Два залучення, по одному на кожен договір, з FTE-частками (наприклад, 0.5 + 0.5)                                                                                                                   |
-| Змінилася ставка з якогось місяця                                                                            | **Нова версія умов** з першого числа цього місяця. Старі версії не редагуються                                                                                                                     |
-| Людина закінчила роботу на клієнта                                                                           | Дата «Завершення» в залученні. Не видаляти                                                                                                                                                         |
-| CEO/CTO працює на нашу компанію                                                                              | Внутрішнє залучення без договору, білінг відсутній                                                                                                                                                 |
-
-Примітка «проєкт» — внутрішня. В інвойс клієнту вона **не потрапляє**: так вирішив власник (A-057).
-
-## 4. Як працюють гроші
-
-**Інвойс клієнту** (5.1). Один на договір × місяць, рядок — на кожне залучення з годинами > 0. H — норма годин місяця, h — відпрацьовані години:
-
-| Умови клієнту                                                     | Сума рядка                          |
-| ----------------------------------------------------------------- | ----------------------------------- |
-| `hourly`                                                          | ставка × h                          |
-| `fixed_monthly` + «Повна сума незалежно від годин» (`full_month`) | ставка, незалежно від годин         |
-| `fixed_monthly` + «Пропорційно годинам» (`by_hours`)              | ставка / H × h                      |
-| `fixed_monthly` + «Ціла погодинна ставка» (`trunc_hourly`)        | floor(ставка / H) × h               |
-| `none` («Не виставляється»)                                       | рядка немає (внутрішні, безоплатні) |
-
-**ЗП людині** (5.2):
-
-| Умови людині                             | Нарахування                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `fixed` («Фіксована сума»)               | сума за місяць. **Вже з урахуванням FTE**: на пів ставки вносьте половину, а не повну суму |
-| `hourly` («Погодинно від місячної суми») | сума / H × h                                                                               |
-| `included` («Включено (0)»)              | 0 (оплата всередині іншого залучення)                                                      |
-
-Усі залучення людини за місяць зводяться в **одну виплату** на кожен спосіб (fiat і crypto окремо). Отримувач — одержувач за замовчуванням із картки людини.
-
-**Коли можна виплатити** (5.3): за замовчуванням «Після оплати клієнтом або в дедлайн» (`on_payment_or_due`) — коли клієнт повністю оплатив інвойс або настав строк його оплати (тоді платить компанія), що раніше. «Одразу» (`immediate`) — одразу після закриття місяця.
-
-**Закритий місяць** заморожений: години, примітки й умови заднім числом не змінюються. Змінити можна лише після повторного відкриття періоду власником.
-
-## 5. Порядок заведення нової роботи
-
-1. **Клієнт.** `list_clients` → якщо немає, `upsert_clients` (`legalName` обов'язкове; `shortName`, `country`, `defaultCurrency`, `contacts`, `bankDetails` для шапки інвойсу).
-2. **Договір клієнта** — людина в UI: номер, дата підписання, валюта, строк оплати (`day_of_month` N або `net_days` N), дата інвойсу (перший / N-й робочий день після місяця).
-3. **Людина.** `search_people` → якщо немає, `upsert_person_profile` (`fullName` обов'язкове + профіль). Перевіряйте можливі інші написання імені.
-4. **Одержувач і договір ФОП** — власник в UI, якщо людині платять через ФОП, якого ще немає. Реквізити агент не вносить і не запитує.
-5. **Залучення** — людина в UI: договір, «SOW / Annex», роль, FTE, початок і перші версії умов «Клієнту» та «Людині».
-6. **Щомісяця** — людина в UI: «Періоди» → місяць → крок 2. Години й, якщо треба, «Проєкт / примітка». Далі розрахунок і закриття.
-
-## 6. Що агент передає людині для кроків в UI
-
-Для кожного нового договору:
+There is **one company of ours** (ТОВ «СІНТОРА» / LLC “SYNTORA”). It has **contracts**: with **clients** (MSA / Contract) and with **FOPs** (payout recipients). The core is the **assignment**: “person × client contract” with a role, SOW/Annex, FTE and dates. Each assignment has two independent **terms versions**: what we charge the client (`billing_terms`) and what we pay the person (`pay_terms`). Every month (**period**) the assignment gets **hours** and, when needed, a **“which project” note**. From this the system produces invoices and payouts itself.
 
 ```
-Клієнт: <legalName>
-Номер договору: <…>   Дата підписання: <YYYY-MM-DD>   Валюта: <USD|EUR|…>
-Строк оплати: <day_of_month 20 | net_days 30>
-Дата інвойсу: <перший робочий день після місяця | N-й робочий день>
+Company ─┬─ Client contract (MSA No. …) ── Client
+         │        └─ Assignment: person, role, SOW/Annex, FTE, dates
+         │              ├─ Client terms (versions from a month)
+         │              ├─ Person terms (versions from a month)
+         │              └─ Monthly timesheet: hours + “project” note
+         └─ FOP contract (OD-…) ── Payee ← who is actually paid
 ```
 
-Для кожного нового залучення:
+## 2. Entities
+
+| Entity              | What it is                                                                                                                                                          | How it is entered                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Company**         | Our legal entity: EN/UA details, director, bank. One for the whole system, used by every contract                                                                   | Settings → Company details (owner only)        |
+| **Client**          | Counterparty we invoice: legal name, short name, address, country, bank details, contacts, default currency                                                         | MCP `upsert_clients` or UI “Clients”           |
+| **Client contract** | MSA / Contract with a number and date. Sets the currency, invoice date rule, payment term, template and numbering. **One invoice = one contract × month**           | UI only: client card → “New contract”          |
+| **Person**          | Specialist: position, seniority, stack, domains, market rate, availability, location, status                                                                        | MCP `upsert_person_profile` or UI “People”     |
+| **Payee**           | Who legally receives the money: a FOP (name, tax ID, IBAN) or a crypto wallet. **May differ from the person who works**: the CTO's pay goes to another person's FOP | UI only, owner only: “People → Payees”         |
+| **FOP contract**    | Contract with a FOP payee (`OD-1002` etc.); a monthly act is issued under it                                                                                        | UI only: payee card → “New contract”           |
+| **Assignment**      | A person on a client contract: contract, SOW/Annex, role, FTE (0 < FTE ≤ 1), start, end. Or internal (CEO/CTO on our own company) — no contract, no billing         | UI only: person card → “New assignment”        |
+| **Client terms**    | Type `hourly` / `fixed_monthly` / `none`, rate, currency, invoice channel (fiat / crypto), partial-month policy                                                     | With the assignment; changes via “Add version” |
+| **Person terms**    | Type `fixed` / `hourly` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                              | With the assignment; changes via “Add version” |
+| **Period**          | Calendar month: hours norm, reference rate, status `open` / `closed`                                                                                                | UI “Periods”                                   |
+| **Timesheet**       | Hours per assignment × month + a “project” note                                                                                                                     | UI “Periods” → step 2 (form or CSV)            |
+
+Over MCP only **clients and people** (and the Ledger) are written today. Contracts, assignments, terms, payees, periods and hours are entered by a person in the UI. The agent prepares the data for them (section 6).
+
+## 3. The main rule: separate record or a note
+
+| Situation                                                                                              | How to record it                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A new client                                                                                           | A new **client**                                                                                                                                                                               |
+| A separate legal agreement with a client (own number, date, payment terms)                             | A new **contract**                                                                                                                                                                             |
+| An SOW / Annex / Statement of Work under an existing MSA                                               | **Not** a new contract. The SOW/Annex number goes into the assignment's “SOW / Annex” field                                                                                                    |
+| A person starts working for a client                                                                   | A new **assignment** on that client's contract                                                                                                                                                 |
+| The same person on the same contract, but **a different rate, pay type, role or SOW/Annex**            | A separate **assignment** — each has its own terms and its own invoice line                                                                                                                    |
+| The same person, the same SOW and the same terms, but **several projects** (e.g. Boosty under one SOW) | **One** assignment. The project is written every month in the **timesheet note** (“Project / note”). If the person worked on several projects that month, list them: “Mobile app, Admin panel” |
+| A person on two clients in parallel                                                                    | Two assignments, one per contract, with FTE shares (e.g. 0.5 + 0.5)                                                                                                                            |
+| The rate changed from some month                                                                       | A **new terms version** from the first day of that month. Old versions are never edited                                                                                                        |
+| A person stopped working for a client                                                                  | The assignment's “End” date. Do not delete                                                                                                                                                     |
+| CEO/CTO works for our own company                                                                      | An internal assignment, no contract, no billing                                                                                                                                                |
+
+The “project” note is internal. It does **not** appear on the client invoice — the owner's decision (A-057).
+
+## 4. How the money works
+
+**Client invoice** (5.1). One per contract × month, a line per assignment with hours > 0. H is the month's hours norm, h the hours worked:
+
+| Client terms                                                       | Line amount                |
+| ------------------------------------------------------------------ | -------------------------- |
+| `hourly`                                                           | rate × h                   |
+| `fixed_monthly` + “Full amount regardless of hours” (`full_month`) | rate, regardless of hours  |
+| `fixed_monthly` + “Proportional to hours” (`by_hours`)             | rate / H × h               |
+| `fixed_monthly` + “Whole hourly rate” (`trunc_hourly`)             | floor(rate / H) × h        |
+| `none` (“Not billed”)                                              | no line (internal, unpaid) |
+
+**Person's pay** (5.2):
+
+| Person terms                                | Accrual                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `fixed` (“Fixed amount”)                    | the monthly amount. **Already includes FTE**: for half-time enter half, not the full amount |
+| `hourly` (“Hourly from the monthly amount”) | amount / H × h                                                                              |
+| `included` (“Included (0)”)                 | 0 (paid inside another assignment)                                                          |
+
+All of a person's assignments in a month roll into **one payout** per method (fiat and crypto separately). The recipient is the default payee from the person card.
+
+**When it can be paid** (5.3): by default “After client payment or at the deadline” (`on_payment_or_due`) — when the client has paid the invoice in full or its due date has come (then the company pays), whichever is first. “Immediately” (`immediate`) — right after the month is closed.
+
+**A closed month** is frozen: hours, notes and terms do not change retroactively. They can change only after the owner reopens the period.
+
+## 5. Order of entering new work
+
+1. **Client.** `list_clients` → if missing, `upsert_clients` (`legalName` required; `shortName`, `country`, `defaultCurrency`, `contacts`, `bankDetails` for the invoice header).
+2. **Client contract** — a person in the UI: number, signing date, currency, payment term (`day_of_month` N or `net_days` N), invoice date (first / Nth working day after the month).
+3. **Person.** `search_people` → if missing, `upsert_person_profile` (`fullName` required + profile). Watch for other spellings of the name.
+4. **Payee and FOP contract** — the owner in the UI, if the person is paid through a FOP that does not exist yet. The agent neither enters nor asks for payee details.
+5. **Assignment** — a person in the UI: contract, “SOW / Annex”, role, FTE, start and the first “Client” and “Person” terms versions.
+6. **Every month** — a person in the UI: “Periods” → month → step 2. Hours and, if needed, “Project / note”. Then calculation and close.
+
+## 6. What the agent hands to a person for UI steps
+
+For each new contract:
 
 ```
-Людина: <fullName>            Договір: <номер договору клієнта>
-SOW / Annex: <номер або порожньо>   Роль: <…>   FTE: <0.5 | 1>
-Початок: <YYYY-MM-DD>         Завершення: <YYYY-MM-DD або порожньо>
-Клієнту: <hourly 47 USD/год | fixed_monthly 5500 USD, full_month|by_hours|trunc_hourly | none>, канал fiat|crypto
-Людині:  <fixed 2300 USD/міс (вже з FTE) | hourly 7360 USD/міс за повну норму | included>, виплата fiat|crypto,
-         коли: on_payment_or_due | immediate
-Проєкти під цим SOW (для приміток табеля): <Mobile app, Admin panel, …>
+Client: <legalName>
+Contract number: <…>   Signing date: <YYYY-MM-DD>   Currency: <USD|EUR|…>
+Payment term: <day_of_month 20 | net_days 30>
+Invoice date: <first working day after the month | Nth working day>
 ```
 
-Якщо чогось із цього немає в джерелі — не вигадуйте. Запишіть «уточнити» і спитайте власника.
+For each new assignment:
 
-## 7. Перевірки перед звітом
+```
+Person: <fullName>            Contract: <client contract number>
+SOW / Annex: <number or empty>   Role: <…>   FTE: <0.5 | 1>
+Start: <YYYY-MM-DD>           End: <YYYY-MM-DD or empty>
+Client: <hourly 47 USD/h | fixed_monthly 5500 USD, full_month|by_hours|trunc_hourly | none>, channel fiat|crypto
+Person: <fixed 2300 USD/month (already with FTE) | hourly 7360 USD/month for the full norm | included>, payout fiat|crypto,
+        when: on_payment_or_due | immediate
+Projects under this SOW (for timesheet notes): <Mobile app, Admin panel, …>
+```
 
-- Немає дублів клієнтів і людей з іншим написанням (`list_clients`, `search_people`).
-- Кожен SOW під MSA оформлено як «SOW / Annex» залучення, а не як окремий договір.
-- Сума FTE людини на одну дату реалістична: зазвичай ≤ 1. Більше — лише свідомо, з поясненням.
-- `fixed` ЗП для неповної зайнятості вже помножено на FTE.
-- Різні проєкти з однаковими умовами під одним SOW — не окремі залучення, а примітки табеля.
+If any of this is missing from the source, do not invent it. Write “to clarify” and ask the owner.
+
+## 7. Checks before reporting
+
+- No duplicate clients or people under another spelling (`list_clients`, `search_people`).
+- Every SOW under an MSA is recorded as the assignment's “SOW / Annex”, not as a separate contract.
+- A person's total FTE on a date is realistic: usually ≤ 1. More only deliberately, with an explanation.
+- `fixed` pay for part-time is already multiplied by FTE.
+- Different projects with the same terms under one SOW are timesheet notes, not separate assignments.
