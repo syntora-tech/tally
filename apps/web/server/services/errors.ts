@@ -102,6 +102,11 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('conflict', 'У періоді вже є виплати — відкрити його знову не можна');
     case 'TL056':
       return serviceError('validation_error', 'Спершу вкажіть курс виплати');
+    case 'TL060':
+      return serviceError(
+        'validation_error',
+        'Акт має бути за договором ФОП з тим самим одержувачем',
+      );
     case 'TL020':
       return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
     case 'TL021':

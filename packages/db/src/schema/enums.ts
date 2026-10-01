@@ -57,3 +57,4 @@ export const adjustmentKind = pgEnum('adjustment_kind', [
   'correction',
   'other',
 ]);
+export const actType = pgEnum('act_type', ['monthly', 'reimbursement', 'other']);

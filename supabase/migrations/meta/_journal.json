@@ -211,6 +211,20 @@
       "when": 1790845559174,
       "tag": "20261001090559_payroll_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790846386476,
+      "tag": "20261001091946_supplier_acts",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790846409072,
+      "tag": "20261001092009_supplier_act_invariants",
+      "breakpoints": true
     }
   ]
 }
