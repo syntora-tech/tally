@@ -22,7 +22,7 @@ export type Fetcher = (
 export async function fetchNbuRate(
   currency: string,
   onDate: LocalDate,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = (u) => fetch(u, { signal: AbortSignal.timeout(4000) }),
 ): Promise<Result<NbuRate, NbuError>> {
   const url = `${NBU_URL}?valcode=${encodeURIComponent(currency)}&date=${onDate.replaceAll('-', '')}&json`;
   let body: unknown;

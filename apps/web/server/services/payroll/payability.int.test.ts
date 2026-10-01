@@ -1,4 +1,5 @@
 import {
+  account,
   adjustment,
   assignment,
   billingTerms,
@@ -14,6 +15,7 @@ import {
   period,
   person,
   timesheet,
+  transaction,
 } from '@tally/db/schema';
 import { parseLocalDate } from '@tally/domain';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -21,6 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { issueInvoice, reissueInvoice, voidInvoice } from '../invoices';
 import { closePeriod, openPeriod, setHours } from '../periods';
+import { listPayroll, payItem } from '.';
 import { overridePayable, refreshPayability } from './payability';
 
 // Spec 9.4 calendar shifted to 2043, where 20 September is also a Sunday: invoice 01.09, due 20.09,
@@ -37,6 +40,8 @@ const ids = {
   people: [] as string[],
   assignments: [] as string[],
   period: '',
+  accounts: [] as string[],
+  transactions: [] as string[],
 };
 
 const lineOf = async (assignmentId: string) => {
@@ -92,6 +97,10 @@ beforeAll(async () => {
 
 afterAll(() =>
   h.cleanup(async (db) => {
+    if (ids.transactions.length) {
+      await db.delete(transaction).where(inArray(transaction.id, ids.transactions));
+    }
+    if (ids.accounts.length) await db.delete(account).where(inArray(account.id, ids.accounts));
     const invs = await db
       .select({ id: invoice.id })
       .from(invoice)
@@ -201,5 +210,53 @@ describe('pay-when-paid (5.3, 9.4)', () => {
       .where(eq(invoice.id, issued?.id ?? ''));
     expect(inv?.status).toBe('paid');
     expect((await lineOf(ids.assignments[1] ?? ''))?.fundingSource).toBe('company');
+  });
+
+  it('pays a fiat item: rate snapshot, UAH expense and allocation mark it paid (6.6)', async () => {
+    const [uah] = await h.db
+      .insert(account)
+      .values({
+        name: `Payroll UAH ${String(Date.now())}`,
+        kind: 'bank',
+        currency: 'UAH',
+        openingDate: '2043-01-01',
+      })
+      .returning();
+    ids.accounts.push(uah?.id ?? '');
+    const queue = (
+      await listPayroll.run(h.ctxFor(finance, d('2043-09-22')), { periodId: ids.period })
+    )._unsafeUnwrap();
+    const target = queue.find((q) => q.item.personId === ids.people[1]);
+    expect(target?.group).toBe('ready');
+
+    const tooMuch = await payItem.run(h.ctxFor(finance), {
+      itemId: target?.item.id ?? '',
+      accountId: uah?.id ?? '',
+      occurredOn: '2043-09-22',
+      amount: '999999',
+      rate: '44.48',
+      rateSource: 'nbu',
+    });
+    expect(tooMuch._unsafeUnwrapErr().fieldErrors?.overrideReason).toBeDefined();
+
+    const [rated] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.id, target?.item.id ?? ''));
+    const paid = await payItem.run(h.ctxFor(finance), {
+      itemId: target?.item.id ?? '',
+      accountId: uah?.id ?? '',
+      occurredOn: '2043-09-22',
+      amount: rated?.totalUah ?? '0',
+      rate: '44.48',
+      rateSource: 'nbu',
+    });
+    ids.transactions.push(paid._unsafeUnwrap().transactionId);
+    const [after] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.id, target?.item.id ?? ''));
+    expect(after).toMatchObject({ status: 'paid', fxSource: 'nbu', payoutFxRate: '44.480000' });
+    expect((await lineOf(ids.assignments[1] ?? ''))?.status).toBe('paid');
   });
 });
