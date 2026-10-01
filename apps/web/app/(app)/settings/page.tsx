@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { OWNER_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { formatUaDate, isoDayOfWeek, type LocalDate } from '@tally/domain';
 import { getCompany } from '@/server/services/company';
+import { listMcpCalls, listMcpClients } from '@/server/services/mcp';
 import { listCalendarExceptions, listJobs, listSequences } from '@/server/services/settings';
 import { CompanyForm } from './company-form';
+import { CreateMcpClientForm, RevokeMcpClientButton } from './mcp-forms';
 import { CalendarExceptionForm, DeleteExceptionButton, SequenceForm } from './settings-forms';
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];
@@ -33,6 +37,11 @@ export default async function SettingsPage() {
   const sequences = (await listSequences.run(ctx, {})).unwrapOr([]);
   const thisYear = ctx.today.slice(0, 4);
   const jobs = (await listJobs.run(ctx, {})).unwrapOr([]);
+  const mcpClients = (await listMcpClients.run(ctx, {})).unwrapOr([]);
+  const mcpCalls = (await listMcpCalls.run(ctx, { limit: 20 })).unwrapOr([]);
+  const clientNames = new Map(mcpClients.map((c) => [c.clientId, c.clientName]));
+  const h = await headers();
+  const mcpUrl = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host') ?? 'localhost:3000'}/api/mcp`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,6 +165,71 @@ export default async function SettingsPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Підключені агенти</CardTitle>
+          <CardDescription>
+            Доступ AI-агентів (Claude, Claude Code) через MCP за адресою {mcpUrl}. Агент діє від
+            вашого імені в межах обраного профілю; кожна зміна потрапляє в журнал аудиту з позначкою
+            «агент». Відкликаний токен перестає працювати одразу
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <CreateMcpClientForm mcpUrl={mcpUrl} />
+          {mcpClients.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Агентів ще не підключено</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {mcpClients.map((c) => (
+                <li key={c.clientId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span
+                    className={`w-56 font-medium ${c.isActive ? '' : 'text-muted-foreground line-through'}`}
+                  >
+                    {c.clientName}
+                  </span>
+                  <Badge variant="outline">
+                    {c.profile === 'assistant'
+                      ? 'асистент'
+                      : c.profile === 'custom'
+                        ? 'вибірково'
+                        : 'читання'}
+                  </Badge>
+                  <span className="text-muted-foreground">…{c.tokenHint}</span>
+                  <span className="text-muted-foreground">
+                    {c.lastUsedAt
+                      ? `останній виклик ${DATE_TIME.format(c.lastUsedAt)}`
+                      : 'ще не використовувався'}
+                  </span>
+                  {c.isActive ? (
+                    <RevokeMcpClientButton clientId={c.clientId} />
+                  ) : (
+                    <span className="text-muted-foreground">відкликано</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {mcpCalls.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="text-sm font-medium">Останні виклики</div>
+              <ul className="flex flex-col gap-1 text-sm">
+                {mcpCalls.map((call) => (
+                  <li key={String(call.id)} className="flex flex-wrap gap-x-3">
+                    <span className="w-36 tabular-nums text-muted-foreground">
+                      {DATE_TIME.format(call.at)}
+                    </span>
+                    <span className="w-48">{clientNames.get(call.clientId) ?? call.clientId}</span>
+                    <span className="w-40">{call.tool}</span>
+                    <span className={call.outcome === 'ok' ? '' : 'text-destructive'}>
+                      {call.outcome === 'ok' ? 'успішно' : call.outcome}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </CardContent>
       </Card>

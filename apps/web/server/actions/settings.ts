@@ -5,6 +5,7 @@ import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import { deleteCalendarException, saveCalendarException, saveSequence } from '../services/settings';
 import type { ServiceContext } from '../services/context';
+import { createMcpClient, revokeMcpClient } from '../services/mcp';
 import type { ServiceResult } from '../services/define-service';
 import type { ActionResult } from './to-action-result';
 
@@ -31,4 +32,12 @@ export async function deleteCalendarExceptionAction(_prev: SettingsFormState, fo
 
 export async function saveSequenceAction(_prev: SettingsFormState, formData: FormData) {
   return run(saveSequence, formData);
+}
+
+export async function createMcpClientAction(_prev: SettingsFormState, formData: FormData) {
+  return run(createMcpClient, formData);
+}
+
+export async function revokeMcpClientAction(_prev: SettingsFormState, formData: FormData) {
+  return run(revokeMcpClient, formData);
 }
