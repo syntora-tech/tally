@@ -8,6 +8,7 @@ import { driveConfig, getServerEnv } from '../env';
 import { GoogleDocsRenderer, HtmlRenderer, type DocumentRenderer } from '../render/renderers';
 import { getDocumentStorage } from '../storage';
 import { DriveStorage } from '../storage/drive-storage';
+import { renderActHandler } from './render-act';
 import { renderInvoiceHandler } from './render-invoice';
 import { runNextJob, type JobHandler } from './worker';
 
@@ -43,6 +44,11 @@ function getHandlers(): Record<string, JobHandler> {
         invoice_hourly: env.GOOGLE_TEMPLATE_INVOICE_HOURLY_ID,
         invoice_fixed: env.GOOGLE_TEMPLATE_INVOICE_FIXED_ID,
       },
+    }),
+    render_act: renderActHandler({
+      renderer: getRenderer(),
+      storage: getDocumentStorage(),
+      templateId: env.GOOGLE_TEMPLATE_ACT_FOP_ID,
     }),
   };
   return handlers;

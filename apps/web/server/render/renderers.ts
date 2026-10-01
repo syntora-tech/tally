@@ -1,5 +1,6 @@
 import type { docs_v1 } from '@googleapis/docs';
 import type { drive_v3 } from '@googleapis/drive';
+import type { ActSnapshot } from '../services/acts/snapshot';
 import type { InvoiceSnapshot } from '../services/invoices/snapshot';
 import type { DriveStorage } from '../storage/drive-storage';
 import { safeFileName } from '../storage/folders';
@@ -7,15 +8,17 @@ import { fillRequests, insertRowRequests, planTemplate } from './google-docs';
 import { describeTemplateError } from './template';
 
 export type InvoiceLayout = 'invoice_hourly' | 'invoice_fixed';
+export type DocumentLayout = InvoiceLayout | 'act_fop';
 
 export type RenderInput = {
-  layout: InvoiceLayout;
   /** Google Docs template id: the contract's own, else the default for the layout. */
   templateId: string | null;
   folderPath: string;
   fileName: string;
-  snapshot: InvoiceSnapshot;
-};
+} & (
+  | { layout: InvoiceLayout; snapshot: InvoiceSnapshot }
+  | { layout: 'act_fop'; snapshot: ActSnapshot }
+);
 
 export type RenderOutput = {
   /** Editable source kept next to the PDF (the Google Doc copy); null for local renders. */
@@ -35,8 +38,14 @@ export class GoogleDocsRenderer implements DocumentRenderer {
     private readonly storage: DriveStorage,
   ) {}
 
-  async render({ templateId, folderPath, fileName, snapshot }: RenderInput): Promise<RenderOutput> {
-    if (!templateId) throw new Error('No Google Docs template configured for this invoice layout');
+  async render({
+    templateId,
+    folderPath,
+    fileName,
+    snapshot,
+    layout,
+  }: RenderInput): Promise<RenderOutput> {
+    if (!templateId) throw new Error(`No Google Docs template configured for ${layout}`);
     const parent = await this.storage.ensureFolder(folderPath);
     const copy = await this.files.copy({
       fileId: templateId,
@@ -51,7 +60,7 @@ export class GoogleDocsRenderer implements DocumentRenderer {
     const plan = planTemplate(original, snapshot);
     if (plan.isErr()) throw new Error(describeTemplateError(plan.error));
 
-    const insert = insertRowRequests(plan.value, snapshot.lines.length);
+    const insert = insertRowRequests(plan.value, 'lines' in snapshot ? snapshot.lines.length : 0);
     if (insert.length) {
       await this.documents.batchUpdate({ documentId, requestBody: { requests: insert } });
     }
@@ -89,18 +98,34 @@ const escapeHtml = (s: string) =>
  * snapshot, so the issue → file → document flow is exercised end to end.
  */
 export class HtmlRenderer implements DocumentRenderer {
-  render({ layout, fileName, snapshot: s }: RenderInput): Promise<RenderOutput> {
-    const e = escapeHtml;
-    const hourly = layout === 'invoice_hourly';
-    const rows = s.lines
-      .map(
-        (l) =>
-          `<tr><td>${e(l.n)}</td><td>${e(l.description_en)}<br><small>${e(l.description_ua)}</small></td>` +
-          (hourly ? `<td>${e(l.qty)}</td><td>${e(l.price)}</td>` : '') +
-          `<td>${e(l.amount)}</td></tr>`,
-      )
-      .join('');
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${e(fileName)}</title>
+  render(input: RenderInput): Promise<RenderOutput> {
+    const html =
+      input.layout === 'act_fop'
+        ? actHtml(input.fileName, input.snapshot)
+        : invoiceHtml(input.layout, input.fileName, input.snapshot);
+    return Promise.resolve({
+      sourceFileId: null,
+      file: {
+        data: new TextEncoder().encode(html),
+        mimeType: 'text/html',
+        fileName: `${input.fileName}.html`,
+      },
+    });
+  }
+}
+
+function invoiceHtml(layout: InvoiceLayout, fileName: string, s: InvoiceSnapshot): string {
+  const e = escapeHtml;
+  const hourly = layout === 'invoice_hourly';
+  const rows = s.lines
+    .map(
+      (l) =>
+        `<tr><td>${e(l.n)}</td><td>${e(l.description_en)}<br><small>${e(l.description_ua)}</small></td>` +
+        (hourly ? `<td>${e(l.qty)}</td><td>${e(l.price)}</td>` : '') +
+        `<td>${e(l.amount)}</td></tr>`,
+    )
+    .join('');
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${e(fileName)}</title>
 <style>body{font:14px/1.4 sans-serif;max-width:800px;margin:2rem auto}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:4px;text-align:left}.draft{color:#b00}</style></head><body>
 <p class="draft">Local render (no Google template)</p>
 <h1>Invoice / Рахунок № ${e(s.doc.number)}</h1>
@@ -112,13 +137,20 @@ export class HtmlRenderer implements DocumentRenderer {
 <p><b>Total: ${e(s.total.amount)} ${e(s.total.currency)}</b><br>${e(s.total.words_en)}<br>${e(s.total.words_ua)}</p>
 <p>Due date / Оплатити до: ${e(s.doc.due_date)}</p>
 </body></html>`;
-    return Promise.resolve({
-      sourceFileId: null,
-      file: {
-        data: new TextEncoder().encode(html),
-        mimeType: 'text/html',
-        fileName: `${fileName}.html`,
-      },
-    });
-  }
+  return html;
+}
+
+function actHtml(fileName: string, s: ActSnapshot): string {
+  const e = escapeHtml;
+  return `<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>${e(fileName)}</title>
+<style>body{font:14px/1.5 serif;max-width:760px;margin:2rem auto}.draft{color:#b00}td{vertical-align:top;padding-right:2rem}</style></head><body>
+<p class="draft">Локальний рендер (без шаблону Google)</p>
+<h1>Акт прийому-передачі № ${e(s.doc.number)}</h1>
+<p>за Договором № ${e(s.contract.number)}${s.contract.date ? ` від ${e(s.contract.date)}` : ''}</p>
+<p>${e(s.doc.place_ua)}, ${e(s.doc.date_ua)} р.</p>
+<p>${e(s.payee.name_ua)} (Виконавець) та ${e(s.company.name_ua)} в особі ${e(s.company.director_ua)} (Замовник) склали цей акт про те, що в період ${e(s.period.text_ua)} Виконавець надав послуги з розробки програмного забезпечення.</p>
+<p>Вартість послуг: <b>${e(s.total.amount)} грн</b> (${e(s.total.words_ua)}), без ПДВ.</p>
+<table><tr><td><b>Виконавець</b><br>${e(s.payee.name_ua)}<br>ІПН: ${e(s.payee.tax_id)}<br>${e(s.payee.address_ua)}<br>IBAN: ${e(s.payee.iban)}<br>${e(s.payee.bank)}</td>
+<td><b>Замовник</b><br>${e(s.company.name_ua)}<br>ЄДРПОУ: ${e(s.company.legal_code)}<br>${e(s.company.address_ua)}<br>${e(s.company.bank_ua)}</td></tr></table>
+</body></html>`;
 }

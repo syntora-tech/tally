@@ -1,7 +1,7 @@
 import type { DbTransaction } from '@tally/db';
 import { job } from '@tally/db/schema';
 
-export type JobKind = 'render_invoice';
+export type JobKind = 'render_invoice' | 'render_act';
 
 export type NewJob = { kind: JobKind; payload: Record<string, unknown>; dedupeKey?: string };
 

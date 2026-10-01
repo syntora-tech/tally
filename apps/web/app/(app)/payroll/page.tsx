@@ -68,6 +68,9 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           </p>
         </div>
         <nav className="flex flex-wrap gap-2" aria-label="Період">
+          <Button size="sm" variant="secondary" render={<Link href="/payroll/acts" />}>
+            Реєстр актів
+          </Button>
           <Button
             size="sm"
             variant={periodId ? 'outline' : 'default'}

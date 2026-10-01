@@ -26,6 +26,7 @@ import {
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
+import { ensureMonthlyActDraft } from '../acts';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
@@ -344,6 +345,7 @@ export const payItem = defineService({
         amount: input.amount,
         currency: fiat ? 'UAH' : acc.currency,
       });
-      return ok({ id: item.item.id, transactionId: booked.id });
+      const act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
+      return ok({ id: item.item.id, transactionId: booked.id, actId: act?.id ?? null });
     }),
 });
