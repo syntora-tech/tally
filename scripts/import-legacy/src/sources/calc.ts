@@ -37,6 +37,14 @@ export type CalcRow = {
   workPeriod: string;
   exchangeRate: string | null;
   workHoursInMonth: string | null;
+  /** O: salary in USD as the sheet computed it. */
+  currentPayment: string | null;
+  /** P: what was actually paid in UAH (hides manual corrections, A4). */
+  uahPaid: string | null;
+  /** S: Vchasno / Tronscan link of the payout. */
+  payoutLink: string | null;
+  /** T: "yes" when paid. */
+  paid: boolean;
 };
 
 export type CalcParse = { rows: CalcRow[]; problems: string[] };
@@ -54,8 +62,12 @@ const COL = {
   invoiceTo: 11,
   payType: 12,
   fixSalary: 13,
+  currentPayment: 14,
+  uahPaid: 15,
   workPeriod: 16,
   prepayment: 17,
+  payoutLink: 18,
+  paid: 19,
   exchangeRate: 21,
   workHours: 22,
 } as const;
@@ -102,6 +114,12 @@ function parseSheet(sheet: Sheet, month: LocalDate, problems: string[]): CalcRow
       workPeriod,
       exchangeRate,
       workHoursInMonth,
+      currentPayment: decimal(at(COL.currentPayment).v),
+      uahPaid: decimal(at(COL.uahPaid).v),
+      payoutLink:
+        at(COL.payoutLink).link ??
+        (/^https?:\/\//.test(text(at(COL.payoutLink).v)) ? text(at(COL.payoutLink).v) : null),
+      paid: text(at(COL.paid).v).toLowerCase() === 'yes',
     });
   }
   return rows;

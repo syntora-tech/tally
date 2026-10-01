@@ -41,6 +41,8 @@ export const aliasesSchema = z.object({
       defaultFor: nameList,
     }),
   ),
+  /** Contractors of the acts registry without an act sheet: their person (spec 8.1, Q7). */
+  actContractors: z.record(z.string(), z.object({ person: z.string().optional() })).default({}),
   internalPartners: z.array(z.string()).default(['Syntora.Tech']),
   /** A5: rows that are company expenses, not people. */
   expenseNames: z.array(z.string()).default(['Services', 'Red Jumpers']),

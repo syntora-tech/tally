@@ -1,6 +1,7 @@
 import type { Db, DbTransaction } from '@tally/db';
 import {
   account,
+  adjustment,
   assignment,
   billingTerms,
   category,
@@ -12,16 +13,18 @@ import {
   fxRate,
   invoice,
   invoiceLine,
+  numberSequence,
   payee,
   payTerms,
   period,
   person,
   posting,
+  supplierAct,
   timesheet,
   transaction,
 } from '@tally/db/schema';
 import { parseDecimal } from '@tally/domain';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { Model } from './model';
 import type { LedgerModel } from './sources/ledger';
@@ -279,7 +282,7 @@ export async function writeModel(
           document,
           'document',
           d.ref,
-          { type: 'cv', title: d.title, url: d.url },
+          { type: d.type ?? 'cv', title: d.title, url: d.url },
           stats,
         );
         await tx
@@ -338,6 +341,8 @@ export async function writeModel(
         st.inserted++;
       }
 
+      await writeAdjustments(tx, model, personIds, periodIds, stats);
+      if (model.registry) await writeRegistry(tx, model.registry, payeeIds, contractIds, stats);
       if (options.ledger) await writeLedger(tx, options.ledger, stats);
 
       if (options.dryRun) throw new DryRunRollback();
@@ -420,5 +425,113 @@ async function writeLedger(tx: DbTransaction, ledger: LedgerModel, stats: WriteS
       .returning({ id: fxRate.id });
     if (inserted.length) rs.inserted++;
     else rs.unchanged++;
+  }
+}
+
+/** Legacy payout differences of the imported months (A-047); closed periods are left alone (I6). */
+async function writeAdjustments(
+  tx: DbTransaction,
+  model: Model,
+  personIds: Map<string, string>,
+  periodIds: Map<string, string>,
+  stats: WriteStats,
+) {
+  const st = statFor(stats, 'adjustment');
+  for (const a of model.adjustments) {
+    const periodId = periodIds.get(a.month);
+    const personId = personIds.get(a.personKey);
+    if (!periodId || !personId) continue;
+    const [p] = await tx
+      .select({ status: period.status })
+      .from(period)
+      .where(eq(period.id, periodId));
+    const [existing] = await tx
+      .select({ id: adjustment.id })
+      .from(adjustment)
+      .where(eq(adjustment.legacyRef, a.ref));
+    if (existing || p?.status === 'closed') {
+      st.unchanged++;
+      continue;
+    }
+    await tx.insert(adjustment).values({
+      legacyRef: a.ref,
+      periodId,
+      personId,
+      payoutMethod: 'fiat',
+      kind: 'correction',
+      amount: a.amount,
+      currency: 'UAH',
+      reason: a.reason,
+    });
+    st.inserted++;
+  }
+}
+
+/**
+ * Acts registry: act number sequences (created, or moved forward only — they never decrease),
+ * the contracts' sequence keys, and legacy acts inserted once (I1).
+ */
+async function writeRegistry(
+  tx: DbTransaction,
+  registry: NonNullable<Model['registry']>,
+  payeeIds: Map<string, string>,
+  contractIds: Map<string, string>,
+  stats: WriteStats,
+) {
+  const ss = statFor(stats, 'number_sequence');
+  for (const seq of registry.sequences) {
+    const [existing] = await tx
+      .select()
+      .from(numberSequence)
+      .where(eq(numberSequence.key, seq.key));
+    if (!existing) {
+      await tx.insert(numberSequence).values(seq);
+      ss.inserted++;
+    } else if (existing.nextValue < seq.nextValue) {
+      await tx
+        .update(numberSequence)
+        .set({ nextValue: seq.nextValue })
+        .where(eq(numberSequence.key, seq.key));
+      ss.updated++;
+    } else {
+      ss.unchanged++;
+    }
+    const number = seq.key.replace(/^act:/, '');
+    await tx
+      .update(contract)
+      .set({ numberSequenceKey: seq.key })
+      .where(
+        and(
+          eq(contract.number, number),
+          eq(contract.kind, 'fop'),
+          isNull(contract.numberSequenceKey),
+        ),
+      );
+  }
+
+  const st = statFor(stats, 'supplier_act');
+  for (const a of registry.acts) {
+    const [existing] = await tx
+      .select({ id: supplierAct.id })
+      .from(supplierAct)
+      .where(eq(supplierAct.legacyRef, a.ref));
+    if (existing) {
+      st.unchanged++;
+      continue;
+    }
+    await tx.insert(supplierAct).values({
+      legacyRef: a.ref,
+      isLegacy: true,
+      contractId: need(contractIds, a.contractRef, 'contract') ?? '',
+      payeeId: need(payeeIds, a.payeeKey, 'payee') ?? '',
+      type: 'monthly',
+      number: a.number,
+      actDate: a.actDate,
+      periodFrom: a.periodFrom,
+      periodTo: a.periodTo,
+      amountUah: a.amountUah,
+      status: 'issued',
+    });
+    st.inserted++;
   }
 }

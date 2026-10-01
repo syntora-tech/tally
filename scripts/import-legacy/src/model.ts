@@ -12,6 +12,8 @@ import type { BenchRow } from './sources/bench';
 import type { CalcRow } from './sources/calc';
 import { MONTH_SHEETS } from './sources/calc';
 import type { ActHeader, InvoiceHeader } from './sources/headers';
+import { buildRegistry } from './registry';
+import type { RegistryAct } from './sources/acts';
 
 export type Anomaly = { code: string; ref: string; message: string };
 
@@ -62,6 +64,26 @@ export type ContractRec = {
   clientKey: string | null;
   payeeKey: string | null;
   currency: string;
+  actDateRule?: { type: 'manual' };
+};
+
+/** UAH difference between what was paid (P) and the computed salary (O × rate), A4. */
+export type AdjustmentRec = {
+  ref: string;
+  month: LocalDate;
+  personKey: string;
+  amount: string;
+  reason: string;
+};
+
+export type PayoutNote = {
+  ref: string;
+  month: LocalDate;
+  personKey: string;
+  uah: string | null;
+  paid: boolean;
+  link: string | null;
+  method: 'fiat' | 'crypto';
 };
 
 export type AssignmentRec = {
@@ -110,7 +132,13 @@ export type CompanyRec = {
   bankDetailsEn: string | null;
 };
 
-export type DocumentRec = { ref: string; title: string; url: string | null; personKey: string };
+export type DocumentRec = {
+  ref: string;
+  type?: 'cv' | 'other';
+  title: string;
+  url: string | null;
+  personKey: string;
+};
 
 export type Model = {
   company: CompanyRec | null;
@@ -126,6 +154,9 @@ export type Model = {
   periods: PeriodRec[];
   timesheets: TimesheetRec[];
   invoices: InvoiceRec[];
+  adjustments: AdjustmentRec[];
+  payouts: PayoutNote[];
+  registry: ReturnType<typeof buildRegistry> | null;
   anomalies: Anomaly[];
   unmapped: { people: string[]; partners: string[]; actSheets: string[]; invoiceSheets: string[] };
 };
@@ -168,6 +199,7 @@ export type Sources = {
   calc: CalcRow[];
   invoices: InvoiceHeader[];
   acts: ActHeader[];
+  registry?: RegistryAct[];
 };
 
 const LAST_MONTH = MONTH_SHEETS.Current ?? '2026-09-01';
@@ -487,6 +519,8 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
   // Hours only where an invoice line exists (billing Fix/Hours and h > 0), for the chosen months.
   const periods: PeriodRec[] = [];
   const timesheets: TimesheetRec[] = [];
+  const adjustments: AdjustmentRec[] = [];
+  const payouts: PayoutNote[] = [];
   for (const month of [...hoursMonths].sort()) {
     const rows = src.calc.filter((r) => r.month === month);
     const first = rows[0];
@@ -513,6 +547,8 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
     }
     for (const r of rows) {
       const assignmentRef = assignmentOfRow.get(r.ref);
+      const personKey = assignments.find((a) => a.ref === assignmentRef)?.personKey;
+      if (personKey) legacyPayout(r, month, personKey, adjustments, payouts, documents, anomalies);
       const billable = ['fix', 'hours'].includes(r.invoiceType.toLowerCase());
       if (!assignmentRef || !billable || !r.hours || toDecimal(r.hours).lte(0)) continue;
       const ref = `${assignmentRef}:hours:${month}`;
@@ -526,6 +562,16 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
       }
       timesheets.push({ ref, assignmentRef, month, hours: r.hours });
     }
+  }
+
+  const registry = src.registry?.length
+    ? buildRegistry(src.registry, { payees, contracts: [...contracts.values()] }, aliases)
+    : null;
+  if (registry) {
+    anomalies.push(...registry.anomalies);
+    payees.push(...registry.payees);
+    for (const c of registry.contracts) contracts.set(c.ref, c);
+    defaultPayees.push(...registry.defaultPayees);
   }
 
   const supplier = src.invoices.find((i) => i.supplier.nameEn)?.supplier;
@@ -555,6 +601,9 @@ export function buildModel(src: Sources, aliases: Aliases, options: BuildOptions
     periods,
     timesheets,
     invoices: invoiceRecs,
+    adjustments,
+    payouts,
+    registry,
     anomalies,
     unmapped: {
       people: [...unmapped.people].sort(),
@@ -725,4 +774,59 @@ function legacyInvoice(
     total,
     lines,
   };
+}
+
+/**
+ * Legacy payouts of the imported months (A-047): the UAH paid (P) minus the computed salary
+ * (O × rate) becomes an adjustment "legacy: уточнити"; S links become documents; T is reported.
+ */
+function legacyPayout(
+  r: CalcRow,
+  month: LocalDate,
+  personKey: string,
+  adjustments: AdjustmentRec[],
+  payouts: PayoutNote[],
+  documents: DocumentRec[],
+  anomalies: Anomaly[],
+) {
+  const method = /crypto/i.test(r.prepayment) ? 'crypto' : 'fiat';
+  if (r.currentPayment || r.uahPaid) {
+    payouts.push({
+      ref: r.ref,
+      month,
+      personKey,
+      uah: r.uahPaid,
+      paid: r.paid,
+      link: r.payoutLink,
+      method,
+    });
+  }
+  if (r.payoutLink) {
+    documents.push({
+      ref: `${r.ref}:payout`,
+      type: 'other',
+      title: `Виплата ${month.slice(0, 7)} — ${r.employee}`,
+      url: r.payoutLink,
+      personKey,
+    });
+  }
+  if (!r.currentPayment || !r.uahPaid || !r.exchangeRate) return;
+  const computed = toDecimal(r.currentPayment).times(r.exchangeRate).toDecimalPlaces(2);
+  const diff = toDecimal(r.uahPaid).minus(computed);
+  if (diff.abs().lt('0.01')) return;
+  if (method === 'crypto') {
+    anomalies.push({
+      code: 'legacy_crypto_difference',
+      ref: r.ref,
+      message: `Крипто-виплата відрізняється від розрахунку на ${diff.toFixed(2)} UAH — коригування не створено`,
+    });
+    return;
+  }
+  adjustments.push({
+    ref: `${r.ref}:adjustment`,
+    month,
+    personKey,
+    amount: diff.toFixed(2),
+    reason: 'legacy: уточнити',
+  });
 }

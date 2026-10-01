@@ -18,6 +18,9 @@ const TABLE_LABELS: Record<string, string> = {
   account: 'Рахунки Ledger',
   transaction: 'Транзакції Ledger',
   fx_rate: 'Курси',
+  adjustment: 'Коригування виплат (legacy)',
+  number_sequence: 'Нумерація актів',
+  supplier_act: 'Акти ФОП (legacy)',
 };
 
 /** import-report.md (spec 8): counts, unmapped names, anomalies with source rows, assignments. */
@@ -106,6 +109,22 @@ export function renderReport(input: {
     for (const i of model.invoices)
       out.push(
         `| ${i.number} | ${i.clientKey} | ${i.issueDate} | ${i.total} ${i.currency} | ${i.lines.length} |`,
+      );
+    out.push('');
+  }
+
+  if (model.payouts.length) {
+    out.push(
+      '## Виплати імпортованих місяців',
+      '',
+      'Виплат цих місяців немає в Ledger (дані до 20.02.2026), тому «виплачено» не записується — після імпорту виписок (етап 4) розподіліть транзакції на виплати.',
+      '',
+      '| Місяць | Людина | Спосіб | UAH (P) | Виплачено (T) | Посилання (S) |',
+      '| --- | --- | --- | --- | --- | --- |',
+    );
+    for (const p of model.payouts)
+      out.push(
+        `| ${p.month.slice(0, 7)} | ${p.personKey} | ${p.method} | ${p.uah ?? '—'} | ${p.paid ? 'так' : 'ні'} | ${p.link ? 'є' : '—'} |`,
       );
     out.push('');
   }

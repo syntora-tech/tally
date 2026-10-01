@@ -16,6 +16,7 @@ import { renderReport } from './report';
 import { parseBench } from './sources/bench';
 import { MONTH_SHEETS, parseCalc } from './sources/calc';
 import { parseHeaders } from './sources/headers';
+import { parseActRegistry } from './sources/acts';
 import { parseLedger } from './sources/ledger';
 import { loadBooks } from './workbook';
 import { writeModel } from './writer';
@@ -68,7 +69,8 @@ async function main(): Promise<number> {
     : { rows: [], problems: ['Немає аркуша Bench'] };
   const calc = parseCalc(books.calc);
   const { invoices, acts } = parseHeaders(books.calc);
-  const sources = { bench: bench.rows, calc: calc.rows, invoices, acts };
+  const registry = books.acts ? parseActRegistry(books.acts) : { acts: [], problems: [] };
+  const sources = { bench: bench.rows, calc: calc.rows, invoices, acts, registry: registry.acts };
 
   const draftPath = join(dir, 'aliases.draft.json');
   if (values['write-aliases-draft']) {
@@ -95,7 +97,7 @@ async function main(): Promise<number> {
       );
   const model = buildModel(sources, aliases, { hoursMonths: months, legacyInvoiceDate });
   const ledger = books.ledger ? parseLedger(books.ledger) : null;
-  const problems = [...bench.problems, ...calc.problems];
+  const problems = [...bench.problems, ...calc.problems, ...registry.problems];
   const unmapped = Object.values(model.unmapped).flat();
 
   // A real import needs every name mapped; dry-run still validates everything else.
