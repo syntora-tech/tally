@@ -10,10 +10,12 @@ import {
   text,
   unique,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, rolePolicies } from './_common';
 import { accountKind, fxSource, txType } from './enums';
 import { invoice } from './invoices';
+import { payrollItem } from './payroll';
 
 /** Bank account, wallet or cash box (spec 6.7); balance = opening + Σ postings. */
 export const account = pgTable(
@@ -144,13 +146,15 @@ export const allocation = pgTable(
     amount: numeric({ precision: 20, scale: 8 }).notNull(),
     currency: text().notNull(),
     invoiceId: uuid().references(() => invoice.id),
+    payrollItemId: uuid().references((): AnyPgColumn => payrollItem.id),
     fxRate: numeric({ precision: 18, scale: 6 }),
     fxSource: fxSource(),
   },
   (t) => [
     unique('allocation_legacy_ref_key').on(t.legacyRef),
     check('allocation_amount_check', sql`${t.amount} > 0`),
-    check('allocation_target_check', sql`num_nonnulls(${t.invoiceId}) = 1`),
+    check('allocation_target_check', sql`num_nonnulls(${t.invoiceId}, ${t.payrollItemId}) = 1`),
+    index('allocation_payroll_item_idx').on(t.payrollItemId),
     index('allocation_transaction_idx').on(t.transactionId),
     index('allocation_invoice_idx').on(t.invoiceId),
     ...rolePolicies('allocation', { read: 'finance', write: 'finance' }),

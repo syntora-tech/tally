@@ -98,6 +98,10 @@ export function mapDbError(error: unknown): ServiceError | null {
       );
     case 'TL055':
       return serviceError('conflict', 'Оплата інвойсу змінюється лише через розподіл транзакцій');
+    case 'TL032':
+      return serviceError('conflict', 'У періоді вже є виплати — відкрити його знову не можна');
+    case 'TL056':
+      return serviceError('validation_error', 'Спершу вкажіть курс виплати');
     case 'TL020':
       return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
     case 'TL021':

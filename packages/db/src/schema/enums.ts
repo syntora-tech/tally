@@ -36,3 +36,24 @@ export const txType = pgEnum('tx_type', [
 export type TxType = (typeof txType.enumValues)[number];
 export const accountKind = pgEnum('account_kind', ['bank', 'crypto', 'cash']);
 export const fxSource = pgEnum('fx_source', ['bank_actual', 'nbu', 'manual']);
+export const payrollItemStatus = pgEnum('payroll_item_status', [
+  'draft',
+  'partially_payable',
+  'payable',
+  'partially_paid',
+  'paid',
+]);
+export const payrollLineStatus = pgEnum('payroll_line_status', [
+  'accrued',
+  'awaiting_client',
+  'payable',
+  'paid',
+]);
+export const fundingSource = pgEnum('funding_source', ['client', 'company']);
+export const adjustmentKind = pgEnum('adjustment_kind', [
+  'bonus',
+  'deduction',
+  'trip_reimbursement',
+  'correction',
+  'other',
+]);
