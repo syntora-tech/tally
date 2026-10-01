@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
 import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
+import { allocateToInvoice, removeAllocation } from '../services/allocations';
 import { attachSignedInvoice } from '../services/documents/live';
 import {
   issueInvoice,
@@ -117,4 +118,31 @@ export async function regenerateInvoicePdfAction(
   if (result.isErr()) return { ok: false, error: result.error };
   runJobsAfterResponse();
   return done(result.value.id);
+}
+
+export async function allocatePaymentAction(
+  _prev: InvoiceFormState,
+  formData: FormData,
+): Promise<InvoiceFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await allocateToInvoice.run(ctx, {
+    ...input,
+    amount: typeof input.amount === 'string' ? input.amount.replace(',', '.') : input.amount,
+  });
+  if (result.isErr()) return { ok: false, error: result.error };
+  revalidatePath('/ledger');
+  return done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
+}
+
+export async function removeAllocationAction(
+  _prev: InvoiceFormState,
+  formData: FormData,
+): Promise<InvoiceFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await removeAllocation.run(ctx, input);
+  if (result.isErr()) return { ok: false, error: result.error };
+  revalidatePath('/ledger');
+  return done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
 }

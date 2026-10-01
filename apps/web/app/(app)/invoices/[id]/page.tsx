@@ -20,11 +20,14 @@ import { INVOICE_STATUS_LABELS } from '@/lib/labels';
 import { monthTitle } from '@/lib/months';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
+import { invoiceAllocations, paymentCandidates } from '@/server/services/allocations';
 import { getInvoice, invoiceRenderStatus, issuePreview } from '@/server/services/invoices';
 import {
+  AllocatePaymentForm,
   InvoiceEditForm,
   IssueForm,
   RegeneratePdfForm,
+  RemoveAllocationButton,
   ReissueForm,
   SignedCopyForm,
   VoidForm,
@@ -73,6 +76,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     render?.revision === inv.revision &&
     (render.status === 'queued' || render.status === 'running');
   const latestSigned = signed[0];
+  const payable = ['issued', 'partially_paid', 'paid'].includes(inv.status);
+  const allocations = payable
+    ? (await invoiceAllocations.run(ctx, { invoiceId: id })).unwrapOr([])
+    : [];
+  const candidates =
+    payable && inv.status !== 'paid'
+      ? (await paymentCandidates.run(ctx, { invoiceId: id })).unwrapOr([])
+      : [];
+  const outstanding = toDecimal(inv.total).minus(inv.paidAmount).toFixed(2);
   const signedOutdated = latestSigned && (latestSigned.sourceRevision ?? 0) < inv.revision;
 
   return (
@@ -268,6 +280,46 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               </Alert>
             )}
             <SignedCopyForm invoiceId={inv.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {payable && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Оплати</CardTitle>
+            <CardDescription>
+              Залишок до сплати: {formatAmount(outstanding, inv.currency)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {allocations.length > 0 && (
+              <ul className="flex flex-col gap-1 text-sm">
+                {allocations.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center gap-2">
+                    <span className="w-24 tabular-nums">
+                      {formatUaDate(a.occurredOn as LocalDate)}
+                    </span>
+                    <span className="font-medium">{formatAmount(a.amount, a.currency)}</span>
+                    {a.fxRate && <span className="text-muted-foreground">курс {a.fxRate}</span>}
+                    <span className="text-muted-foreground">{a.counterparty}</span>
+                    <RemoveAllocationButton id={a.id} invoiceId={inv.id} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {inv.status !== 'paid' && (
+              <AllocatePaymentForm
+                invoiceId={inv.id}
+                outstanding={outstanding}
+                candidates={candidates.map((c) => ({
+                  id: c.id,
+                  remaining: c.remaining,
+                  needsRate: c.needsRate,
+                  label: `${formatUaDate(c.occurredOn as LocalDate)} · ${formatAmount(c.remaining, c.currency)} вільно · ${c.accountName}${c.counterparty ? ` · ${c.counterparty}` : ''}`,
+                }))}
+              />
+            )}
           </CardContent>
         </Card>
       )}

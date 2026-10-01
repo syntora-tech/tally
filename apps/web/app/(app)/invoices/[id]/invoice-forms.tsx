@@ -17,10 +17,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  allocatePaymentAction,
   attachSignedInvoiceAction,
   issueInvoiceAction,
   issuePreviewAction,
   regenerateInvoicePdfAction,
+  removeAllocationAction,
   reissueInvoiceAction,
   saveInvoiceAction,
   voidInvoiceAction,
@@ -344,6 +346,100 @@ export function RegeneratePdfForm({ invoiceId }: { invoiceId: string }) {
         </Button>
       </div>
       <ErrorAlert message={error?.message} />
+    </form>
+  );
+}
+
+export type PaymentCandidate = {
+  id: string;
+  label: string;
+  remaining: string;
+  needsRate: boolean;
+};
+
+/** Links a revenue transaction to this invoice (6.5); the DB keeps the totals (I7). */
+export function AllocatePaymentForm(props: {
+  invoiceId: string;
+  outstanding: string;
+  candidates: PaymentCandidate[];
+}) {
+  const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
+    allocatePaymentAction,
+    null,
+  );
+  const error = useResult(state, 'Оплату зараховано');
+  const [selected, setSelected] = useState('');
+  const candidate = props.candidates.find((c) => c.id === selected);
+  if (props.candidates.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Немає нерозподілених надходжень — спершу додайте дохід у Ledger
+      </p>
+    );
+  }
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="invoiceId" value={props.invoiceId} />
+      <FormField label="Надходження" htmlFor="pay-tx" error={error?.fieldErrors?.transactionId}>
+        <select
+          id="pay-tx"
+          name="transactionId"
+          value={selected}
+          onChange={(e) => {
+            setSelected(e.target.value);
+          }}
+          className="h-9 max-w-md rounded-md border border-input bg-transparent px-2.5 text-sm"
+        >
+          <option value="">Оберіть транзакцію</option>
+          {props.candidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </FormField>
+      <FormField
+        label="Сума в валюті інвойсу"
+        htmlFor="pay-amount"
+        error={error?.fieldErrors?.amount}
+      >
+        <Input
+          id="pay-amount"
+          name="amount"
+          key={selected}
+          inputMode="decimal"
+          defaultValue={props.outstanding}
+          className="w-36"
+        />
+      </FormField>
+      {candidate?.needsRate && (
+        <FormField label="Курс (одиниць надходження за 1)" htmlFor="pay-rate">
+          <Input id="pay-rate" name="fxRate" inputMode="decimal" required className="w-36" />
+        </FormField>
+      )}
+      <Button type="submit" disabled={pending || !selected}>
+        Зарахувати оплату
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function RemoveAllocationButton({ id, invoiceId }: { id: string; invoiceId: string }) {
+  const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
+    removeAllocationAction,
+    null,
+  );
+  useResult(state, 'Розподіл знято');
+  return (
+    <form action={action}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="invoiceId" value={invoiceId} />
+      <Button type="submit" size="sm" variant="ghost" disabled={pending}>
+        Зняти
+      </Button>
     </form>
   );
 }
