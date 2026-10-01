@@ -1,0 +1,5721 @@
+{
+  "id": "58153777-6812-4cac-8330-f768624441f8",
+  "prevId": "58b4d971-3ec4-4997-a74a-c12f4e634f7b",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.app_user": {
+      "name": "app_user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "app_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'viewer'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {
+        "app_user_email_key": {
+          "name": "app_user_email_key",
+          "columns": [
+            {
+              "expression": "lower(\"email\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "app_user_id_fkey": {
+          "name": "app_user_id_fkey",
+          "tableFrom": "app_user",
+          "columnsFrom": [
+            "id"
+          ],
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "app_user_select_self_or_owner": {
+          "name": "app_user_select_self_or_owner",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"app_user\".\"id\" = (select auth.uid()) or (select public.current_app_role()) = 'owner'"
+        },
+        "app_user_insert_owner": {
+          "name": "app_user_insert_owner",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "app_user_update_owner": {
+          "name": "app_user_update_owner",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'",
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "app_user_delete_owner": {
+          "name": "app_user_delete_owner",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "table_name": {
+          "name": "table_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "row_id": {
+          "name": "row_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "old": {
+          "name": "old",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new": {
+          "name": "new",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor": {
+          "name": "actor",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_label": {
+          "name": "actor_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "via": {
+          "name": "via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "audit_log_row_idx": {
+          "name": "audit_log_row_idx",
+          "columns": [
+            {
+              "expression": "table_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "row_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "audit_log_select_owner_finance": {
+          "name": "audit_log_select_owner_finance",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "audit_log_action_check": {
+          "name": "audit_log_action_check",
+          "value": "\"audit_log\".\"action\" in ('INSERT', 'UPDATE', 'DELETE')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.client": {
+      "name": "client",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legal_name": {
+          "name": "legal_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "short_name": {
+          "name": "short_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_details": {
+          "name": "bank_details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contacts": {
+          "name": "contacts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "default_currency": {
+          "name": "default_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "zoho_id": {
+          "name": "zoho_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "client_zoho_id_key": {
+          "name": "client_zoho_id_key",
+          "columns": [
+            {
+              "expression": "zoho_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"client\".\"zoho_id\" is not null",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "client_legacy_ref_key": {
+          "name": "client_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "client_select": {
+          "name": "client_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) is not null"
+        },
+        "client_insert": {
+          "name": "client_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "client_update": {
+          "name": "client_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "client_delete": {
+          "name": "client_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "client_default_currency_check": {
+          "name": "client_default_currency_check",
+          "value": "\"client\".\"default_currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.company": {
+      "name": "company",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "name_en": {
+          "name": "name_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_ua": {
+          "name": "name_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legal_code": {
+          "name": "legal_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address_en": {
+          "name": "address_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address_ua": {
+          "name": "address_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "director_ua": {
+          "name": "director_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "director_en": {
+          "name": "director_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_details_en": {
+          "name": "bank_details_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_details_ua": {
+          "name": "bank_details_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "place_en": {
+          "name": "place_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Odesa'"
+        },
+        "place_ua": {
+          "name": "place_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'м. Одеса'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "company_select": {
+          "name": "company_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "company_insert": {
+          "name": "company_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "company_update": {
+          "name": "company_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'",
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "company_delete": {
+          "name": "company_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payee": {
+      "name": "payee",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legal_name_ua": {
+          "name": "legal_name_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "legal_name_en": {
+          "name": "legal_name_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_id": {
+          "name": "tax_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "edr_record": {
+          "name": "edr_record",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "edr_date": {
+          "name": "edr_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address_ua": {
+          "name": "address_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "iban": {
+          "name": "iban",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_name": {
+          "name": "bank_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wallet_address": {
+          "name": "wallet_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wallet_network": {
+          "name": "wallet_network",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payee_person_id_person_id_fk": {
+          "name": "payee_person_id_person_id_fk",
+          "tableFrom": "payee",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "tableTo": "person",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payee_legacy_ref_key": {
+          "name": "payee_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "payee_select": {
+          "name": "payee_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payee_insert": {
+          "name": "payee_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payee_update": {
+          "name": "payee_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payee_delete": {
+          "name": "payee_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "payee_kind_check": {
+          "name": "payee_kind_check",
+          "value": "\"payee\".\"kind\" in ('fop', 'crypto', 'other')"
+        },
+        "payee_name_check": {
+          "name": "payee_name_check",
+          "value": "num_nonnulls(\"payee\".\"legal_name_ua\", \"payee\".\"legal_name_en\") >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.person": {
+      "name": "person",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seniority": {
+          "name": "seniority",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "stack": {
+          "name": "stack",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "domains": {
+          "name": "domains",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "market_rate_usd": {
+          "name": "market_rate_usd",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "allocation": {
+          "name": "allocation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "availability_from": {
+          "name": "availability_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_owner": {
+          "name": "contact_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "default_payee_id": {
+          "name": "default_payee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "person_stack_idx": {
+          "name": "person_stack_idx",
+          "columns": [
+            {
+              "expression": "stack",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "gin",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "person_default_payee_id_payee_id_fk": {
+          "name": "person_default_payee_id_payee_id_fk",
+          "tableFrom": "person",
+          "columnsFrom": [
+            "default_payee_id"
+          ],
+          "tableTo": "payee",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "person_legacy_ref_key": {
+          "name": "person_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "person_select": {
+          "name": "person_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) is not null"
+        },
+        "person_insert": {
+          "name": "person_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "person_update": {
+          "name": "person_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "person_delete": {
+          "name": "person_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "person_allocation_check": {
+          "name": "person_allocation_check",
+          "value": "\"person\".\"allocation\" in ('full_time', 'part_time')"
+        },
+        "person_status_check": {
+          "name": "person_status_check",
+          "value": "\"person\".\"status\" in ('active', 'bench', 'inactive')"
+        },
+        "person_market_rate_check": {
+          "name": "person_market_rate_check",
+          "value": "\"person\".\"market_rate_usd\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.assignment": {
+      "name": "assignment",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contract_id": {
+          "name": "contract_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_internal": {
+          "name": "is_internal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "sow_ref": {
+          "name": "sow_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role_title": {
+          "name": "role_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fte": {
+          "name": "fte",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1'"
+        },
+        "starts_on": {
+          "name": "starts_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ends_on": {
+          "name": "ends_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "assignment_person_idx": {
+          "name": "assignment_person_idx",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "assignment_contract_idx": {
+          "name": "assignment_contract_idx",
+          "columns": [
+            {
+              "expression": "contract_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "assignment_person_id_person_id_fk": {
+          "name": "assignment_person_id_person_id_fk",
+          "tableFrom": "assignment",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "tableTo": "person",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "assignment_contract_id_contract_id_fk": {
+          "name": "assignment_contract_id_contract_id_fk",
+          "tableFrom": "assignment",
+          "columnsFrom": [
+            "contract_id"
+          ],
+          "tableTo": "contract",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "assignment_legacy_ref_key": {
+          "name": "assignment_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "assignment_select": {
+          "name": "assignment_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "assignment_insert": {
+          "name": "assignment_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "assignment_update": {
+          "name": "assignment_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "assignment_delete": {
+          "name": "assignment_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "assignment_contract_check": {
+          "name": "assignment_contract_check",
+          "value": "\"assignment\".\"is_internal\" or \"assignment\".\"contract_id\" is not null"
+        },
+        "assignment_fte_check": {
+          "name": "assignment_fte_check",
+          "value": "\"assignment\".\"fte\" > 0 and \"assignment\".\"fte\" <= 1"
+        },
+        "assignment_dates_check": {
+          "name": "assignment_dates_check",
+          "value": "\"assignment\".\"ends_on\" is null or \"assignment\".\"ends_on\" >= \"assignment\".\"starts_on\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.billing_terms": {
+      "name": "billing_terms",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "billing_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "proration_policy": {
+          "name": "proration_policy",
+          "type": "proration_policy",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'full_month'"
+        },
+        "invoice_channel": {
+          "name": "invoice_channel",
+          "type": "payout_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fiat'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "billing_terms_assignment_id_assignment_id_fk": {
+          "name": "billing_terms_assignment_id_assignment_id_fk",
+          "tableFrom": "billing_terms",
+          "columnsFrom": [
+            "assignment_id"
+          ],
+          "tableTo": "assignment",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "billing_terms_legacy_ref_key": {
+          "name": "billing_terms_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "billing_terms_version_key": {
+          "name": "billing_terms_version_key",
+          "columns": [
+            "assignment_id",
+            "valid_from"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "billing_terms_select": {
+          "name": "billing_terms_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "billing_terms_insert": {
+          "name": "billing_terms_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "billing_terms_update": {
+          "name": "billing_terms_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "billing_terms_delete": {
+          "name": "billing_terms_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "billing_terms_valid_from_check": {
+          "name": "billing_terms_valid_from_check",
+          "value": "extract(day from valid_from) = 1"
+        },
+        "billing_terms_rate_check": {
+          "name": "billing_terms_rate_check",
+          "value": "\"billing_terms\".\"rate\" >= 0"
+        },
+        "billing_terms_currency_check": {
+          "name": "billing_terms_currency_check",
+          "value": "\"billing_terms\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.contract": {
+      "name": "contract",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signed_on": {
+          "name": "signed_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payee_id": {
+          "name": "payee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "payment_due_rule": {
+          "name": "payment_due_rule",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"type\":\"day_of_month\",\"day\":20}'::jsonb"
+        },
+        "invoice_date_rule": {
+          "name": "invoice_date_rule",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"type\":\"first_working_day_after_period\"}'::jsonb"
+        },
+        "act_date_rule": {
+          "name": "act_date_rule",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"type\":\"last_working_day_of_period\"}'::jsonb"
+        },
+        "invoice_template_file_id": {
+          "name": "invoice_template_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "act_template_file_id": {
+          "name": "act_template_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "number_sequence_key": {
+          "name": "number_sequence_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        }
+      },
+      "indexes": {
+        "contract_client_idx": {
+          "name": "contract_client_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "contract_payee_idx": {
+          "name": "contract_payee_idx",
+          "columns": [
+            {
+              "expression": "payee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "contract_company_id_company_id_fk": {
+          "name": "contract_company_id_company_id_fk",
+          "tableFrom": "contract",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "tableTo": "company",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contract_client_id_client_id_fk": {
+          "name": "contract_client_id_client_id_fk",
+          "tableFrom": "contract",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "tableTo": "client",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contract_payee_id_payee_id_fk": {
+          "name": "contract_payee_id_payee_id_fk",
+          "tableFrom": "contract",
+          "columnsFrom": [
+            "payee_id"
+          ],
+          "tableTo": "payee",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contract_number_sequence_key_number_sequence_key_fk": {
+          "name": "contract_number_sequence_key_number_sequence_key_fk",
+          "tableFrom": "contract",
+          "columnsFrom": [
+            "number_sequence_key"
+          ],
+          "tableTo": "number_sequence",
+          "columnsTo": [
+            "key"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "contract_legacy_ref_key": {
+          "name": "contract_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "contract_select": {
+          "name": "contract_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "contract_insert": {
+          "name": "contract_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "contract_update": {
+          "name": "contract_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "contract_delete": {
+          "name": "contract_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "contract_kind_check": {
+          "name": "contract_kind_check",
+          "value": "\"contract\".\"kind\" in ('client', 'fop')"
+        },
+        "contract_one_counterparty_check": {
+          "name": "contract_one_counterparty_check",
+          "value": "num_nonnulls(\"contract\".\"client_id\", \"contract\".\"payee_id\") = 1 and (\"contract\".\"kind\" = 'client') = (\"contract\".\"client_id\" is not null)"
+        },
+        "contract_status_check": {
+          "name": "contract_status_check",
+          "value": "\"contract\".\"status\" in ('active', 'ended')"
+        },
+        "contract_payment_due_rule_check": {
+          "name": "contract_payment_due_rule_check",
+          "value": "\"contract\".\"payment_due_rule\" ->> 'type' in ('day_of_month', 'net_days')"
+        },
+        "contract_invoice_date_rule_check": {
+          "name": "contract_invoice_date_rule_check",
+          "value": "\"contract\".\"invoice_date_rule\" ->> 'type' in ('first_working_day_after_period', 'nth_working_day_after_period')"
+        },
+        "contract_act_date_rule_check": {
+          "name": "contract_act_date_rule_check",
+          "value": "\"contract\".\"act_date_rule\" ->> 'type' in ('last_working_day_of_period', 'nth_working_day_after_period', 'manual')"
+        },
+        "contract_currency_check": {
+          "name": "contract_currency_check",
+          "value": "\"contract\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.pay_terms": {
+      "name": "pay_terms",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "pay_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "payout_method": {
+          "name": "payout_method",
+          "type": "payout_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fiat'"
+        },
+        "release_policy": {
+          "name": "release_policy",
+          "type": "release_policy",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'on_payment_or_due'"
+        },
+        "grace_days": {
+          "name": "grace_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "pay_terms_assignment_id_assignment_id_fk": {
+          "name": "pay_terms_assignment_id_assignment_id_fk",
+          "tableFrom": "pay_terms",
+          "columnsFrom": [
+            "assignment_id"
+          ],
+          "tableTo": "assignment",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "pay_terms_legacy_ref_key": {
+          "name": "pay_terms_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "pay_terms_version_key": {
+          "name": "pay_terms_version_key",
+          "columns": [
+            "assignment_id",
+            "valid_from"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "pay_terms_select": {
+          "name": "pay_terms_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "pay_terms_insert": {
+          "name": "pay_terms_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "pay_terms_update": {
+          "name": "pay_terms_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "pay_terms_delete": {
+          "name": "pay_terms_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "pay_terms_valid_from_check": {
+          "name": "pay_terms_valid_from_check",
+          "value": "extract(day from valid_from) = 1"
+        },
+        "pay_terms_amount_check": {
+          "name": "pay_terms_amount_check",
+          "value": "\"pay_terms\".\"amount\" >= 0"
+        },
+        "pay_terms_grace_days_check": {
+          "name": "pay_terms_grace_days_check",
+          "value": "\"pay_terms\".\"grace_days\" >= 0"
+        },
+        "pay_terms_currency_check": {
+          "name": "pay_terms_currency_check",
+          "value": "\"pay_terms\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.period": {
+      "name": "period",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "month": {
+          "name": "month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_hours": {
+          "name": "work_hours",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "period_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "reference_fx_usd_uah": {
+          "name": "reference_fx_usd_uah",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "period_month_unique": {
+          "name": "period_month_unique",
+          "columns": [
+            "month"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "period_select": {
+          "name": "period_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "period_insert": {
+          "name": "period_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "period_update": {
+          "name": "period_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "period_delete": {
+          "name": "period_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "period_month_check": {
+          "name": "period_month_check",
+          "value": "extract(day from month) = 1"
+        },
+        "period_work_hours_check": {
+          "name": "period_work_hours_check",
+          "value": "\"period\".\"work_hours\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.timesheet": {
+      "name": "timesheet",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hours": {
+          "name": "hours",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "timesheet_assignment_id_assignment_id_fk": {
+          "name": "timesheet_assignment_id_assignment_id_fk",
+          "tableFrom": "timesheet",
+          "columnsFrom": [
+            "assignment_id"
+          ],
+          "tableTo": "assignment",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "timesheet_period_id_period_id_fk": {
+          "name": "timesheet_period_id_period_id_fk",
+          "tableFrom": "timesheet",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "tableTo": "period",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "timesheet_legacy_ref_key": {
+          "name": "timesheet_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "timesheet_assignment_period_key": {
+          "name": "timesheet_assignment_period_key",
+          "columns": [
+            "assignment_id",
+            "period_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "timesheet_select": {
+          "name": "timesheet_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "timesheet_insert": {
+          "name": "timesheet_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "timesheet_update": {
+          "name": "timesheet_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "timesheet_delete": {
+          "name": "timesheet_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "timesheet_hours_check": {
+          "name": "timesheet_hours_check",
+          "value": "\"timesheet\".\"hours\" >= 0"
+        },
+        "timesheet_source_check": {
+          "name": "timesheet_source_check",
+          "value": "\"timesheet\".\"source\" in ('manual', 'import')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.document": {
+      "name": "document",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "number_key": {
+          "name": "number_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "type": "stored",
+            "as": "translate(upper(regexp_replace(number, '[[:space:]-]', '', 'g')), 'A', 'А')"
+          }
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doc_date": {
+          "name": "doc_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "drive_file_id": {
+          "name": "drive_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "doc_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'issued'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signed_at": {
+          "name": "signed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_revision": {
+          "name": "source_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "document_number_key_idx": {
+          "name": "document_number_key_idx",
+          "columns": [
+            {
+              "expression": "number_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "document_supersedes_id_document_id_fk": {
+          "name": "document_supersedes_id_document_id_fk",
+          "tableFrom": "document",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "tableTo": "document",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "document_legacy_ref_key": {
+          "name": "document_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "document_supersedes_key": {
+          "name": "document_supersedes_key",
+          "columns": [
+            "supersedes_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "document_select": {
+          "name": "document_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) is not null"
+        },
+        "document_insert": {
+          "name": "document_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "document_update": {
+          "name": "document_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "document_delete": {
+          "name": "document_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "document_type_check": {
+          "name": "document_type_check",
+          "value": "\"document\".\"type\" in ('contract', 'sow', 'annex', 'invoice', 'act', 'cv', 'nda', 'statement', 'other')"
+        },
+        "document_version_check": {
+          "name": "document_version_check",
+          "value": "\"document\".\"version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.document_link": {
+      "name": "document_link",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "document_link_entity_idx": {
+          "name": "document_link_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "document_link_document_id_document_id_fk": {
+          "name": "document_link_document_id_document_id_fk",
+          "tableFrom": "document_link",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "tableTo": "document",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "document_link_key": {
+          "name": "document_link_key",
+          "columns": [
+            "document_id",
+            "entity_type",
+            "entity_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "document_link_select": {
+          "name": "document_link_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) is not null"
+        },
+        "document_link_insert": {
+          "name": "document_link_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "document_link_update": {
+          "name": "document_link_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "document_link_delete": {
+          "name": "document_link_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "document_link_entity_type_check": {
+          "name": "document_link_entity_type_check",
+          "value": "\"document_link\".\"entity_type\" in ('person', 'payee', 'client', 'contract', 'assignment', 'invoice', 'supplier_act', 'trip', 'transaction')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.drive_folder": {
+      "name": "drive_folder",
+      "schema": "",
+      "columns": {
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "folder_id": {
+          "name": "folder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.number_sequence": {
+      "name": "number_sequence",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template": {
+          "name": "template",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_value": {
+          "name": "next_value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "year_scoped": {
+          "name": "year_scoped",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "current_year": {
+          "name": "current_year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "number_sequence_select": {
+          "name": "number_sequence_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "number_sequence_insert": {
+          "name": "number_sequence_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "number_sequence_update": {
+          "name": "number_sequence_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'",
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "number_sequence_delete": {
+          "name": "number_sequence_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'"
+        }
+      },
+      "checkConstraints": {
+        "number_sequence_next_value_check": {
+          "name": "number_sequence_next_value_check",
+          "value": "\"number_sequence\".\"next_value\" >= 1"
+        },
+        "number_sequence_template_check": {
+          "name": "number_sequence_template_check",
+          "value": "\"number_sequence\".\"template\" like '%{seq}%'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.work_calendar_exception": {
+      "name": "work_calendar_exception",
+      "schema": "",
+      "columns": {
+        "on_date": {
+          "name": "on_date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "is_working": {
+          "name": "is_working",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "work_calendar_exception_select": {
+          "name": "work_calendar_exception_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) is not null"
+        },
+        "work_calendar_exception_insert": {
+          "name": "work_calendar_exception_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "work_calendar_exception_update": {
+          "name": "work_calendar_exception_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'",
+          "withCheck": "(select public.current_app_role()) = 'owner'"
+        },
+        "work_calendar_exception_delete": {
+          "name": "work_calendar_exception_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) = 'owner'"
+        }
+      },
+      "checkConstraints": {
+        "work_calendar_exception_reason_check": {
+          "name": "work_calendar_exception_reason_check",
+          "value": "length(trim(\"work_calendar_exception\".\"reason\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.invoice": {
+      "name": "invoice",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_legacy": {
+          "name": "is_legacy",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contract_id": {
+          "name": "contract_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "invoice_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "issue_date": {
+          "name": "issue_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "paid_amount": {
+          "name": "paid_amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gdoc_file_id": {
+          "name": "gdoc_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pdf_file_id": {
+          "name": "pdf_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "date_override_reason": {
+          "name": "date_override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "void_reason": {
+          "name": "void_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "invoice_number_key": {
+          "name": "invoice_number_key",
+          "columns": [
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"invoice\".\"status\" <> 'draft'",
+          "concurrently": false
+        },
+        "invoice_client_idx": {
+          "name": "invoice_client_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "invoice_period_idx": {
+          "name": "invoice_period_idx",
+          "columns": [
+            {
+              "expression": "period_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "invoice_client_id_client_id_fk": {
+          "name": "invoice_client_id_client_id_fk",
+          "tableFrom": "invoice",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "tableTo": "client",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "invoice_contract_id_contract_id_fk": {
+          "name": "invoice_contract_id_contract_id_fk",
+          "tableFrom": "invoice",
+          "columnsFrom": [
+            "contract_id"
+          ],
+          "tableTo": "contract",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "invoice_period_id_period_id_fk": {
+          "name": "invoice_period_id_period_id_fk",
+          "tableFrom": "invoice",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "tableTo": "period",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "invoice_legacy_ref_key": {
+          "name": "invoice_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "invoice_select": {
+          "name": "invoice_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_insert": {
+          "name": "invoice_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_update": {
+          "name": "invoice_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_delete": {
+          "name": "invoice_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "invoice_draft_number_check": {
+          "name": "invoice_draft_number_check",
+          "value": "\"invoice\".\"status\" <> 'draft' or \"invoice\".\"number\" is null"
+        },
+        "invoice_issued_number_check": {
+          "name": "invoice_issued_number_check",
+          "value": "\"invoice\".\"status\" = 'draft' or \"invoice\".\"number\" is not null"
+        },
+        "invoice_void_reason_check": {
+          "name": "invoice_void_reason_check",
+          "value": "\"invoice\".\"status\" <> 'void' or length(trim(coalesce(\"invoice\".\"void_reason\", ''))) > 0"
+        },
+        "invoice_amounts_check": {
+          "name": "invoice_amounts_check",
+          "value": "\"invoice\".\"total\" >= 0 and \"invoice\".\"paid_amount\" >= 0"
+        },
+        "invoice_due_check": {
+          "name": "invoice_due_check",
+          "value": "\"invoice\".\"due_date\" >= \"invoice\".\"issue_date\""
+        },
+        "invoice_currency_check": {
+          "name": "invoice_currency_check",
+          "value": "\"invoice\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.invoice_line": {
+      "name": "invoice_line",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "invoice_id": {
+          "name": "invoice_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timesheet_id": {
+          "name": "timesheet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description_en": {
+          "name": "description_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description_ua": {
+          "name": "description_ua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_price": {
+          "name": "unit_price",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invoice_line_invoice_id_invoice_id_fk": {
+          "name": "invoice_line_invoice_id_invoice_id_fk",
+          "tableFrom": "invoice_line",
+          "columnsFrom": [
+            "invoice_id"
+          ],
+          "tableTo": "invoice",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "invoice_line_timesheet_id_timesheet_id_fk": {
+          "name": "invoice_line_timesheet_id_timesheet_id_fk",
+          "tableFrom": "invoice_line",
+          "columnsFrom": [
+            "timesheet_id"
+          ],
+          "tableTo": "timesheet",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "invoice_line_timesheet_key": {
+          "name": "invoice_line_timesheet_key",
+          "columns": [
+            "timesheet_id"
+          ],
+          "nullsNotDistinct": false
+        },
+        "invoice_line_position_key": {
+          "name": "invoice_line_position_key",
+          "columns": [
+            "invoice_id",
+            "position"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "invoice_line_select": {
+          "name": "invoice_line_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_line_insert": {
+          "name": "invoice_line_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_line_update": {
+          "name": "invoice_line_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "invoice_line_delete": {
+          "name": "invoice_line_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "invoice_line_amounts_check": {
+          "name": "invoice_line_amounts_check",
+          "value": "\"invoice_line\".\"quantity\" >= 0 and \"invoice_line\".\"unit_price\" >= 0 and \"invoice_line\".\"amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.invoice_revision": {
+      "name": "invoice_revision",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "invoice_id": {
+          "name": "invoice_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_date": {
+          "name": "issue_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pdf_file_id": {
+          "name": "pdf_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invoice_revision_invoice_id_invoice_id_fk": {
+          "name": "invoice_revision_invoice_id_invoice_id_fk",
+          "tableFrom": "invoice_revision",
+          "columnsFrom": [
+            "invoice_id"
+          ],
+          "tableTo": "invoice",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "invoice_revision_key": {
+          "name": "invoice_revision_key",
+          "columns": [
+            "invoice_id",
+            "revision"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "invoice_revision_select": {
+          "name": "invoice_revision_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.job": {
+      "name": "job",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_after": {
+          "name": "run_after",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "job_dedupe_key": {
+          "name": "job_dedupe_key",
+          "columns": [
+            {
+              "expression": "dedupe_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"job\".\"status\" in ('queued', 'running')",
+          "concurrently": false
+        },
+        "job_queue_idx": {
+          "name": "job_queue_idx",
+          "columns": [
+            {
+              "expression": "run_after",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "where": "\"job\".\"status\" = 'queued'",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "job_select": {
+          "name": "job_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "job_insert": {
+          "name": "job_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "job_update": {
+          "name": "job_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "job_delete": {
+          "name": "job_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "job_status_check": {
+          "name": "job_status_check",
+          "value": "\"job\".\"status\" in ('queued', 'running', 'done', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.account": {
+      "name": "account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "account_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "network": {
+          "name": "network",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opening_balance": {
+          "name": "opening_balance",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "opening_date": {
+          "name": "opening_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "account_legacy_ref_key": {
+          "name": "account_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "account_name_key": {
+          "name": "account_name_key",
+          "columns": [
+            "name"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "account_select": {
+          "name": "account_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "account_insert": {
+          "name": "account_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "account_update": {
+          "name": "account_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "account_delete": {
+          "name": "account_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "account_currency_check": {
+          "name": "account_currency_check",
+          "value": "\"account\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.allocation": {
+      "name": "allocation",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invoice_id": {
+          "name": "invoice_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payroll_item_id": {
+          "name": "payroll_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fx_rate": {
+          "name": "fx_rate",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fx_source": {
+          "name": "fx_source",
+          "type": "fx_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "allocation_payroll_item_idx": {
+          "name": "allocation_payroll_item_idx",
+          "columns": [
+            {
+              "expression": "payroll_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "allocation_transaction_idx": {
+          "name": "allocation_transaction_idx",
+          "columns": [
+            {
+              "expression": "transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "allocation_invoice_idx": {
+          "name": "allocation_invoice_idx",
+          "columns": [
+            {
+              "expression": "invoice_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "allocation_transaction_id_transaction_id_fk": {
+          "name": "allocation_transaction_id_transaction_id_fk",
+          "tableFrom": "allocation",
+          "columnsFrom": [
+            "transaction_id"
+          ],
+          "tableTo": "transaction",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "allocation_invoice_id_invoice_id_fk": {
+          "name": "allocation_invoice_id_invoice_id_fk",
+          "tableFrom": "allocation",
+          "columnsFrom": [
+            "invoice_id"
+          ],
+          "tableTo": "invoice",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "allocation_payroll_item_id_payroll_item_id_fk": {
+          "name": "allocation_payroll_item_id_payroll_item_id_fk",
+          "tableFrom": "allocation",
+          "columnsFrom": [
+            "payroll_item_id"
+          ],
+          "tableTo": "payroll_item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "allocation_legacy_ref_key": {
+          "name": "allocation_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "allocation_select": {
+          "name": "allocation_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "allocation_insert": {
+          "name": "allocation_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "allocation_update": {
+          "name": "allocation_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "allocation_delete": {
+          "name": "allocation_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "allocation_amount_check": {
+          "name": "allocation_amount_check",
+          "value": "\"allocation\".\"amount\" > 0"
+        },
+        "allocation_target_check": {
+          "name": "allocation_target_check",
+          "value": "num_nonnulls(\"allocation\".\"invoice_id\", \"allocation\".\"payroll_item_id\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.category": {
+      "name": "category",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "tx_type": {
+          "name": "tx_type",
+          "type": "tx_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "category_type_name_key": {
+          "name": "category_type_name_key",
+          "columns": [
+            "tx_type",
+            "name"
+          ],
+          "nullsNotDistinct": false
+        },
+        "category_id_type_key": {
+          "name": "category_id_type_key",
+          "columns": [
+            "id",
+            "tx_type"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "category_select": {
+          "name": "category_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "category_insert": {
+          "name": "category_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "category_update": {
+          "name": "category_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "category_delete": {
+          "name": "category_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "category_name_check": {
+          "name": "category_name_check",
+          "value": "length(trim(\"category\".\"name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fx_rate": {
+      "name": "fx_rate",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "on_date": {
+          "name": "on_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base": {
+          "name": "base",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quote": {
+          "name": "quote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "fx_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "fx_rate_key": {
+          "name": "fx_rate_key",
+          "columns": [
+            "on_date",
+            "base",
+            "quote",
+            "source"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "fx_rate_select": {
+          "name": "fx_rate_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "fx_rate_insert": {
+          "name": "fx_rate_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "fx_rate_update": {
+          "name": "fx_rate_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "fx_rate_delete": {
+          "name": "fx_rate_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "fx_rate_positive_check": {
+          "name": "fx_rate_positive_check",
+          "value": "\"fx_rate\".\"rate\" > 0"
+        },
+        "fx_rate_base_check": {
+          "name": "fx_rate_base_check",
+          "value": "\"fx_rate\".\"base\" ~ '^[A-Z]{3,4}$'"
+        },
+        "fx_rate_quote_check": {
+          "name": "fx_rate_quote_check",
+          "value": "\"fx_rate\".\"quote\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.posting": {
+      "name": "posting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_fee": {
+          "name": "is_fee",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "posting_transaction_idx": {
+          "name": "posting_transaction_idx",
+          "columns": [
+            {
+              "expression": "transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "posting_account_idx": {
+          "name": "posting_account_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "posting_transaction_id_transaction_id_fk": {
+          "name": "posting_transaction_id_transaction_id_fk",
+          "tableFrom": "posting",
+          "columnsFrom": [
+            "transaction_id"
+          ],
+          "tableTo": "transaction",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "posting_account_id_account_id_fk": {
+          "name": "posting_account_id_account_id_fk",
+          "tableFrom": "posting",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "tableTo": "account",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "posting_select": {
+          "name": "posting_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "posting_insert": {
+          "name": "posting_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "posting_update": {
+          "name": "posting_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "posting_delete": {
+          "name": "posting_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "posting_amount_check": {
+          "name": "posting_amount_check",
+          "value": "\"posting\".\"amount\" <> 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.transaction": {
+      "name": "transaction",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_on": {
+          "name": "occurred_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "tx_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterparty": {
+          "name": "counterparty",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_ref": {
+          "name": "external_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "transaction_occurred_on_idx": {
+          "name": "transaction_occurred_on_idx",
+          "columns": [
+            {
+              "expression": "occurred_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "transaction_external_ref_idx": {
+          "name": "transaction_external_ref_idx",
+          "columns": [
+            {
+              "expression": "external_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "transaction_category_type_fk": {
+          "name": "transaction_category_type_fk",
+          "tableFrom": "transaction",
+          "columnsFrom": [
+            "category_id",
+            "type"
+          ],
+          "tableTo": "category",
+          "columnsTo": [
+            "id",
+            "tx_type"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "transaction_legacy_ref_key": {
+          "name": "transaction_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "transaction_select": {
+          "name": "transaction_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "transaction_insert": {
+          "name": "transaction_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "transaction_update": {
+          "name": "transaction_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "transaction_delete": {
+          "name": "transaction_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.adjustment": {
+      "name": "adjustment",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_method": {
+          "name": "payout_method",
+          "type": "payout_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fiat'"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "adjustment_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "adjustment_period_person_idx": {
+          "name": "adjustment_period_person_idx",
+          "columns": [
+            {
+              "expression": "period_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "adjustment_period_id_period_id_fk": {
+          "name": "adjustment_period_id_period_id_fk",
+          "tableFrom": "adjustment",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "tableTo": "period",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "adjustment_person_id_person_id_fk": {
+          "name": "adjustment_person_id_person_id_fk",
+          "tableFrom": "adjustment",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "tableTo": "person",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "adjustment_legacy_ref_key": {
+          "name": "adjustment_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "adjustment_select": {
+          "name": "adjustment_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "adjustment_insert": {
+          "name": "adjustment_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "adjustment_update": {
+          "name": "adjustment_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "adjustment_delete": {
+          "name": "adjustment_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "adjustment_amount_check": {
+          "name": "adjustment_amount_check",
+          "value": "\"adjustment\".\"amount\" <> 0"
+        },
+        "adjustment_reason_check": {
+          "name": "adjustment_reason_check",
+          "value": "length(trim(\"adjustment\".\"reason\")) > 0"
+        },
+        "adjustment_currency_check": {
+          "name": "adjustment_currency_check",
+          "value": "\"adjustment\".\"currency\" in ('USD', 'USDT', 'USDC', 'UAH')"
+        },
+        "adjustment_currency_format_check": {
+          "name": "adjustment_currency_format_check",
+          "value": "\"adjustment\".\"currency\" ~ '^[A-Z]{3,4}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payroll_item": {
+      "name": "payroll_item",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_method": {
+          "name": "payout_method",
+          "type": "payout_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payee_id": {
+          "name": "payee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "payroll_item_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "total_usd": {
+          "name": "total_usd",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "payout_fx_rate": {
+          "name": "payout_fx_rate",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fx_source": {
+          "name": "fx_source",
+          "type": "fx_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fx_set_by": {
+          "name": "fx_set_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fx_set_at": {
+          "name": "fx_set_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_uah": {
+          "name": "total_uah",
+          "type": "numeric(20, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paid_amount": {
+          "name": "paid_amount",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        }
+      },
+      "indexes": {
+        "payroll_item_period_idx": {
+          "name": "payroll_item_period_idx",
+          "columns": [
+            {
+              "expression": "period_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "payroll_item_period_id_period_id_fk": {
+          "name": "payroll_item_period_id_period_id_fk",
+          "tableFrom": "payroll_item",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "tableTo": "period",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "payroll_item_person_id_person_id_fk": {
+          "name": "payroll_item_person_id_person_id_fk",
+          "tableFrom": "payroll_item",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "tableTo": "person",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "payroll_item_payee_id_payee_id_fk": {
+          "name": "payroll_item_payee_id_payee_id_fk",
+          "tableFrom": "payroll_item",
+          "columnsFrom": [
+            "payee_id"
+          ],
+          "tableTo": "payee",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payroll_item_legacy_ref_key": {
+          "name": "payroll_item_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        },
+        "payroll_item_key": {
+          "name": "payroll_item_key",
+          "columns": [
+            "period_id",
+            "person_id",
+            "payout_method"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "payroll_item_select": {
+          "name": "payroll_item_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_item_insert": {
+          "name": "payroll_item_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_item_update": {
+          "name": "payroll_item_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_item_delete": {
+          "name": "payroll_item_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "payroll_item_fx_check": {
+          "name": "payroll_item_fx_check",
+          "value": "(\"payroll_item\".\"payout_fx_rate\" is null) = (\"payroll_item\".\"total_uah\" is null) and (\"payroll_item\".\"payout_fx_rate\" is null) = (\"payroll_item\".\"fx_source\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payroll_line": {
+      "name": "payroll_line",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "payroll_item_id": {
+          "name": "payroll_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timesheet_id": {
+          "name": "timesheet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_usd": {
+          "name": "amount_usd",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "funded_by_invoice_line_id": {
+          "name": "funded_by_invoice_line_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "funding_source": {
+          "name": "funding_source",
+          "type": "funding_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "payroll_line_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'accrued'"
+        },
+        "payable_at": {
+          "name": "payable_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "override_reason": {
+          "name": "override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "payroll_line_funded_by_idx": {
+          "name": "payroll_line_funded_by_idx",
+          "columns": [
+            {
+              "expression": "funded_by_invoice_line_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "payroll_line_payroll_item_id_payroll_item_id_fk": {
+          "name": "payroll_line_payroll_item_id_payroll_item_id_fk",
+          "tableFrom": "payroll_line",
+          "columnsFrom": [
+            "payroll_item_id"
+          ],
+          "tableTo": "payroll_item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "payroll_line_assignment_id_assignment_id_fk": {
+          "name": "payroll_line_assignment_id_assignment_id_fk",
+          "tableFrom": "payroll_line",
+          "columnsFrom": [
+            "assignment_id"
+          ],
+          "tableTo": "assignment",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "payroll_line_timesheet_id_timesheet_id_fk": {
+          "name": "payroll_line_timesheet_id_timesheet_id_fk",
+          "tableFrom": "payroll_line",
+          "columnsFrom": [
+            "timesheet_id"
+          ],
+          "tableTo": "timesheet",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "payroll_line_funded_by_invoice_line_id_invoice_line_id_fk": {
+          "name": "payroll_line_funded_by_invoice_line_id_invoice_line_id_fk",
+          "tableFrom": "payroll_line",
+          "columnsFrom": [
+            "funded_by_invoice_line_id"
+          ],
+          "tableTo": "invoice_line",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payroll_line_timesheet_key": {
+          "name": "payroll_line_timesheet_key",
+          "columns": [
+            "timesheet_id"
+          ],
+          "nullsNotDistinct": false
+        },
+        "payroll_line_assignment_key": {
+          "name": "payroll_line_assignment_key",
+          "columns": [
+            "payroll_item_id",
+            "assignment_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "payroll_line_select": {
+          "name": "payroll_line_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_line_insert": {
+          "name": "payroll_line_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_line_update": {
+          "name": "payroll_line_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "payroll_line_delete": {
+          "name": "payroll_line_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "payroll_line_payable_check": {
+          "name": "payroll_line_payable_check",
+          "value": "\"payroll_line\".\"status\" in ('accrued', 'awaiting_client') or \"payroll_line\".\"funding_source\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.supplier_act": {
+      "name": "supplier_act",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "auth.uid()"
+        },
+        "legacy_ref": {
+          "name": "legacy_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_legacy": {
+          "name": "is_legacy",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "contract_id": {
+          "name": "contract_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payee_id": {
+          "name": "payee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payroll_item_id": {
+          "name": "payroll_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "act_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'monthly'"
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "act_date": {
+          "name": "act_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_from": {
+          "name": "period_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_to": {
+          "name": "period_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_uah": {
+          "name": "amount_uah",
+          "type": "numeric(20, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "doc_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gdoc_file_id": {
+          "name": "gdoc_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pdf_file_id": {
+          "name": "pdf_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signed_url": {
+          "name": "signed_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "date_override_reason": {
+          "name": "date_override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "void_reason": {
+          "name": "void_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "supplier_act_number_key": {
+          "name": "supplier_act_number_key",
+          "columns": [
+            {
+              "expression": "contract_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"supplier_act\".\"status\" <> 'draft'",
+          "concurrently": false
+        },
+        "supplier_act_payee_idx": {
+          "name": "supplier_act_payee_idx",
+          "columns": [
+            {
+              "expression": "payee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "supplier_act_payroll_item_idx": {
+          "name": "supplier_act_payroll_item_idx",
+          "columns": [
+            {
+              "expression": "payroll_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "supplier_act_contract_id_contract_id_fk": {
+          "name": "supplier_act_contract_id_contract_id_fk",
+          "tableFrom": "supplier_act",
+          "columnsFrom": [
+            "contract_id"
+          ],
+          "tableTo": "contract",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "supplier_act_payee_id_payee_id_fk": {
+          "name": "supplier_act_payee_id_payee_id_fk",
+          "tableFrom": "supplier_act",
+          "columnsFrom": [
+            "payee_id"
+          ],
+          "tableTo": "payee",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "supplier_act_payroll_item_id_payroll_item_id_fk": {
+          "name": "supplier_act_payroll_item_id_payroll_item_id_fk",
+          "tableFrom": "supplier_act",
+          "columnsFrom": [
+            "payroll_item_id"
+          ],
+          "tableTo": "payroll_item",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "supplier_act_legacy_ref_key": {
+          "name": "supplier_act_legacy_ref_key",
+          "columns": [
+            "legacy_ref"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "supplier_act_select": {
+          "name": "supplier_act_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "supplier_act_insert": {
+          "name": "supplier_act_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "supplier_act_update": {
+          "name": "supplier_act_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')",
+          "withCheck": "(select public.current_app_role()) in ('owner', 'finance')"
+        },
+        "supplier_act_delete": {
+          "name": "supplier_act_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select public.current_app_role()) in ('owner', 'finance')"
+        }
+      },
+      "checkConstraints": {
+        "supplier_act_draft_number_check": {
+          "name": "supplier_act_draft_number_check",
+          "value": "\"supplier_act\".\"status\" <> 'draft' or \"supplier_act\".\"number\" is null"
+        },
+        "supplier_act_issued_number_check": {
+          "name": "supplier_act_issued_number_check",
+          "value": "\"supplier_act\".\"status\" = 'draft' or \"supplier_act\".\"number\" is not null"
+        },
+        "supplier_act_amount_check": {
+          "name": "supplier_act_amount_check",
+          "value": "\"supplier_act\".\"amount_uah\" >= 0"
+        },
+        "supplier_act_period_check": {
+          "name": "supplier_act_period_check",
+          "value": "\"supplier_act\".\"period_from\" is null or \"supplier_act\".\"period_to\" is null or \"supplier_act\".\"period_to\" >= \"supplier_act\".\"period_from\""
+        },
+        "supplier_act_void_reason_check": {
+          "name": "supplier_act_void_reason_check",
+          "value": "\"supplier_act\".\"status\" <> 'void' or length(trim(coalesce(\"supplier_act\".\"void_reason\", ''))) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.account_kind": {
+      "name": "account_kind",
+      "schema": "public",
+      "values": [
+        "bank",
+        "crypto",
+        "cash"
+      ]
+    },
+    "public.act_type": {
+      "name": "act_type",
+      "schema": "public",
+      "values": [
+        "monthly",
+        "reimbursement",
+        "other"
+      ]
+    },
+    "public.adjustment_kind": {
+      "name": "adjustment_kind",
+      "schema": "public",
+      "values": [
+        "bonus",
+        "deduction",
+        "trip_reimbursement",
+        "correction",
+        "other"
+      ]
+    },
+    "public.app_role": {
+      "name": "app_role",
+      "schema": "public",
+      "values": [
+        "owner",
+        "finance",
+        "viewer"
+      ]
+    },
+    "public.billing_type": {
+      "name": "billing_type",
+      "schema": "public",
+      "values": [
+        "fixed_monthly",
+        "hourly",
+        "none"
+      ]
+    },
+    "public.doc_status": {
+      "name": "doc_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "issued",
+        "void"
+      ]
+    },
+    "public.funding_source": {
+      "name": "funding_source",
+      "schema": "public",
+      "values": [
+        "client",
+        "company"
+      ]
+    },
+    "public.fx_source": {
+      "name": "fx_source",
+      "schema": "public",
+      "values": [
+        "bank_actual",
+        "nbu",
+        "manual"
+      ]
+    },
+    "public.invoice_status": {
+      "name": "invoice_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "issued",
+        "partially_paid",
+        "paid",
+        "void",
+        "written_off"
+      ]
+    },
+    "public.pay_type": {
+      "name": "pay_type",
+      "schema": "public",
+      "values": [
+        "fixed",
+        "hourly",
+        "included"
+      ]
+    },
+    "public.payout_method": {
+      "name": "payout_method",
+      "schema": "public",
+      "values": [
+        "fiat",
+        "crypto"
+      ]
+    },
+    "public.payroll_item_status": {
+      "name": "payroll_item_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "partially_payable",
+        "payable",
+        "partially_paid",
+        "paid"
+      ]
+    },
+    "public.payroll_line_status": {
+      "name": "payroll_line_status",
+      "schema": "public",
+      "values": [
+        "accrued",
+        "awaiting_client",
+        "payable",
+        "paid"
+      ]
+    },
+    "public.period_status": {
+      "name": "period_status",
+      "schema": "public",
+      "values": [
+        "open",
+        "closed"
+      ]
+    },
+    "public.proration_policy": {
+      "name": "proration_policy",
+      "schema": "public",
+      "values": [
+        "full_month",
+        "by_hours",
+        "trunc_hourly"
+      ]
+    },
+    "public.release_policy": {
+      "name": "release_policy",
+      "schema": "public",
+      "values": [
+        "immediate",
+        "on_payment_or_due"
+      ]
+    },
+    "public.tx_type": {
+      "name": "tx_type",
+      "schema": "public",
+      "values": [
+        "revenue",
+        "expense",
+        "transfer",
+        "fx_exchange",
+        "crypto_buy",
+        "crypto_sell",
+        "crypto_swap",
+        "adjustment"
+      ]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

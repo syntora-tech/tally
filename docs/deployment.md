@@ -54,6 +54,7 @@
 | `CRON_SECRET`                     | випадковий рядок ≥ 32 символів (`openssl rand -hex 32`)                                       |
 | `NEXT_PUBLIC_AUTH_GOOGLE_ENABLED` | `false` до появи ключів                                                                       |
 | `STORAGE_DRIVER`                  | `drive` (файлова система Vercel недовговічна; документи — з Етапу 1 після налаштування Drive) |
+| `GOOGLE_TEMPLATE_*_ID`            | ID шаблонів Google Docs: `INVOICE_HOURLY`, `INVOICE_FIXED`, `ACT_FOP` (7.2)                   |
 
 `SUPABASE_SERVICE_ROLE_KEY` поки не потрібен і ніколи не має префікса `NEXT_PUBLIC_`. `APP_TODAY` у Vercel не задається.
 
@@ -61,6 +62,19 @@
 
 **Обмеження Hobby:** якщо Vercel не дозволить імпортувати приватний репозиторій організації на Hobby, це обмеження тарифу — тоді або Pro раніше, або деплой з особистого акаунта власника.
 
-## 4. Production (Етап 6)
+## 4. Фонові задачі (pg_cron, 10.4)
+
+Розклад створює міграція `cron_schedules`: `tally-jobs` щохвилини (рендер документів), `tally-nbu-rates` о 07:00 UTC, `tally-payability` о 03:00 UTC. Кожна задача робить `POST <URL>/api/cron/<name>` з `Authorization: Bearer <CRON_SECRET>`. Поки в Vault немає двох секретів, виклики нічого не роблять.
+
+Для кожного Supabase-проєкту один раз виконати в SQL Editor:
+
+```sql
+select vault.create_secret('https://<vercel-url>', 'tally_app_url');
+select vault.create_secret('<той самий CRON_SECRET, що у Vercel>', 'tally_cron_secret');
+```
+
+Перевірка: `select * from cron.job_run_details order by start_time desc limit 5;` і `select * from net._http_response order by created desc limit 5;` — відповідь 200. Змінити секрет: `select vault.update_secret((select id from vault.secrets where name = 'tally_cron_secret'), '<новий>');`.
+
+## 5. Production (Етап 6)
 
 Vercel Pro, окремий Supabase-проєкт, домен `tally.syntora.tech` (CNAME на Vercel, Site URL і Redirect URLs у Supabase, redirect URI у Google OAuth), environment `production` у GitHub, `backup.yml`, перевірка відновлення — за чеклістом Етапу 6 у специфікації.

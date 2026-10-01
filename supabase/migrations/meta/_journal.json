@@ -225,6 +225,13 @@
       "when": 1790846409072,
       "tag": "20261001092009_supplier_act_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790847160416,
+      "tag": "20261001093240_cron_schedules",
+      "breakpoints": true
     }
   ]
 }
