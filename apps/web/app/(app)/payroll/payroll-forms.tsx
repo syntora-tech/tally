@@ -39,8 +39,16 @@ export type PayDialogProps = {
 
 /** "Виплатити" (6.6): rate with its source badge, UAH total, account; creates expense + allocation. */
 export function PayDialog(p: PayDialogProps) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(payItemAction, null);
-  const error = useResult(state, 'Виплату записано');
+  // The dialog disappears once the item is paid, so the toast fires before the page re-renders.
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    async (prev, formData) => {
+      const result = await payItemAction(prev, formData);
+      if (result?.ok) toast.success('Виплату записано');
+      return result;
+    },
+    null,
+  );
+  const error = state && !state.ok ? state.error : null;
   const initialRate = p.currentRate ?? p.suggestion?.rate ?? '';
   const [rate, setRate] = useState(initialRate);
   const [source, setSource] = useState(

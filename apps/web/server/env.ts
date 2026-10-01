@@ -45,6 +45,8 @@ export const serverEnvSchema = z.object({
   GOOGLE_TEMPLATE_ACT_FOP_ID: z.string().optional(),
   CRON_SECRET: z.string().min(16).optional(),
   APP_TODAY: optionalLocalDate,
+  /** E2E only: lets a `tally_today` cookie move the business date per request (never in production). */
+  ALLOW_TODAY_OVERRIDE: z.enum(['0', '1']).optional(),
   VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
 });
 

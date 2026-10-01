@@ -8,7 +8,7 @@ import { withUser, type JwtClaims } from './db/with-user';
 import { getServerEnv } from './env';
 import type { Actor, ServiceContext } from './services/context';
 import { createSupabaseServerClient } from './supabase/server-client';
-import { getToday } from './today';
+import { getRequestToday, getToday } from './today';
 
 export type UserActor = Extract<Actor, { kind: 'user' }>;
 
@@ -54,7 +54,7 @@ export async function requireUserContext(): Promise<ServiceContext & { actor: Us
   const actor = await getSessionActor();
   if (!actor) redirect('/login');
   if (!actor.role) redirect('/login?error=forbidden');
-  return { ...baseContext(actor), actor };
+  return { ...baseContext(actor), today: await getRequestToday(), actor };
 }
 
 /** Page-level gate for role-restricted modules; RLS still enforces data access. */

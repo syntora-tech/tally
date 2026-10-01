@@ -363,11 +363,16 @@ export function AllocatePaymentForm(props: {
   outstanding: string;
   candidates: PaymentCandidate[];
 }) {
+  // A full payment removes this form, so the toast fires before the page re-renders.
   const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
-    allocatePaymentAction,
+    async (prev, formData) => {
+      const result = await allocatePaymentAction(prev, formData);
+      if (result?.ok) toast.success('Оплату зараховано');
+      return result;
+    },
     null,
   );
-  const error = useResult(state, 'Оплату зараховано');
+  const error = state && !state.ok ? state.error : null;
   const [selected, setSelected] = useState('');
   const candidate = props.candidates.find((c) => c.id === selected);
   if (props.candidates.length === 0) {

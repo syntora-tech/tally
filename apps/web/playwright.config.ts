@@ -24,6 +24,6 @@ export default defineConfig({
     reuseExistingServer: !isCI,
     timeout: 180_000,
     gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
-    env: { ALLOWED_EMAILS: E2E_OWNER_EMAIL },
+    env: { ALLOWED_EMAILS: E2E_OWNER_EMAIL, ALLOW_TODAY_OVERRIDE: '1' },
   },
 });
