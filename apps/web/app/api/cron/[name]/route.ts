@@ -4,12 +4,14 @@ import { getServerEnv } from '@/server/env';
 import { getDb } from '@/server/db/client';
 import { runJobsOnce } from '@/server/jobs';
 import { syncNbuRates } from '@/server/services/fx';
+import { refreshPayability } from '@/server/services/payroll/payability';
 import { getToday } from '@/server/today';
 
-// Handlers are registered by the stages that introduce them (payability, tmp-cleanup).
+// Handlers are registered by the stages that introduce them (tmp-cleanup comes later).
 const HANDLERS: Record<string, () => Promise<unknown>> = {
   jobs: runJobsOnce,
   'nbu-rates': () => syncNbuRates(getDb(), getToday()),
+  payability: () => refreshPayability(getDb(), getToday()),
 };
 
 export async function POST(request: NextRequest, ctx: RouteContext<'/api/cron/[name]'>) {

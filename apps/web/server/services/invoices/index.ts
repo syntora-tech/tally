@@ -9,6 +9,7 @@ import {
   invoiceLine,
   invoiceRevision,
   job,
+  payrollLine,
   period,
 } from '@tally/db/schema';
 import {
@@ -439,7 +440,7 @@ export const reissueInvoice = defineService({
         .returning({ id: invoice.id });
       if (!copy) throw new Error('Invoice copy insert returned no row');
       if (lines.length) {
-        await tx
+        const copied = await tx
           .insert(invoiceLine)
           .values(
             lines.map(
@@ -452,7 +453,17 @@ export const reissueInvoice = defineService({
                 ...l
               }) => ({ ...l, invoiceId: copy.id }),
             ),
-          );
+          )
+          .returning({ id: invoiceLine.id, position: invoiceLine.position });
+        // 5.3 rule 5: payroll funded by the void invoice follows its hours to the new draft.
+        for (const old of lines) {
+          const next = copied.find((c) => c.position === old.position);
+          if (!next) continue;
+          await tx
+            .update(payrollLine)
+            .set({ fundedByInvoiceLineId: next.id })
+            .where(eq(payrollLine.fundedByInvoiceLineId, old.id));
+        }
       }
       return ok(copy);
     }),

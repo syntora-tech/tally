@@ -14,7 +14,7 @@ import {
 } from '@tally/db/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { intHarness } from '../../../test/int-helpers';
+import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { LocalStorage } from '../../storage/local-storage';
 import { documentServices } from '../documents';
 import {
@@ -92,10 +92,7 @@ afterAll(async () => {
     }
     await db.delete(job).where(inArray(sql`${job.payload} ->> 'invoiceId'`, ids.invoices));
     // Issued invoices are undeletable by design (I1); only test cleanup bypasses the triggers.
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`set local session_replication_role = replica`);
-      await tx.delete(invoice).where(inArray(invoice.id, ids.invoices));
-    });
+    await purgeProtected(db, { invoiceIds: ids.invoices });
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(numberSequence).where(eq(numberSequence.key, SEQUENCE));
     await db.delete(client).where(eq(client.id, ids.client));

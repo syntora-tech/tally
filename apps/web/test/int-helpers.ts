@@ -5,6 +5,11 @@ import {
   allocation,
   appUser,
   category,
+  invoice,
+  invoiceLine,
+  invoiceRevision,
+  payrollItem,
+  payrollLine,
   posting,
   transaction,
   type AppRole,
@@ -100,4 +105,44 @@ export function intHarness(today = '2026-09-29') {
   }
 
   return { db, user, ctxFor, systemCtx, cleanup, payInvoice, today: todayDate };
+}
+
+/**
+ * Removes issued invoices (and the payroll of a period) that triggers protect by design (I1, I6).
+ * Replica mode also skips FK cascades, so children are deleted explicitly.
+ */
+export async function purgeProtected(
+  db: Db,
+  target: { invoiceIds?: readonly string[]; periodId?: string },
+) {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`set local session_replication_role = replica`);
+    if (target.periodId) {
+      const items = await tx
+        .select({ id: payrollItem.id })
+        .from(payrollItem)
+        .where(eq(payrollItem.periodId, target.periodId));
+      if (items.length) {
+        const itemIds = items.map((i) => i.id);
+        await tx.delete(payrollLine).where(inArray(payrollLine.payrollItemId, itemIds));
+        await tx.delete(payrollItem).where(inArray(payrollItem.id, itemIds));
+      }
+    }
+    const invoiceIds = [
+      ...(target.invoiceIds ?? []),
+      ...(target.periodId
+        ? (
+            await tx
+              .select({ id: invoice.id })
+              .from(invoice)
+              .where(eq(invoice.periodId, target.periodId))
+          ).map((i) => i.id)
+        : []),
+    ];
+    if (invoiceIds.length) {
+      await tx.delete(invoiceRevision).where(inArray(invoiceRevision.invoiceId, invoiceIds));
+      await tx.delete(invoiceLine).where(inArray(invoiceLine.invoiceId, invoiceIds));
+      await tx.delete(invoice).where(inArray(invoice.id, invoiceIds));
+    }
+  });
 }

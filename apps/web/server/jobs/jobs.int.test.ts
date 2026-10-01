@@ -14,7 +14,7 @@ import {
 } from '@tally/db/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { intHarness } from '../../test/int-helpers';
+import { intHarness, purgeProtected } from '../../test/int-helpers';
 import { HtmlRenderer, type DocumentRenderer } from '../render/renderers';
 import { getInvoice, issueInvoice, saveInvoice } from '../services/invoices';
 import { LocalStorage } from '../storage/local-storage';
@@ -93,10 +93,7 @@ afterAll(async () => {
       await db.update(document).set({ supersedesId: null }).where(inArray(document.id, docIds));
       await db.delete(document).where(inArray(document.id, docIds));
     }
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`set local session_replication_role = replica`);
-      await tx.delete(invoice).where(eq(invoice.id, ids.invoice));
-    });
+    await purgeProtected(db, { invoiceIds: [ids.invoice] });
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(numberSequence).where(eq(numberSequence.key, SEQUENCE));
     await db.delete(client).where(eq(client.id, ids.client));

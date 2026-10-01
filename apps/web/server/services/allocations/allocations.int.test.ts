@@ -8,9 +8,9 @@ import {
   invoiceLine,
   transaction,
 } from '@tally/db/schema';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { intHarness } from '../../../test/int-helpers';
+import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { createTransaction } from '../ledger';
 import { allocateToInvoice, invoiceAllocations, paymentCandidates, removeAllocation } from '.';
 
@@ -99,10 +99,7 @@ afterAll(() =>
   h.cleanup(async (db) => {
     await db.delete(transaction).where(inArray(transaction.id, txIds));
     await db.delete(account).where(inArray(account.id, [ids.usd, ids.uah]));
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`set local session_replication_role = replica`);
-      await tx.delete(invoice).where(eq(invoice.id, ids.invoice));
-    });
+    await purgeProtected(db, { invoiceIds: [ids.invoice] });
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(client).where(eq(client.id, ids.client));
     await db.delete(company).where(eq(company.id, ids.company));
