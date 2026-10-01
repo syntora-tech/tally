@@ -7,3 +7,4 @@ export * from './documents';
 export * from './numbering';
 export * from './invoices';
 export * from './jobs';
+export * from './ledger';

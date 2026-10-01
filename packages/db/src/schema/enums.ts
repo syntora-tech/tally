@@ -23,3 +23,16 @@ export const invoiceStatus = pgEnum('invoice_status', [
   'written_off',
 ]);
 export type InvoiceStatus = (typeof invoiceStatus.enumValues)[number];
+export const txType = pgEnum('tx_type', [
+  'revenue',
+  'expense',
+  'transfer',
+  'fx_exchange',
+  'crypto_buy',
+  'crypto_sell',
+  'crypto_swap',
+  'adjustment',
+]);
+export type TxType = (typeof txType.enumValues)[number];
+export const accountKind = pgEnum('account_kind', ['bank', 'crypto', 'cash']);
+export const fxSource = pgEnum('fx_source', ['bank_actual', 'nbu', 'manual']);

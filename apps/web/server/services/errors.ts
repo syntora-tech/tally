@@ -67,6 +67,16 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('conflict', 'Інвойс щойно змінили — оновіть сторінку й спробуйте ще раз');
     case 'TL006':
       return serviceError('validation_error', 'Вкажіть причину зміни випущеного інвойсу');
+    case 'TL040':
+      return serviceError(
+        'validation_error',
+        `Валюта проводки не збігається з валютою рахунку (${pg.detail ?? ''})`,
+      );
+    case 'TL041':
+      return serviceError(
+        'validation_error',
+        'Неправильна форма транзакції: перевірте суми, знаки й комісію для цього типу',
+      );
     case 'TL020':
       return serviceError('validation_error', 'Лічильник номерів не можна зменшити');
     case 'TL021':
