@@ -62,6 +62,9 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
           <Button variant="outline" render={<Link href="/ledger/categories" />}>
             Категорії
           </Button>
+          <Button variant="outline" render={<Link href="/ledger/rates" />}>
+            Курси
+          </Button>
           <Button render={<Link href="/ledger/new" />}>Нова транзакція</Button>
         </div>
       </div>

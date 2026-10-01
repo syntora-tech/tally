@@ -1,10 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyCronSecret } from '@/server/cron/verify-secret';
 import { getServerEnv } from '@/server/env';
+import { getDb } from '@/server/db/client';
 import { runJobsOnce } from '@/server/jobs';
+import { syncNbuRates } from '@/server/services/fx';
+import { getToday } from '@/server/today';
 
-// Handlers are registered by the stages that introduce them (nbu-rates, payability, tmp-cleanup).
-const HANDLERS: Record<string, () => Promise<unknown>> = { jobs: runJobsOnce };
+// Handlers are registered by the stages that introduce them (payability, tmp-cleanup).
+const HANDLERS: Record<string, () => Promise<unknown>> = {
+  jobs: runJobsOnce,
+  'nbu-rates': () => syncNbuRates(getDb(), getToday()),
+};
 
 export async function POST(request: NextRequest, ctx: RouteContext<'/api/cron/[name]'>) {
   if (!verifyCronSecret(request.headers.get('authorization'), getServerEnv().CRON_SECRET)) {

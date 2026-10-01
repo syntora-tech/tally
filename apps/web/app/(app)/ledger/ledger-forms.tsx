@@ -11,6 +11,7 @@ import {
   deleteTransactionAction,
   saveAccountAction,
   saveCategoryAction,
+  saveManualRateAction,
   type LedgerFormState,
 } from '@/server/actions/ledger';
 
@@ -132,6 +133,27 @@ export function CategoryForm() {
       </FormField>
       <Button type="submit" disabled={pending}>
         Додати
+      </Button>
+    </form>
+  );
+}
+
+export function ManualRateForm({ today }: { today: string }) {
+  const [state, action, pending] = useActionState(saveManualRateAction, null);
+  const errors = useFeedback(state, 'Курс збережено');
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <FormField label="Дата" htmlFor="rate-date" error={errors?.onDate}>
+        <Input id="rate-date" name="onDate" type="date" defaultValue={today} />
+      </FormField>
+      <FormField label="Валюта" htmlFor="rate-base" error={errors?.base}>
+        <Input id="rate-base" name="base" defaultValue="USD" className="w-24" />
+      </FormField>
+      <FormField label="Курс, UAH за 1" htmlFor="rate-value" error={errors?.rate}>
+        <Input id="rate-value" name="rate" inputMode="decimal" className="w-32" required />
+      </FormField>
+      <Button type="submit" variant="outline" disabled={pending}>
+        Зберегти ручний курс
       </Button>
     </form>
   );

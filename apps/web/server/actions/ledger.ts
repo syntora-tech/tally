@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject, nestPrefixed } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
+import { saveManualRate } from '../services/fx';
 import {
   createTransaction,
   deleteTransaction,
@@ -57,5 +58,20 @@ export async function saveCategoryAction(
   const result = await saveCategory.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: result.error };
   revalidatePath('/ledger/categories');
+  return { ok: true, data: result.value };
+}
+
+export async function saveManualRateAction(
+  _prev: LedgerFormState,
+  formData: FormData,
+): Promise<LedgerFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await saveManualRate.run(ctx, {
+    ...input,
+    rate: typeof input.rate === 'string' ? input.rate.replace(',', '.') : input.rate,
+  });
+  if (result.isErr()) return { ok: false, error: result.error };
+  revalidatePath('/ledger/rates');
   return { ok: true, data: result.value };
 }
