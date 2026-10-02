@@ -75,9 +75,7 @@ export default async function PeriodsPage() {
                 </Badge>
               </TableCell>
               <TableCell>{fmt.amount(p.workHours)}</TableCell>
-              <TableCell>
-                {p.referenceFxUsdUah ? fmt.amount(p.referenceFxUsdUah, undefined, { dp: 4 }) : '—'}
-              </TableCell>
+              <TableCell>{p.referenceFxUsdUah ? fmt.amount(p.referenceFxUsdUah) : '—'}</TableCell>
               <TableCell>{hoursRows}</TableCell>
               <TableCell>{invoices}</TableCell>
             </TableRow>

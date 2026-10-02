@@ -57,10 +57,17 @@ export function toDbNumeric(value: DecimalInput, scale: number): string {
 const NARROW_NBSP = ' ';
 
 export type FormatAmountOptions = {
-  /** Fraction digits to show; defaults to 2. */
+  /** Fraction digits always shown; defaults to 2. */
   dp?: number;
+  /**
+   * Fraction digits shown at most; digits beyond `dp` appear only when significant, so a 34.375
+   * rate is not displayed as 34.38. Defaults to `dp` (plain rounding).
+   */
+  maxDp?: number;
   /** Thousands separator: narrow no-break space (Ukrainian UI, documents) or comma (English UI). */
   grouping?: 'space' | 'comma';
+  /** Decimal separator: dot (default, A-004) or comma (Ukrainian-only documents such as FOP acts). */
+  decimal?: 'dot' | 'comma';
 };
 
 /**
@@ -72,12 +79,16 @@ export function formatAmount(
   currency?: string,
   options: FormatAmountOptions = {},
 ): string {
-  const fixed = toDecimal(value).toFixed(options.dp ?? 2, Decimal.ROUND_HALF_UP);
+  const dp = options.dp ?? 2;
+  const maxDp = Math.max(dp, options.maxDp ?? dp);
+  const fixed = toDecimal(value).toFixed(maxDp, Decimal.ROUND_HALF_UP);
   const negative = fixed.startsWith('-');
-  const [intPart = '0', fracPart] = (negative ? fixed.slice(1) : fixed).split('.');
+  const [intPart = '0', rawFrac = ''] = (negative ? fixed.slice(1) : fixed).split('.');
+  const fracPart = rawFrac.replace(/0+$/, '').padEnd(dp, '0');
   const separator = options.grouping === 'comma' ? ',' : NARROW_NBSP;
+  const point = options.decimal === 'comma' ? ',' : '.';
   const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
   const isZero = /^[0.]+$/.test(negative ? fixed.slice(1) : fixed);
-  const number = `${negative && !isZero ? '-' : ''}${grouped}${fracPart ? `.${fracPart}` : ''}`;
+  const number = `${negative && !isZero ? '-' : ''}${grouped}${fracPart ? `${point}${fracPart}` : ''}`;
   return currency ? `${number}${NARROW_NBSP}${currency}` : number;
 }

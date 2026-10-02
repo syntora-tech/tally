@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { editableDecimal } from '@/lib/format';
 import { toOptions, useLabels } from '@/lib/labels';
 import {
   deleteTransactionAction,
@@ -108,7 +109,7 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           id={`${p}-opening`}
           name="openingBalance"
           inputMode="decimal"
-          defaultValue={value?.openingBalance ?? '0'}
+          defaultValue={editableDecimal(value?.openingBalance) || '0'}
         />
       </FormField>
       <FormField label={t('openingDate')} htmlFor={`${p}-date`} error={errors?.openingDate}>

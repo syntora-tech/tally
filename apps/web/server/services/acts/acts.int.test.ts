@@ -202,7 +202,7 @@ describe('FOP acts (6.6)', () => {
     expect(act?.snapshot).toMatchObject({
       doc: { number: '9099 - А7', date: '31.08.2045' },
       period: { text_ua: 'з 01.08.2045 року по 31.08.2045 року' },
-      total: { amount: expect.stringMatching(/^89\s849\.60$/) as string },
+      total: { amount: expect.stringMatching(/^89\s849,60$/) as string },
     });
   });
 

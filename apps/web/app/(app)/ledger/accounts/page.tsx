@@ -35,7 +35,7 @@ export default async function AccountsPage() {
         <Card key={a.id}>
           <CardHeader>
             <CardTitle className="text-base">
-              {a.name} · {fmt.amount(balance, a.currency, { dp: a.kind === 'crypto' ? 6 : 2 })}
+              {a.name} · {fmt.amount(balance, a.currency)}
               {!a.isActive && t('inactiveSuffix')}
             </CardTitle>
           </CardHeader>

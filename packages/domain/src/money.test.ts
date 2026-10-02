@@ -79,4 +79,17 @@ describe('formatAmount', () => {
     expect(formatAmount('959.922092', 'USDC', { dp: 6 })).toBe(`959.922092${nb}USDC`);
     expect(formatAmount('12', undefined, { dp: 0 })).toBe('12');
   });
+
+  it('shows significant digits up to maxDp without padding them', () => {
+    expect(formatAmount('34.37500000', 'USD', { maxDp: 8 })).toBe(`34.375${nb}USD`);
+    expect(formatAmount('1437.50000000', undefined, { maxDp: 8 })).toBe(`1${nb}437.50`);
+    expect(formatAmount('46', undefined, { maxDp: 8 })).toBe('46.00');
+    expect(formatAmount('0.123456789', undefined, { maxDp: 8 })).toBe('0.12345679');
+    expect(formatAmount('7', undefined, { dp: 0, maxDp: 2 })).toBe('7');
+    expect(formatAmount('-0.000000001', undefined, { maxDp: 8 })).toBe('0.00');
+  });
+
+  it('uses a decimal comma when asked', () => {
+    expect(formatAmount('125095.2', undefined, { decimal: 'comma' })).toBe(`125${nb}095,20`);
+  });
 });

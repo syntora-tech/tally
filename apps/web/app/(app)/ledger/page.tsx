@@ -87,7 +87,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                 {a.network ? ` · ${a.network}` : ''}
               </Link>
               <span className="text-xl font-semibold tabular-nums">
-                {fmt.amount(balance, a.currency, { dp: a.kind === 'crypto' ? 6 : 2 })}
+                {fmt.amount(balance, a.currency)}
               </span>
             </CardContent>
           </Card>
@@ -195,10 +195,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                     <TableCell className="tabular-nums">
                       {tx.postings.map((p) => (
                         <div key={p.id} className={p.isFee ? 'text-muted-foreground' : undefined}>
-                          {fmt.amount(p.amount, p.currency, {
-                            dp: toDecimal(p.amount).decimalPlaces() > 2 ? 6 : 2,
-                          })}{' '}
-                          · {p.accountName}
+                          {fmt.amount(p.amount, p.currency)} · {p.accountName}
                           {p.isFee ? t('fee') : ''}
                         </div>
                       ))}

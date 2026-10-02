@@ -4,6 +4,7 @@ import {
   formatAmount,
   formatUaDate,
   moneyToWordsEn,
+  SCALE,
   moneyToWordsUa,
   type LocalDate,
 } from '@tally/domain';
@@ -44,6 +45,9 @@ export type SnapshotInput = {
  * Frozen document data (spec 7): PDFs are rendered only from this, never from live rows, so a
  * re-render a year later gives the same document. Keys match the `{{path}}` placeholders of 7.2.
  */
+/** Hours and rates are shown as stored: a 34.375 rate must not print as 34.38 next to its amount. */
+const EXACT = { maxDp: SCALE.amount } as const;
+
 export function buildInvoiceSnapshot(i: SnapshotInput) {
   const date = formatUaDate(i.issueDate);
   const period = i.periodMonth
@@ -96,8 +100,8 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
       n: String(index + 1),
       description_en: l.descriptionEn,
       description_ua: l.descriptionUa,
-      qty: formatAmount(l.quantity),
-      price: formatAmount(l.unitPrice),
+      qty: formatAmount(l.quantity, undefined, EXACT),
+      price: formatAmount(l.unitPrice, undefined, EXACT),
       amount: formatAmount(l.amount),
     })),
   };

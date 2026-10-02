@@ -62,7 +62,7 @@ export function buildActSnapshot(i: ActSnapshotInput) {
     },
     period: { from, to, text_ua: from && to ? `з ${from} року по ${to} року` : '' },
     total: {
-      amount: formatAmount(i.amountUah),
+      amount: formatAmount(i.amountUah, undefined, { decimal: 'comma' }),
       currency: 'UAH',
       words_ua: capitalizeFirst(moneyToWordsUa(i.amountUah, 'UAH')),
     },

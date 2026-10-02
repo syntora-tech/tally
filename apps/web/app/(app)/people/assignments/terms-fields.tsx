@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Input } from '@/components/ui/input';
+import { editableDecimal } from '@/lib/format';
 import { toOptions, useLabels } from '@/lib/labels';
 
 type Errors = Record<string, string[]> | undefined;
@@ -26,7 +27,6 @@ export type PayDefaults = {
 };
 
 /** "60.00000000" → "60" for editing. */
-export const editable = (v: string) => (v.includes('.') ? v.replace(/\.?0+$/, '') : v);
 
 /** Client terms block. `prefix` is `billing.` in the create form and empty in the version form. */
 export function BillingFields({
@@ -67,7 +67,7 @@ export function BillingFields({
               name={`${prefix}rate`}
               inputMode="decimal"
               required
-              defaultValue={editable(defaults.rate)}
+              defaultValue={editableDecimal(defaults.rate)}
             />
           </FormField>
           <FormField label={t('currency')} htmlFor={id('currency')}>
@@ -145,7 +145,7 @@ export function PayFields({
               name={`${prefix}amount`}
               inputMode="decimal"
               required
-              defaultValue={editable(defaults.amount)}
+              defaultValue={editableDecimal(defaults.amount)}
             />
           </FormField>
           <FormField label={t('currency')} htmlFor={id('currency')}>

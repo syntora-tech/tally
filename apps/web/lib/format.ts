@@ -1,4 +1,5 @@
 import {
+  SCALE,
   formatAmount,
   formatUaDate,
   type DecimalInput,
@@ -11,12 +12,16 @@ import type { Locale } from '@/i18n/locales';
 type MonthTranslator = (key: `${number}`) => string;
 type RuleTranslator = (key: string, values?: Record<string, string>) => string;
 
-/** Money, dates and months in the UI language: `1,234.56` in English, `1 234.56` in Ukrainian. */
+/**
+ * Money, dates and months in the UI language: `1,234.56` in English, `1 234.56` in Ukrainian.
+ * Amounts keep their stored precision (rates, hours, crypto) and are never cut below 2 places.
+ */
 export function formatterFor(locale: Locale, months: MonthTranslator, rules: RuleTranslator) {
   return {
     amount: (value: DecimalInput, currency?: string, options: FormatAmountOptions = {}) =>
       formatAmount(value, currency, {
         grouping: locale === 'en' ? 'comma' : 'space',
+        maxDp: SCALE.amount,
         ...options,
       }),
     date: (date: string) => formatUaDate(date as LocalDate),
@@ -48,6 +53,12 @@ export function formatterFor(locale: Locale, months: MonthTranslator, rules: Rul
 }
 
 export type Formatter = ReturnType<typeof formatterFor>;
+
+/** Drops trailing zeros of numeric(20,8) values for editing: "60.00000000" → "60". */
+export function editableDecimal(v: string | null | undefined): string {
+  if (!v) return '';
+  return v.includes('.') ? v.replace(/\.?0+$/, '') : v;
+}
 
 /** For client and non-async server components; async ones use `getFormat()`. */
 export function useFormat(): Formatter {

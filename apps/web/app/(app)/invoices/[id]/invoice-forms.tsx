@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { useFormat } from '@/lib/format';
+import { editableDecimal, useFormat } from '@/lib/format';
 import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -132,7 +132,7 @@ export function InvoiceEditForm(props: {
                 <TableCell>
                   <Input
                     name={`lines.${String(i)}.quantity`}
-                    defaultValue={l.quantity}
+                    defaultValue={editableDecimal(l.quantity)}
                     inputMode="decimal"
                     aria-label={t('qtyAria')}
                   />
@@ -140,7 +140,7 @@ export function InvoiceEditForm(props: {
                 <TableCell>
                   <Input
                     name={`lines.${String(i)}.unitPrice`}
-                    defaultValue={l.unitPrice}
+                    defaultValue={editableDecimal(l.unitPrice)}
                     inputMode="decimal"
                     aria-label={t('price')}
                   />

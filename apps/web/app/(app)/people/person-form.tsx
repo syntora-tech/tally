@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
+import { editableDecimal } from '@/lib/format';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -28,12 +29,6 @@ export type PersonFormValues = {
   status: string;
   notes: string | null;
 };
-
-/** Drops trailing zeros of numeric(20,8) values for editing: "60.00000000" → "60". */
-function editableDecimal(v: string | null): string {
-  if (!v) return '';
-  return v.includes('.') ? v.replace(/\.?0+$/, '') : v;
-}
 
 export function PersonForm({ person }: { person?: PersonFormValues }) {
   const [state, action, pending] = useActionState<PersonFormState, FormData>(savePerson, null);
