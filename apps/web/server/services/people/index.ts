@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
+import { walletsOf, type WalletRow } from '../wallets';
 import { peopleFilters, personProfileInput, type PeopleFilters } from './schema';
 
 export type PersonRow = typeof person.$inferSelect & { load: string; bench: BenchStatus };
@@ -80,7 +81,17 @@ export const searchPeople = defineService({
 export type PersonCard = PersonRow & {
   /** Null for roles that cannot read payees (viewer) or when unset. */
   defaultPayee: { id: string; name: string } | null;
+  /** Crypto wallets (A-060); empty for roles that cannot read them. */
+  wallets: WalletRow[];
 };
+
+const walletRow = ({ id, network, address, label, isActive }: WalletRow): WalletRow => ({
+  id,
+  network,
+  address,
+  label,
+  isActive,
+});
 
 export const getPerson = defineService({
   name: 'people.get',
@@ -101,6 +112,7 @@ export const getPerson = defineService({
       return {
         ...withBench(row.person, loads),
         defaultPayee: row.payeeId ? { id: row.payeeId, name: row.payeeName ?? '' } : null,
+        wallets: (await walletsOf(tx, { personIds: [id] })).map(walletRow),
       } satisfies PersonCard;
     });
     return card ? ok(card) : err(serviceError('not_found', 'people.notFound'));

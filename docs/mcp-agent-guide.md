@@ -46,7 +46,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 
 | Tool                    | Kind  | What it does                                                                                                                               |
 | ----------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `openingBalance`, `openingDate`, `balance` (= opening + all postings)                     |
+| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + all postings)          |
 | `list_categories`       | read  | Categories: `txType`, `name`, `id`                                                                                                         |
 | `list_transactions`     | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`      |
 | `list_fx_rates`         | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                  |
@@ -55,12 +55,14 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                 |
 | `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                            |
 | `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data |
-| `get_person`            | read  | A person's profile by `id` and current load (`load`, `bench`)                                                                              |
-| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts                                                       |
+| `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                            |
+| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                     |
+| `find_wallets`          | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                           |
 | `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                       |
 | `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                               |
+| `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                        |
 
-Deleting or changing transactions over MCP is impossible by design. Likewise MCP has no access to payee details (FOP, tax IDs, IBANs, wallets), contracts, billing and pay rates, or assignments of people to projects — those are UI only. A mistake is fixed by a person in the UI (`/ledger`), after which the row can be entered again.
+Deleting or changing transactions over MCP is impossible by design. Likewise MCP has no access to payee details (FOP, tax IDs, IBANs, payout wallets), contracts, billing and pay rates, or assignments of people to projects — those are UI only. A mistake is fixed by a person in the UI (`/ledger`), after which the row can be entered again.
 
 ## 4. Rules for every call
 
@@ -106,7 +108,7 @@ Columns: `Type`, `Category`. Type to `txType`: `Revenue` → `revenue`, `Expense
 
 ### 6.3 Accounts — sheet `Accounts`
 
-Columns: `Account ID` (not needed), `Account Name` → `name`, `Type` (`Bank` / `Crypto` / `Cash`) → `kind` in lower case, `Currency` → `currency`, `Network` → `network` (crypto only), `Opening Balance` → `openingBalance` as a string.
+Columns: `Account ID` (not needed), `Account Name` → `name`, `Type` (`Bank` / `Crypto` / `Cash`) → `kind` in lower case, `Currency` → `currency`, `Network` → `network` (crypto only; one of `ETH`, `BSC`, `POLYGON`, `ARBITRUM`, `BASE`, `OPTIMISM`, `AVALANCHE`, `TRON`, `SOLANA`, `BTC`, `TON` — map `ERC20` → `ETH`, `TRC20` → `TRON`), `address` — our wallet address on that network if known, `Opening Balance` → `openingBalance` as a string.
 
 `openingDate` is the date of the **earliest** transaction on the `Transactions` sheet (`2026-01-01` in this file), the same for all accounts.
 
@@ -200,6 +202,20 @@ The Bench profile: who the person is, what they know, when they are free. Fields
 | `defaultCurrency`                 | `USD`, `EUR`, … (a new client defaults to `USD`)                               |
 
 Matching, partial updates and renaming work as for people, with `legalName` as the key. Contracts with the client and billing rates are added by a person in the UI.
+
+### 7.3 Crypto wallets — `upsert_wallets`, `find_wallets`
+
+People and clients we settle with in crypto can have several wallets. They are how a crypto transaction in the Ledger is matched to its counterparty, so an address on a network belongs to exactly one owner and can never be one of our own account addresses.
+
+| Field                    | Format                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `personId` or `clientId` | Exactly one; take the id from `search_people` / `list_clients`                                       |
+| `network`                | `ETH`, `BSC`, `POLYGON`, `ARBITRUM`, `BASE`, `OPTIMISM`, `AVALANCHE`, `TRON`, `SOLANA`, `BTC`, `TON` |
+| `address`                | As shown by the explorer; checked against the network format. EVM addresses are stored in lower case |
+| `label`                  | Optional note, e.g. `Binance deposit`; omit to keep the stored one                                   |
+| `isActive`               | `false` deactivates; wallets are never deleted so old transactions stay identifiable                 |
+
+The same EVM address used on several EVM networks is entered once per network. Before booking a crypto transaction, call `find_wallets` with the counterparty address: `wallets[].owner` names the person or client, `ownAccounts` means it is a transfer between our own accounts.
 
 ## 8. Report to the owner
 

@@ -14,6 +14,7 @@ import {
 } from '../services/ledger/batch';
 import { getPerson, searchPeople, type PersonRow } from '../services/people';
 import { upsertPeople } from '../services/people/batch';
+import { findWallets, upsertWallets } from '../services/wallets';
 
 export type ToolKind = 'read' | 'write';
 
@@ -44,7 +45,7 @@ function tool<S extends z.ZodType, T>(
   };
 }
 
-/** Bench profile only: payees (tax ids, IBANs, wallets) never leave through MCP (13.2). */
+/** Bench profile only: payees (tax ids, IBANs, payout wallets) never leave through MCP (13.2). */
 function benchProfile(p: PersonRow) {
   return {
     id: p.id,
@@ -87,6 +88,7 @@ export const TOOLS: readonly ToolDef[] = [
         kind: a.kind,
         currency: a.currency,
         network: a.network,
+        address: a.address,
         openingBalance: a.openingBalance,
         openingDate: a.openingDate,
         isActive: a.isActive,
@@ -149,18 +151,27 @@ export const TOOLS: readonly ToolDef[] = [
   tool({
     name: 'get_person',
     title: 'Person profile',
-    description: 'One person by id: bench profile and current load, without payee details.',
+    description:
+      'One person by id: bench profile, current load and crypto wallets (network, address, label, isActive), without payee details.',
     kind: 'read',
     service: getPerson,
-    present: benchProfile,
+    present: (p) => ({ ...benchProfile(p), wallets: p.wallets }),
   }),
   tool({
     name: 'list_clients',
     title: 'Clients',
     description:
-      'Clients with legal and short name, country, default currency and the number of contracts.',
+      'Clients with legal and short name, country, default currency, the number of contracts and crypto wallets (network, address, label, isActive).',
     kind: 'read',
     service: listClients,
+  }),
+  tool({
+    name: 'find_wallets',
+    title: 'Find wallet owners',
+    description:
+      'Crypto wallets of people and clients with their owner, plus our own accounts with that address (ownAccounts). Use it to identify the counterparty of a crypto transaction: pass the exact address (EVM case does not matter) and optionally the network; without address it lists all wallets.',
+    kind: 'read',
+    service: findWallets,
   }),
   tool({
     name: 'upsert_person_profile',
@@ -179,10 +190,18 @@ export const TOOLS: readonly ToolDef[] = [
     service: upsertClients,
   }),
   tool({
+    name: 'upsert_wallets',
+    title: 'Add or update crypto wallets',
+    description:
+      'Crypto wallets of people or clients in bulk (max 200). Each item names exactly one owner (personId or clientId), a network (ETH, BSC, POLYGON, ARBITRUM, BASE, OPTIMISM, AVALANCHE, TRON, SOLANA, BTC, TON) and the address, validated for that network. A new address is added; a known address of the same owner gets the label/isActive sent. An address owned by someone else or by one of our accounts is an error. Wallets are never deleted: set isActive false. All-or-nothing; errors keyed "wallets.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertWallets,
+  }),
+  tool({
     name: 'upsert_accounts',
     title: 'Create or update accounts',
     description:
-      'Creates accounts or updates them by exact name (max 100). The currency of an account that already has postings cannot change. All-or-nothing; use dryRun to preview.',
+      'Creates accounts or updates them by exact name (max 100). Crypto accounts take a network from the fixed list and our wallet address on it. The currency of an account that already has postings cannot change. All-or-nothing; use dryRun to preview.',
     kind: 'write',
     service: upsertAccounts,
   }),

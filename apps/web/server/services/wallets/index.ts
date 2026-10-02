@@ -122,6 +122,70 @@ export const listWallets = defineService({
     ),
 });
 
+/**
+ * Who owns an address (A-060): counterparty wallets and our own accounts, for identifying Ledger
+ * transactions. `address` is matched in canonical form, so EVM case does not matter.
+ */
+export const findWallets = defineService({
+  name: 'wallets.find',
+  input: z.object({
+    address: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe('Exact address; omit to list all wallets (optionally of one network)'),
+    network: network.optional(),
+  }),
+  handler: async (ctx, { address, network: net }) => {
+    const canonical = address && /^(0x|bc1)/i.test(address) ? address.toLowerCase() : address;
+    return ok(
+      await inActorScope(ctx, async (tx) => {
+        const wallets = await tx
+          .select({
+            ...walletColumns,
+            personId: cryptoWallet.personId,
+            personName: person.fullName,
+            clientId: cryptoWallet.clientId,
+            clientName: sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`,
+          })
+          .from(cryptoWallet)
+          .leftJoin(person, eq(person.id, cryptoWallet.personId))
+          .leftJoin(client, eq(client.id, cryptoWallet.clientId))
+          .where(
+            and(
+              canonical ? eq(cryptoWallet.address, canonical) : undefined,
+              net ? eq(cryptoWallet.network, net) : undefined,
+            ),
+          )
+          .orderBy(asc(cryptoWallet.network), asc(cryptoWallet.address))
+          .limit(1000);
+        const accounts = canonical
+          ? await tx
+              .select({ id: account.id, name: account.name, network: account.network })
+              .from(account)
+              .where(
+                and(eq(account.address, canonical), net ? eq(account.network, net) : undefined),
+              )
+          : [];
+        return {
+          wallets: wallets.map((w) => ({
+            id: w.id,
+            network: w.network,
+            address: w.address,
+            label: w.label,
+            isActive: w.isActive,
+            owner: w.personId
+              ? { kind: 'person' as const, id: w.personId, name: w.personName }
+              : { kind: 'client' as const, id: w.clientId, name: w.clientName },
+          })),
+          ownAccounts: accounts,
+        };
+      }),
+    );
+  },
+});
+
 export const addWallet = defineService({
   name: 'wallets.add',
   input: walletInput,

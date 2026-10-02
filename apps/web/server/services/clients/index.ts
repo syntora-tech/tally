@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
+import { walletsOf } from '../wallets';
 import { clientInput, contractInput } from './schema';
 
 export const clientName = sql<string>`coalesce(${client.shortName}, ${client.legalName})`;
@@ -31,7 +32,23 @@ export const listClients = defineService({
         .groupBy(client.id)
         .orderBy(asc(clientName)),
     );
-    return ok(rows);
+    const wallets = await inActorScope(ctx, (tx) =>
+      walletsOf(tx, { clientIds: rows.map((r) => r.id) }),
+    );
+    return ok(
+      rows.map((r) => ({
+        ...r,
+        wallets: wallets
+          .filter((w) => w.clientId === r.id)
+          .map(({ id, network, address, label, isActive }) => ({
+            id,
+            network,
+            address,
+            label,
+            isActive,
+          })),
+      })),
+    );
   },
 });
 

@@ -115,13 +115,14 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'search_people',
       'get_person',
       'list_clients',
+      'find_wallets',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(15);
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -251,6 +252,37 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       arguments: { id: people[0]?.id },
     })) as ToolResult;
     expect(card.structuredContent).not.toHaveProperty('defaultPayee');
+
+    const address = `0x${tag}${'ab'.repeat(16)}`;
+    const wallet = (await mcp.callTool({
+      name: 'upsert_wallets',
+      arguments: {
+        idempotencyKey: `wallets-${tag}`,
+        wallets: [
+          {
+            personId: people[0]?.id,
+            network: 'ETH',
+            address: address.toUpperCase().replace('0X', '0x'),
+          },
+        ],
+      },
+    })) as ToolResult;
+    expect(wallet.structuredContent).toMatchObject({ wallets: [{ status: 'created' }] });
+    const withWallet = (await mcp.callTool({
+      name: 'get_person',
+      arguments: { id: people[0]?.id },
+    })) as ToolResult;
+    expect(withWallet.structuredContent?.wallets).toEqual([
+      expect.objectContaining({ network: 'ETH', address, isActive: true }),
+    ]);
+    const owner = (await mcp.callTool({
+      name: 'find_wallets',
+      arguments: { address },
+    })) as ToolResult;
+    expect(owner.structuredContent).toMatchObject({
+      wallets: [{ owner: { kind: 'person', name: fullName } }],
+      ownAccounts: [],
+    });
 
     const legalName = `M ${tag} Client Ltd`;
     const saved = (await mcp.callTool({
