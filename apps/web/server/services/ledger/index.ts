@@ -12,7 +12,9 @@ import {
   currencyCode,
   decimalString,
   localDateString,
+  normalizeAddressIn,
   optionalLocalDate,
+  optionalNetwork,
   optionalText,
   requiredText,
 } from '../fields';
@@ -56,16 +58,19 @@ export const listAccounts = defineService({
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
-export const accountInput = z.object({
-  id: z.preprocess(emptyToUndefined, z.uuid().optional()),
-  name: requiredText('field.name'),
-  kind: z.enum(['bank', 'crypto', 'cash'], { error: 'field.kind' }),
-  currency: currencyCode,
-  network: optionalText,
-  openingBalance: decimalString,
-  openingDate: localDateString,
-  isActive: checkbox,
-});
+export const accountInput = z
+  .object({
+    id: z.preprocess(emptyToUndefined, z.uuid().optional()),
+    name: requiredText('field.name'),
+    kind: z.enum(['bank', 'crypto', 'cash'], { error: 'field.kind' }),
+    currency: currencyCode,
+    network: optionalNetwork,
+    address: optionalText,
+    openingBalance: decimalString,
+    openingDate: localDateString,
+    isActive: checkbox,
+  })
+  .transform(normalizeAddressIn('network', 'address'));
 
 /** The currency of an account with postings is fixed: I4 was checked against it. */
 export const saveAccount = defineService({

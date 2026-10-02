@@ -1,4 +1,4 @@
-import { toDecimal } from '@tally/domain';
+import { shortAddress, toDecimal } from '@tally/domain';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { FormField, NativeSelect } from '@/components/form-field';
@@ -86,6 +86,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                 {a.name}
                 {a.network ? ` · ${a.network}` : ''}
               </Link>
+              {a.address && (
+                <span className="font-mono text-xs text-muted-foreground" title={a.address}>
+                  {shortAddress(a.address)}
+                </span>
+              )}
               <span className="text-xl font-semibold tabular-nums">
                 {fmt.amount(balance, a.currency)}
               </span>

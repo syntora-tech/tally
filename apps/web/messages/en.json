@@ -203,7 +203,10 @@
       "name": "Enter the name",
       "kind": "Choose a type",
       "positive": "The amount must be greater than 0",
-      "voidReason": "Enter the reason for voiding"
+      "voidReason": "Enter the reason for voiding",
+      "network": "Choose a network from the list",
+      "networkRequired": "Choose the network of this address",
+      "walletAddress": "This is not a valid address for the chosen network"
     },
     "general": {
       "checkInput": "Check the entered data",
@@ -388,6 +391,13 @@
       "duplicate": "Such a record already exists",
       "referenced": "The record is linked to other data",
       "invalid": "The data did not pass validation"
+    },
+    "wallets": {
+      "owner": "A wallet belongs to exactly one person or client",
+      "ownAccount": "This is the address of our account «{name}»",
+      "taken": "This address already belongs to {owner}",
+      "duplicate": "This wallet is already added",
+      "notFound": "Wallet not found"
     }
   },
   "audit": {
@@ -908,7 +918,9 @@
     "rateSaved": "Rate saved",
     "date": "Date",
     "rateUah": "Rate, UAH per 1",
-    "saveManualRate": "Save manual rate"
+    "saveManualRate": "Save manual rate",
+    "address": "Wallet address",
+    "addressHint": "For crypto accounts: our address on the network"
   },
   "newTransaction": {
     "subtitle": "For an exchange enter both actual amounts from the statement — the rate is derived from them"
@@ -1362,5 +1374,18 @@
     "copy": "Copy command",
     "revoked": "Access revoked",
     "revoke": "Revoke"
+  },
+  "wallets": {
+    "title": "Crypto wallets",
+    "empty": "No wallets yet. They help recognise this counterparty in Ledger transactions.",
+    "network": "Network",
+    "address": "Address",
+    "label": "Note",
+    "labelHint": "e.g. Binance deposit",
+    "added": "Wallet added",
+    "activated": "Wallet activated",
+    "deactivated": "Wallet deactivated",
+    "activate": "Activate",
+    "deactivate": "Deactivate"
   }
 }

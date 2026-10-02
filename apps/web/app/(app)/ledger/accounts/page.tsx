@@ -48,6 +48,7 @@ export default async function AccountsPage() {
                 kind: a.kind,
                 currency: a.currency,
                 network: a.network,
+                address: a.address,
                 openingBalance: a.openingBalance,
                 openingDate: a.openingDate,
                 isActive: a.isActive,

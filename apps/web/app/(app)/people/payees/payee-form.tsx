@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
+import { NetworkSelect } from '@/components/network-select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,11 +109,11 @@ export function PayeeForm({ payee, people, defaultPersonId }: Props) {
         <Input id="walletAddress" name="walletAddress" defaultValue={payee?.walletAddress ?? ''} />
       </FormField>
       <FormField label={t('network')} htmlFor="walletNetwork" error={errors?.walletNetwork}>
-        <Input
+        <NetworkSelect
           id="walletNetwork"
           name="walletNetwork"
           defaultValue={payee?.walletNetwork ?? ''}
-          placeholder="TRON, Ethereum"
+          placeholder="—"
         />
       </FormField>
       <div className="flex gap-2 md:col-span-2">

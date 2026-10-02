@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   index,
@@ -11,7 +12,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { baseColumns, currencyCheck, rolePolicies } from './_common';
+import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
 
 /** Our legal entity (TOV «SYNTORA»): headers of invoices and acts. */
 export const company = pgTable(
@@ -99,6 +100,7 @@ export const payee = pgTable(
     unique('payee_legacy_ref_key').on(t.legacyRef),
     check('payee_kind_check', sql`${t.kind} in ('fop', 'crypto', 'other')`),
     check('payee_name_check', sql`num_nonnulls(${t.legalNameUa}, ${t.legalNameEn}) >= 1`),
+    networkCheck('payee_wallet_network_check', t.walletNetwork),
     ...rolePolicies('payee', { read: 'finance', write: 'finance' }),
   ],
 );
@@ -126,6 +128,38 @@ export const client = pgTable(
   ],
 );
 
+/**
+ * Crypto wallets of the people and clients we settle with in crypto; several per owner. The
+ * Ledger matches transaction counterparties by (network, address), so an address has one owner.
+ * Wallets are deactivated rather than deleted to keep old transactions identifiable.
+ */
+export const cryptoWallet = pgTable(
+  'crypto_wallet',
+  {
+    ...baseColumns,
+    personId: uuid().references(() => person.id, { onDelete: 'cascade' }),
+    clientId: uuid().references(() => client.id, { onDelete: 'cascade' }),
+    network: text().notNull(),
+    /** Canonical form from `normalizeWalletAddress` (EVM lower-cased). */
+    address: text().notNull(),
+    label: text(),
+    isActive: boolean().notNull().default(true),
+  },
+  (t) => [
+    check('crypto_wallet_owner_check', sql`num_nonnulls(${t.personId}, ${t.clientId}) = 1`),
+    check(
+      'crypto_wallet_address_check',
+      sql`${t.address} = btrim(${t.address}) and ${t.address} <> ''`,
+    ),
+    networkCheck('crypto_wallet_network_check', t.network),
+    unique('crypto_wallet_network_address_key').on(t.network, t.address),
+    index('crypto_wallet_person_idx').on(t.personId),
+    index('crypto_wallet_client_idx').on(t.clientId),
+    ...rolePolicies('crypto_wallet', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+export type CryptoWallet = typeof cryptoWallet.$inferSelect;
 export type Company = typeof company.$inferSelect;
 export type Person = typeof person.$inferSelect;
 export type Payee = typeof payee.$inferSelect;

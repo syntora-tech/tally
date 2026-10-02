@@ -1,4 +1,11 @@
-import { addDays, localDate, sum, toDecimal, type LocalDate } from '@tally/domain';
+import {
+  addDays,
+  localDate,
+  parseCryptoNetwork,
+  sum,
+  toDecimal,
+  type LocalDate,
+} from '@tally/domain';
 import type { Anomaly } from '../model';
 import { decimal, text } from '../cells';
 import { cellAt, ref, type Book, type Sheet } from '../workbook';
@@ -94,12 +101,21 @@ export function parseLedger(book: Book): LedgerModel {
     .filter(({ row }) => text(row[1]?.v))
     .map(({ row }) => {
       const kind = text(row[2]?.v).toLowerCase();
+      const rawNetwork = text(row[4]?.v);
+      const network = rawNetwork ? parseCryptoNetwork(rawNetwork) : null;
+      if (rawNetwork && !network) {
+        anomalies.push({
+          code: 'ledger_network_unknown',
+          ref: `ledger:account:${text(row[1]?.v)}`,
+          message: `Невідома мережа «${rawNetwork}» — рахунок імпортовано без мережі`,
+        });
+      }
       return {
         ref: `ledger:account:${text(row[1]?.v)}`,
         name: text(row[1]?.v),
         kind: kind === 'crypto' ? 'crypto' : kind === 'cash' ? 'cash' : 'bank',
         currency: text(row[3]?.v).toUpperCase(),
-        network: text(row[4]?.v) || null,
+        network,
         openingBalance: decimal(row[5]?.v) ?? '0',
       } satisfies LedgerAccount;
     });

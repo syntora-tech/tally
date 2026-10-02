@@ -12,3 +12,4 @@ export * from './date-rules';
 export * from './words';
 export * from './period';
 export * from './payroll';
+export * from './crypto';

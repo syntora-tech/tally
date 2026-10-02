@@ -260,6 +260,20 @@
       "when": 1790863359673,
       "tag": "20261001140239_timesheet_note",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790930900168,
+      "tag": "20261002084820_crypto_wallets",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790930921491,
+      "tag": "20261002084841_crypto_wallet_access",
+      "breakpoints": true
     }
   ]
 }

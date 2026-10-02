@@ -43,6 +43,29 @@ export function rolePolicies(table: string, access: { read: Access; write: Acces
 }
 
 /** ISO 4217 codes plus 4-letter stablecoins (USDT, USDC), spec 4.2 `char(3|4)`. */
+/** Mirrors `CRYPTO_NETWORKS` in @tally/domain (a unit test in apps/web keeps them equal). */
+export const CRYPTO_NETWORK_CODES = [
+  'ETH',
+  'BSC',
+  'POLYGON',
+  'ARBITRUM',
+  'BASE',
+  'OPTIMISM',
+  'AVALANCHE',
+  'TRON',
+  'SOLANA',
+  'BTC',
+  'TON',
+] as const;
+
+export function networkCheck(name: string, column: AnyPgColumn) {
+  const list = sql.join(
+    CRYPTO_NETWORK_CODES.map((n) => sql.raw(`'${n}'`)),
+    sql`, `,
+  );
+  return check(name, sql`${column} in (${list})`);
+}
+
 export function currencyCheck(name: string, column: AnyPgColumn) {
   return check(name, sql`${column} ~ '^[A-Z]{3,4}$'`);
 }

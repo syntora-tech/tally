@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
+import { WalletsCard } from '@/components/wallets-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -165,6 +166,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="flex flex-col gap-6">
+          {isFinance && <WalletsCard ctx={ctx} owner={{ name: 'clientId', value: c.id }} />}
           <LinkedDocuments ctx={ctx} entityType="client" entityId={c.id} canAdd={isFinance} />
           <AuditHistory ctx={ctx} tableName="client" rowId={c.id} />
         </div>

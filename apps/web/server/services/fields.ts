@@ -1,4 +1,10 @@
-import { parseDecimal, parseLocalDate, type LocalDate } from '@tally/domain';
+import {
+  CRYPTO_NETWORKS,
+  normalizeWalletAddress,
+  parseDecimal,
+  parseLocalDate,
+  type LocalDate,
+} from '@tally/domain';
 import { z } from 'zod';
 
 // Shared Zod building blocks for forms, services and (later) MCP tools. Money and dates stay strings.
@@ -69,3 +75,47 @@ export const checkbox = z
   .union([z.literal('on'), z.literal('true'), z.literal('false'), z.boolean()])
   .optional()
   .transform((v) => v === true || v === 'on' || v === 'true');
+
+export const cryptoNetwork = z.enum(CRYPTO_NETWORKS, { error: 'field.network' });
+
+/** Network code from the fixed list (A-060); empty input becomes null. */
+export const optionalNetwork = z
+  .preprocess(emptyToNull, cryptoNetwork.nullable().optional())
+  .transform((v) => v ?? null);
+
+type Issue = { path: string[]; message: string };
+
+/** Zod transform step: replaces `addressKey` with its canonical form or reports an issue. */
+export function normalizeAddressIn<K extends string, A extends string>(
+  networkKey: K,
+  addressKey: A,
+) {
+  return <T extends Record<K | A, string | null>>(value: T, ctx: z.RefinementCtx): T => {
+    const result = canonicalAddress(value[networkKey], value[addressKey], {
+      network: networkKey,
+      address: addressKey,
+    });
+    if ('issue' in result) {
+      ctx.addIssue({ code: 'custom', ...result.issue });
+      return z.NEVER;
+    }
+    return { ...value, [addressKey]: result.address };
+  };
+}
+
+/**
+ * Canonical wallet address for `network` (EVM lower-cased), or the issue to report. A missing
+ * address is fine; an address without a network is not, since it cannot be validated or matched.
+ */
+export function canonicalAddress(
+  network: string | null,
+  address: string | null,
+  keys: { network: string; address: string },
+): { address: string | null } | { issue: Issue } {
+  if (!address) return { address: null };
+  if (!network) return { issue: { path: [keys.network], message: 'field.networkRequired' } };
+  const normalized = normalizeWalletAddress(network as (typeof CRYPTO_NETWORKS)[number], address);
+  return normalized.isOk()
+    ? { address: normalized.value }
+    : { issue: { path: [keys.address], message: 'field.walletAddress' } };
+}

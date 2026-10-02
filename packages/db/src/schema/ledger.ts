@@ -9,10 +9,11 @@ import {
   pgTable,
   text,
   unique,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { baseColumns, currencyCheck, rolePolicies } from './_common';
+import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
 import { accountKind, fxSource, txType } from './enums';
 import { invoice } from './invoices';
 import { payrollItem } from './payroll';
@@ -28,6 +29,8 @@ export const account = pgTable(
     currency: text().notNull(),
     /** Blockchain network for crypto wallets, e.g. ETH, TRON. */
     network: text(),
+    /** Our own wallet address, canonical form (`normalizeWalletAddress`); identifies transfers. */
+    address: text(),
     openingBalance: numeric({ precision: 20, scale: 8 }).notNull().default('0'),
     openingDate: date({ mode: 'string' }).notNull(),
     isActive: boolean().notNull().default(true),
@@ -36,6 +39,11 @@ export const account = pgTable(
     unique('account_legacy_ref_key').on(t.legacyRef),
     unique('account_name_key').on(t.name),
     currencyCheck('account_currency_check', t.currency),
+    networkCheck('account_network_check', t.network),
+    check('account_address_network_check', sql`${t.address} is null or ${t.network} is not null`),
+    uniqueIndex('account_network_address_key')
+      .on(t.network, t.address)
+      .where(sql`${t.address} is not null`),
     ...rolePolicies('account', { read: 'finance', write: 'finance' }),
   ],
 );

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
-import { optionalLocalDate, optionalText } from '../fields';
+import { normalizeAddressIn, optionalLocalDate, optionalNetwork, optionalText } from '../fields';
 
 export const PAYEE_KINDS = ['fop', 'crypto', 'other'] as const;
 
@@ -54,7 +54,7 @@ export const payeeInput = z
     iban: optionalIban,
     bankName: optionalText,
     walletAddress: optionalText,
-    walletNetwork: optionalText,
+    walletNetwork: optionalNetwork,
     personId: optionalUuid,
   })
   .refine((p) => p.legalNameUa ?? p.legalNameEn, {
@@ -64,7 +64,8 @@ export const payeeInput = z
   .refine((p) => p.kind !== 'crypto' || p.walletAddress, {
     message: 'payees.wallet',
     path: ['walletAddress'],
-  });
+  })
+  .transform(normalizeAddressIn('walletNetwork', 'walletAddress'));
 
 export const payeeName = sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`;
 

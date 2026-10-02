@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
+import { NetworkSelect } from '@/components/network-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { editableDecimal } from '@/lib/format';
@@ -57,6 +58,7 @@ export type AccountValues = {
   kind: string;
   currency: string;
   network: string | null;
+  address: string | null;
   openingBalance: string;
   openingDate: string;
   isActive: boolean;
@@ -96,12 +98,12 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           required
         />
       </FormField>
-      <FormField label={t('network')} htmlFor={`${p}-network`}>
-        <Input
+      <FormField label={t('network')} htmlFor={`${p}-network`} error={errors?.network}>
+        <NetworkSelect
           id={`${p}-network`}
           name="network"
           defaultValue={value?.network ?? ''}
-          placeholder="ETH, TRON"
+          placeholder="—"
         />
       </FormField>
       <FormField label={t('opening')} htmlFor={`${p}-opening`} error={errors?.openingBalance}>
@@ -120,7 +122,22 @@ export function AccountForm({ value, today }: { value?: AccountValues; today: st
           defaultValue={value?.openingDate ?? today}
         />
       </FormField>
-      <div className="flex h-9 items-center gap-3">
+      <FormField
+        label={t('address')}
+        htmlFor={`${p}-address`}
+        error={errors?.address}
+        className="col-span-2 md:col-span-6"
+      >
+        <Input
+          id={`${p}-address`}
+          name="address"
+          defaultValue={value?.address ?? ''}
+          placeholder={t('addressHint')}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </FormField>
+      <div className="col-span-2 flex h-9 items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="isActive" defaultChecked={value?.isActive ?? true} />{' '}
           {t('active')}

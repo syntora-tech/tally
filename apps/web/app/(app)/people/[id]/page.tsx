@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
+import { WalletsCard } from '@/components/wallets-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -109,6 +110,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
         <div className="flex flex-col gap-6">
           {isFinance && <AssignmentsCard ctx={ctx} personId={p.id} />}
+          {isFinance && <WalletsCard ctx={ctx} owner={{ name: 'personId', value: p.id }} />}
           <LinkedDocuments
             ctx={ctx}
             entityType="person"

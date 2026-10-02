@@ -11,6 +11,8 @@ import {
   currencyCode,
   decimalString,
   localDateString,
+  normalizeAddressIn,
+  optionalNetwork,
   optionalText,
   requiredText,
 } from '../fields';
@@ -30,15 +32,20 @@ function batchFailure(errors: ItemErrors) {
   return serviceError('validation_error', msg('batch.failedItems', { count }), errors);
 }
 
-export const accountItem = z.object({
-  name: requiredText('field.name').describe('Unique account name, e.g. "Privat USD"'),
-  kind: z.enum(['bank', 'crypto', 'cash']),
-  currency: currencyCode.describe('ISO code or stablecoin: USD, EUR, UAH, USDT, USDC'),
-  network: optionalText.describe('Blockchain network for crypto wallets, e.g. ETH, TRON'),
-  openingBalance: decimalString.describe('Balance on openingDate as a decimal string'),
-  openingDate: localDateString.describe('YYYY-MM-DD; the balance is opening + all postings'),
-  isActive: z.boolean().default(true),
-});
+export const accountItem = z
+  .object({
+    name: requiredText('field.name').describe('Unique account name, e.g. "Privat USD"'),
+    kind: z.enum(['bank', 'crypto', 'cash']),
+    currency: currencyCode.describe('ISO code or stablecoin: USD, EUR, UAH, USDT, USDC'),
+    network: optionalNetwork.describe(
+      'Network of a crypto wallet: ETH, BSC, POLYGON, ARBITRUM, BASE, OPTIMISM, AVALANCHE, TRON, SOLANA, BTC, TON',
+    ),
+    address: optionalText.describe('Our wallet address on that network; identifies transfers'),
+    openingBalance: decimalString.describe('Balance on openingDate as a decimal string'),
+    openingDate: localDateString.describe('YYYY-MM-DD; the balance is opening + all postings'),
+    isActive: z.boolean().default(true),
+  })
+  .transform(normalizeAddressIn('network', 'address'));
 
 /** Accounts matched by name: created, updated in place, or left unchanged. */
 export const upsertAccounts = defineService({
@@ -65,6 +72,7 @@ export const upsertAccounts = defineService({
           current.kind === item.kind &&
           current.currency === item.currency &&
           current.network === item.network &&
+          current.address === item.address &&
           toDecimal(current.openingBalance).eq(item.openingBalance) &&
           current.openingDate === item.openingDate &&
           current.isActive === item.isActive;
