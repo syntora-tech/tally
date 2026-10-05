@@ -330,6 +330,20 @@
       "when": 1791212596304,
       "tag": "20261005150316_agency_terms_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791227462557,
+      "tag": "20261005191102_trips",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1791227479505,
+      "tag": "20261005191119_trips_invariants",
+      "breakpoints": true
     }
   ]
 }

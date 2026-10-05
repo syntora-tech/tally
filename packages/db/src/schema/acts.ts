@@ -11,12 +11,14 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, rolePolicies } from './_common';
 import { contract } from './engagements';
 import { actType, docStatus } from './enums';
 import { payee } from './parties';
 import { payrollItem } from './payroll';
+import { reimbursement } from './trips';
 
 /**
  * Act of a FOP contractor (spec 4.2, 6.6). The monthly act equals `total_uah` of its payroll item;
@@ -37,6 +39,8 @@ export const supplierAct = pgTable(
       .notNull()
       .references(() => payee.id),
     payrollItemId: uuid().references(() => payrollItem.id),
+    /** An extra act for a trip reimbursement (6.6, A-070). */
+    reimbursementId: uuid().references((): AnyPgColumn => reimbursement.id),
     type: actType().notNull().default('monthly'),
     number: text(),
     actDate: date({ mode: 'string' }).notNull(),

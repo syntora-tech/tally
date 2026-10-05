@@ -73,7 +73,8 @@
       "cv": "CV",
       "nda": "NDA",
       "statement": "Виписка",
-      "other": "Інше"
+      "other": "Інше",
+      "receipt": "Чек"
     },
     "docStatus": {
       "draft": "Чернетка",

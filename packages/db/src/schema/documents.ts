@@ -24,6 +24,7 @@ export const DOCUMENT_TYPES = [
   'cv',
   'nda',
   'statement',
+  'receipt',
   'other',
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];

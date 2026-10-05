@@ -34,7 +34,7 @@ select is((select count(distinct number_key)::int from public.document where id:
 select is((select number_key from public.document where id = '70000000-0000-0000-0000-000000000001'), '1003А4', 'number_key value matches the domain function');
 select throws_ok($$ update public.document set number_key = 'x' $$, '428C9', null, 'number_key is generated');
 
-select throws_ok($$ insert into public.document (type, title) values ('receipt', 'X') $$,
+select throws_ok($$ insert into public.document (type, title) values ('passport', 'X') $$,
   '23514', null, 'unknown document type rejected');
 select lives_ok($$ insert into public.document (id, type, title) values ('70000000-0000-0000-0000-000000000010', 'nda', 'NDA without links') $$,
   'document without links is allowed (6.9 AC)');

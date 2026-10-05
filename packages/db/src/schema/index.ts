@@ -12,3 +12,4 @@ export * from './ledger';
 export * from './payroll';
 export * from './acts';
 export * from './mcp';
+export * from './trips';

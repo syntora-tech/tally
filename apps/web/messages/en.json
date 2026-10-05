@@ -73,7 +73,8 @@
       "cv": "CV",
       "nda": "NDA",
       "statement": "Statement",
-      "other": "Other"
+      "other": "Other",
+      "receipt": "Receipt"
     },
     "docStatus": {
       "draft": "Draft",

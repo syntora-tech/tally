@@ -19,6 +19,7 @@ import { accountKind, fxSource, plannedFrequency, txType } from './enums';
 import { invoice } from './invoices';
 import { client, person } from './parties';
 import { payrollItem } from './payroll';
+import { reimbursement } from './trips';
 
 /** Bank account, wallet or cash box (spec 6.7); balance = opening + Σ postings. */
 export const account = pgTable(
@@ -166,13 +167,18 @@ export const allocation = pgTable(
     currency: text().notNull(),
     invoiceId: uuid().references(() => invoice.id),
     payrollItemId: uuid().references((): AnyPgColumn => payrollItem.id),
+    reimbursementId: uuid().references((): AnyPgColumn => reimbursement.id),
     fxRate: numeric({ precision: 18, scale: 6 }),
     fxSource: fxSource(),
   },
   (t) => [
     unique('allocation_legacy_ref_key').on(t.legacyRef),
     check('allocation_amount_check', sql`${t.amount} > 0`),
-    check('allocation_target_check', sql`num_nonnulls(${t.invoiceId}, ${t.payrollItemId}) = 1`),
+    check(
+      'allocation_target_check',
+      sql`num_nonnulls(${t.invoiceId}, ${t.payrollItemId}, ${t.reimbursementId}) = 1`,
+    ),
+    index('allocation_reimbursement_idx').on(t.reimbursementId),
     index('allocation_payroll_item_idx').on(t.payrollItemId),
     index('allocation_transaction_idx').on(t.transactionId),
     index('allocation_invoice_idx').on(t.invoiceId),
