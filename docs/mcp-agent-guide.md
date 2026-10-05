@@ -69,8 +69,15 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `get_trip`              | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
 | `upsert_trips`          | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
 | `add_trip_expenses`     | write | Adds expenses to a trip (≤ 200); NBU rate by default; duplicate receipts refused                                                                        |
+| `search_documents`      | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
+| `get_document`          | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
+| `find_link_targets`     | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
+| `add_documents`         | write | Adds documents (≤ 10) with a base64 file (≤ 3 MB per call) or a link, plus links; `supersedesId` for a new version                                      |
+| `update_documents`      | write | Corrects document metadata by `id` (≤ 100); `status: void` cancels; generated/signed files are read-only                                                |
+| `link_documents`        | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
+| `unlink_documents`      | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
 
-A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only.
+A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
 ## 4. Rules for every call
 
@@ -318,6 +325,17 @@ A trip (6.8) has dates, a place and participants (people from `search_people`). 
    - **who paid:** the participant's own card → `paidBy: "person"`, `reimbursable: true` unless the owner says the company does not return it; the company's card or account → `paidBy: "company"` with `transactionId` of the Ledger expense (category `Travel / Conf.`, see section 7) — company-paid expenses are never reimbursed;
    - the same date + amount + description already in another trip is refused: it is usually the same receipt pasted twice. Use `allowDuplicate: true` only when the owner confirms they are different.
 3. Receipt photos and reimbursements (through the monthly payout, an extra FOP act or a direct payment) are done by a person in the UI: Trips → the trip.
+
+### 8.7 Documents — `search_documents`, `get_document`, `add_documents`, `link_documents`
+
+The registry (6.9) holds contracts, SOWs, annexes, NDAs, CVs, invoices, acts, statements, receipts and other files. A document may be linked to any number of records — `person`, `payee`, `client`, `contract`, `assignment`, `invoice`, `supplier_act`, `trip`, `transaction` — or to none.
+
+1. **Look first.** `search_documents` with `q` (number or title) or `linkedTo` — do not upload what is already there; a newer copy of an existing document is a new version (`supersedesId`), not a second document.
+2. **Find the records.** Ids come from `find_link_targets` (any type), or `search_people`, `list_clients`, `list_payees`, `list_trips`, `list_transactions`. A link to a record that does not exist is an error.
+3. **Add.** `add_documents` with `type`, `title`, `number` and `docDate` as printed on the document, and either `file` `{fileName, mimeType, contentBase64}` or `url` (e.g. a Vchasno link; Tally never downloads it). Put the main record first in `links`: it picks the Drive folder (person → `people/…`, client or contract → `clients/…`, payee → `payees/…`, trip → `trips/…`). Files are limited to 3 MB per call — send several documents in separate calls, and ask the owner to upload anything larger in the UI. Run `dryRun: true` first: it shows the folder and the link labels without uploading.
+4. **Read.** `get_document` with `includeContent: true` returns the file as base64 to read a PDF or a scan; `viewUrl` opens it in Drive.
+5. **Correct.** `update_documents` changes only the fields sent. Documents are never deleted: a wrong or cancelled one gets `status: "void"`. Invoice and act files that Tally generated, and their signed copies, belong to the invoice/act and are read-only here.
+6. **Links.** `link_documents` attaches existing documents; `unlink_documents` detaches them — only when the owner asks, after `dryRun`.
 
 ## 9. Report to the owner
 
