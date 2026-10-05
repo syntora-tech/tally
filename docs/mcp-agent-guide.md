@@ -44,27 +44,27 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 
 ## 3. Tools
 
-| Tool                    | Kind  | What it does                                                                                                                               |
-| ----------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + all postings)          |
-| `list_categories`       | read  | Categories: `txType`, `name`, `id`                                                                                                         |
-| `list_transactions`     | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`      |
-| `list_fx_rates`         | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                  |
-| `upsert_accounts`       | write | Creates or updates accounts by exact name (≤ 100)                                                                                          |
-| `upsert_categories`     | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                       |
-| `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                 |
-| `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                            |
-| `update_transactions`   | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                      |
-| `delete_transactions`   | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request   |
-| `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data |
-| `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                            |
-| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                     |
-| `find_wallets`          | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                           |
-| `list_payees`           | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                    |
-| `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                       |
-| `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                               |
-| `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                        |
-| `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                         |
+| Tool                    | Kind  | What it does                                                                                                                                            |
+| ----------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + postings; `asOf` = up to that date) |
+| `list_categories`       | read  | Categories: `txType`, `name`, `id`                                                                                                                      |
+| `list_transactions`     | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`                   |
+| `list_fx_rates`         | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                               |
+| `upsert_accounts`       | write | Creates or updates accounts by exact name (≤ 100)                                                                                                       |
+| `upsert_categories`     | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                                    |
+| `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                              |
+| `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                                         |
+| `update_transactions`   | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                                   |
+| `delete_transactions`   | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request                |
+| `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data              |
+| `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                                         |
+| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                                  |
+| `find_wallets`          | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                                        |
+| `list_payees`           | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                                 |
+| `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                                    |
+| `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                                            |
+| `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
+| `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only.
 
@@ -233,7 +233,7 @@ The agent does not allocate money to documents. After booking, list for the owne
 
 ### 7.6 Reconciliation
 
-For every account, the closing balance of the statement must equal `balance` in `get_balances` exactly, provided nothing after the statement's last date has been entered. On a mismatch do not add correcting rows: report the account, the statement balance, Tally's balance and the rows you suspect (missed, duplicated, a fee booked twice).
+For every account, call `get_balances` with `asOf` = the statement's last date: the closing balance of the statement must equal `balance` exactly. A person can do the same in the UI: Ledger → «Reconcile». On a mismatch do not add correcting rows: report the account, the statement balance, Tally's balance and the rows you suspect (missed, duplicated, a fee booked twice).
 
 ## 8. People and clients
 

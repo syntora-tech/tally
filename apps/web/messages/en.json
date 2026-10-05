@@ -277,7 +277,8 @@
       "txNotFound": "Transaction not found",
       "oneParty": "Link the transaction to one person or one client",
       "addressNeedsCrypto": "A counterparty wallet needs a crypto account in the transaction",
-      "editReason": "This transaction is allocated: enter the reason for changing its money"
+      "editReason": "This transaction is allocated: enter the reason for changing its money",
+      "beforeOpening": "The date is before the account's opening date"
     },
     "fx": {
       "ratePositive": "The rate must be > 0",
@@ -460,7 +461,8 @@
     "act": "Act",
     "trips": "Trips",
     "login": "Sign in",
-    "editTransaction": "Edit transaction"
+    "editTransaction": "Edit transaction",
+    "reconcile": "Reconciliation"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -918,7 +920,8 @@
     "explorer": "Open in explorer",
     "edit": "Edit",
     "editTransaction": "Edit transaction",
-    "editAllocated": "This transaction is allocated to invoices or payouts: changing its type, accounts or amounts needs a reason, and allocations must still fit."
+    "editAllocated": "This transaction is allocated to invoices or payouts: changing its type, accounts or amounts needs a reason, and allocations must still fit.",
+    "reconcile": "Reconcile"
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",
@@ -1427,5 +1430,21 @@
     "deactivated": "Wallet deactivated",
     "activate": "Activate",
     "deactivate": "Deactivate"
+  },
+  "reconcile": {
+    "title": "Reconciliation",
+    "subtitle": "Compare a balance from the bank statement or wallet on a date with the balance in Tally",
+    "account": "Account",
+    "chooseAccount": "Choose an account",
+    "onDate": "Balance at the end of",
+    "statementBalance": "Balance from the bank",
+    "check": "Check",
+    "resultTitle": "{account} at the end of {date}",
+    "statement": "Bank / wallet",
+    "computed": "Tally",
+    "difference": "Difference",
+    "matches": "Balances match",
+    "mismatch": "Balances differ: look for missing, duplicate or wrong transactions up to this date",
+    "openJournal": "Open the journal of this account up to this date"
   }
 }

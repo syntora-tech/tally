@@ -49,21 +49,61 @@ export const TWO_LEG_TYPES: readonly TxType[] = [
   'crypto_swap',
 ];
 
-const balanceSql = sql<string>`${account.openingBalance} + coalesce((select sum(p.amount) from ${posting} p where p.account_id = "account"."id"), 0)`;
+/** Opening balance plus postings, optionally only those of transactions on or before a date. */
+const balanceSql = (asOf?: string | null) =>
+  sql<string>`${account.openingBalance} + coalesce((select sum(p.amount) from ${posting} p join ${transaction} t on t.id = p.transaction_id where p.account_id = "account"."id"${asOf ? sql` and t.occurred_on <= ${asOf}` : sql``}), 0)`;
 
 export const listAccounts = defineService({
   name: 'ledger.accounts.list',
-  input: z.object({ includeInactive: z.boolean().default(false) }),
-  handler: async (ctx, { includeInactive }) =>
+  input: z.object({
+    includeInactive: z.boolean().default(false),
+    asOf: optionalLocalDate.describe(
+      'YYYY-MM-DD: balances at the end of that day (transactions dated after it are left out)',
+    ),
+  }),
+  handler: async (ctx, { includeInactive, asOf }) =>
     ok(
       await inActorScope(ctx, (tx) =>
         tx
-          .select({ account, balance: balanceSql })
+          .select({ account, balance: balanceSql(asOf) })
           .from(account)
           .where(includeInactive ? undefined : eq(account.isActive, true))
           .orderBy(asc(account.name)),
       ),
     ),
+});
+
+/**
+ * Reconciliation (6.7): a balance from the bank or wallet on a date against the computed one.
+ * Nothing is stored; a mismatch is fixed by finding the missing or wrong transactions.
+ */
+export const reconcileAccount = defineService({
+  name: 'ledger.accounts.reconcile',
+  input: z.object({
+    accountId: z.uuid({ error: 'ledger.chooseAccount' }),
+    onDate: localDateString,
+    statementBalance: decimalString,
+  }),
+  handler: async (ctx, { accountId, onDate, statementBalance }) =>
+    inActorScope(ctx, async (tx) => {
+      const [row] = await tx
+        .select({ account, balance: balanceSql(onDate) })
+        .from(account)
+        .where(eq(account.id, accountId));
+      if (!row) return err(serviceError('not_found', 'ledger.accountNotFound'));
+      if (onDate < row.account.openingDate) {
+        return err(
+          serviceError('validation_error', 'ledger.beforeOpening', {
+            onDate: ['ledger.beforeOpening'],
+          }),
+        );
+      }
+      return ok({
+        account: row.account,
+        computed: row.balance,
+        difference: toDecimal(statementBalance).minus(row.balance).toString(),
+      });
+    }),
 });
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);

@@ -9,6 +9,7 @@ import {
   impliedRate,
   listAccounts,
   listTransactions,
+  reconcileAccount,
   saveAccount,
 } from '.';
 
@@ -85,6 +86,34 @@ describe('ledger services (6.7)', () => {
       await listTransactions.run(h.ctxFor(finance), { accountId: accounts.uah })
     )._unsafeUnwrap();
     expect(impliedRate(rows[0]?.postings ?? [])?.toFixed(6)).toBe('43.050000');
+  });
+
+  it('reconciles a statement balance on a date (6.7)', async () => {
+    const usdOn = async (asOf: string) =>
+      (await listAccounts.run(h.ctxFor(finance), { asOf }))
+        ._unsafeUnwrap()
+        .find((a) => a.account.id === accounts.usd)?.balance ?? '';
+    expect(toDecimal(await usdOn('2034-01-10')).toFixed(2)).toBe('1095.00');
+    expect(toDecimal(await usdOn('2034-01-11')).toFixed(2)).toBe('895.00');
+
+    const off = await reconcileAccount.run(h.ctxFor(finance), {
+      accountId: accounts.usd,
+      onDate: '2034-01-10',
+      statementBalance: '1090',
+    });
+    expect(toDecimal(off._unsafeUnwrap().difference).toFixed(2)).toBe('-5.00');
+    const exact = await reconcileAccount.run(h.ctxFor(finance), {
+      accountId: accounts.usd,
+      onDate: '2034-01-11',
+      statementBalance: '895',
+    });
+    expect(toDecimal(exact._unsafeUnwrap().difference).isZero()).toBe(true);
+    const early = await reconcileAccount.run(h.ctxFor(finance), {
+      accountId: accounts.usd,
+      onDate: '2033-12-31',
+      statementBalance: '100',
+    });
+    expect(early._unsafeUnwrapErr().fieldErrors?.onDate).toBeDefined();
   });
 
   it('rejects a revenue without an account and a category of another type', async () => {

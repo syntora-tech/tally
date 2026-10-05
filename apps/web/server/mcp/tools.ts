@@ -85,7 +85,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'get_balances',
     title: 'Account balances',
     description:
-      'Ledger accounts (bank, crypto, cash) with currency, opening balance/date and the current balance = opening + all postings. Amounts are decimal strings in the account currency.',
+      'Ledger accounts (bank, crypto, cash) with currency, opening balance/date and the balance = opening + all postings, or only those dated on or before `asOf` (to reconcile with a statement). Amounts are decimal strings in the account currency.',
     kind: 'read',
     service: listAccounts,
     present: (rows) =>

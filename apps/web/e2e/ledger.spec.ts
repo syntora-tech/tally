@@ -60,4 +60,14 @@ test('AC 6.7: accounts, revenue with a fee and an exchange with two actual amoun
   await expect(page.getByText('1 USD = 43.050000 UAH')).toBeVisible();
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page.getByRole('link', { name: uah }).locator('..')).toContainText(/86,100\.00/);
+
+  await page.getByRole('link', { name: 'Reconcile' }).click();
+  await page.getByLabel('Account').selectOption({ label: `${usd} (USD)` });
+  await page.getByLabel('Balance from the bank').fill('2900');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.getByTestId('reconcile-difference')).toHaveText(/3\.22/);
+  await expect(page.getByText('Balances differ')).toBeVisible();
+  await page.getByLabel('Balance from the bank').fill('2,896.78');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.getByText('Balances match')).toBeVisible();
 });
