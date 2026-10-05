@@ -1,6 +1,6 @@
 # Tally MCP: guide for agents
 
-This document is for an AI agent (Claude Code, Claude, Cowork) that reads and enters Tally data over MCP: the Ledger, people and clients. Decisions and limits: `docs/assumptions.md` A-054, A-055, A-056. How clients, contracts, assignments and projects fit together, and what gets its own record versus a note: **`docs/agent-projects-guide.md`** — read it before entering people and clients.
+This document is for an AI agent (Claude Code, Claude, Cowork) that reads and enters Tally data over MCP: the Ledger, people and clients. Decisions and limits: `docs/assumptions.md` A-054…A-056, A-061…A-064. Monthly bank statements: section 7. How clients, contracts, assignments and projects fit together, and what gets its own record versus a note: **`docs/agent-projects-guide.md`** — read it before entering people and clients.
 
 ## 1. What it is
 
@@ -173,9 +173,70 @@ Treasury: the sum of balances in USD at the latest rates (`EUR × 1.168`, `UAH �
 
 Do not fix a mismatch yourself with adjusting transactions — describe it to the owner: account, expected, actual, suspicious rows.
 
-## 7. People and clients
+## 7. PrivatBank statements
 
-### 7.1 People — `upsert_person_profile`
+The owner hands you PrivatBank (Privat24 for business) statements, one per account (UAH, USD, EUR), and you book them into the Ledger. There is no importer in the UI: you are it. A statement is real financial data — the same handling as the xlsx in section 6.
+
+### 7.1 Before starting
+
+1. `get_balances`. Each account's `openingDate` is where Tally's accounting starts (A-063: `2026-09-01`); its `openingBalance` already holds everything before that day. **Enter only rows dated on or after the account's `openingDate`.** Never change `openingBalance` / `openingDate` unless the owner asks.
+2. `list_transactions` for the account (`accountId`, `from` = the first statement date). Rows may already be there without a bank reference: entered by hand, or a payout recorded with **Pay** in Payroll. Match every statement row against rows **without** `externalRef` by account, date and amount. If one matches, do not add a second one: set its `externalRef` with `update_transactions` so that reruns recognise it. If it is unclear whether two rows are the same payment, ask.
+3. `list_payees`, `list_clients`: you need them to link rows to people and clients (7.3).
+
+### 7.2 One statement row → one transaction
+
+| Statement                                     | Field                                                                                     |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Bank reference of the row (`Референс`)        | `externalRef` = `privat:<reference>`. No reference in the export → stop and ask the owner |
+| Operation date                                | `occurredOn`                                                                              |
+| Credit (money in)                             | `revenue` with `to` = (this account, amount)                                              |
+| Debit (money out)                             | `expense` with `from` = (this account, amount)                                            |
+| Payment purpose (`Призначення платежу`)       | `description`, verbatim                                                                   |
+| Counterparty name                             | `counterparty`, verbatim                                                                  |
+| Counterparty tax ID (ЄДРПОУ / ІПН) or account | finds the person or client: `personId` / `clientId` (7.3)                                 |
+
+Amounts are absolute values with 2 decimal places, in the account currency. Exceptions to "one row, one transaction" — currency exchange, transfers and fees — are in 7.4.
+
+### 7.3 Type, category and party
+
+Default categories by what the row is. If the counterparty already appears in earlier transactions (`list_transactions`), keep its category; if the row fits nothing below, ask.
+
+| Row                                                                                    | `type`        | `category`                | Party      |
+| -------------------------------------------------------------------------------------- | ------------- | ------------------------- | ---------- |
+| Payment from a client (SWIFT, invoice number in the purpose)                           | `revenue`     | `Client Revenue`          | `clientId` |
+| Bank interest, refunds                                                                 | `revenue`     | `Interest / Other Income` | —          |
+| Payment to a FOP of one of our people (contractor payout)                              | `expense`     | `Contractors`             | `personId` |
+| Salary of an employee, e.g. the director («Зарплатня»)                                 | `expense`     | `Payroll`                 | `personId` |
+| «ГУ ДПС», «УДКСУ», ЄСВ, ПДФО, military levy, single tax                                | `expense`     | `Taxes`                   | —          |
+| Account service («Обслуговування поточних рахунків»), SWIFT and other bank commissions | `expense`     | `Bank Fees`               | —          |
+| Accountant, lawyers                                                                    | `expense`     | `Legal / Accounting`      | —          |
+| Sale or purchase of currency                                                           | `fx_exchange` | `FX Exchange`             | — (7.4)    |
+| Between our own accounts in one currency                                               | `transfer`    | `Internal Transfer`       | — (7.4)    |
+
+Finding the party: the counterparty tax ID is a payee's `taxId` in `list_payees`, and that payee's `personId` is the person. A payee can belong to another person than its name suggests (someone is paid through a relative's FOP) — trust `personId`, not the name. Clients are matched by name in `list_clients`. If nothing matches, leave the party empty and list the row in the report.
+
+### 7.4 Rows that are not one transaction
+
+- **Currency sale or purchase** shows up as two rows on two accounts: a debit on the USD (or EUR) account and a credit on the UAH account, sometimes a day apart and with different references. Book **one** `fx_exchange`: `from` = (USD account, debited amount), `to` = (UAH account, credited amount), `occurredOn` = date of the debit, `externalRef` = `privat:<debit reference>`, and put the credit reference in the description: `Exchange · credit ref <reference>`. Before booking any credit row, check that its reference is not already in such a description.
+- **Between our own accounts** in one currency: likewise one `transfer` from the debit row, the credit reference in the description.
+- **A bank fee for a specific payment** (SWIFT commission on a payout or an exchange, fee withheld from an incoming SWIFT): put it in `fee` of that transaction (`{ account, amount }`), not as a separate expense. If the statement shows an incoming payment as gross amount and withheld fee, book `to` = gross and `fee` = fee, so the invoice is closed by the full amount the client paid. If only the net amount is shown, book the net and mention it in the report. A monthly account-service charge is not tied to a payment — a separate `Bank Fees` expense.
+
+Sequence: `add_transactions` with `dryRun: true` → fix `transactions.<i>` errors → the same batch without `dryRun` and with a new `idempotencyKey`. A rerun of the same statement only returns `duplicate`.
+
+### 7.5 What a person finishes in the UI
+
+The agent does not allocate money to documents. After booking, list for the owner:
+
+- **Client payments** (`revenue`, `Client Revenue`) → the invoice card → «Allocate payment».
+- **Payouts to people** (`Contractors` / `Payroll` with `personId`) → Payroll → «Pay» → «Existing Ledger transaction» (A-064). The picker shows unallocated `Contractors` / `Payroll` expenses in the payout currency dated from the first day of the payout month, so a payout booked under another category or before that month will not be offered — book payouts with the right category and date.
+
+### 7.6 Reconciliation
+
+For every account, the closing balance of the statement must equal `balance` in `get_balances` exactly, provided nothing after the statement's last date has been entered. On a mismatch do not add correcting rows: report the account, the statement balance, Tally's balance and the rows you suspect (missed, duplicated, a fee booked twice).
+
+## 8. People and clients
+
+### 8.1 People — `upsert_person_profile`
 
 The Bench profile: who the person is, what they know, when they are free. Fields:
 
@@ -195,7 +256,7 @@ The Bench profile: who the person is, what they know, when they are free. Fields
 - Check `search_people` before writing so you do not create a duplicate under another spelling. If unsure whether it is the same person, ask the owner.
 - What the person is paid and which clients they work for is not entered here.
 
-### 7.2 Clients — `upsert_clients`
+### 8.2 Clients — `upsert_clients`
 
 | Field                             | Format                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------ |
@@ -207,7 +268,7 @@ The Bench profile: who the person is, what they know, when they are free. Fields
 
 Matching, partial updates and renaming work as for people, with `legalName` as the key. Contracts with the client and billing rates are added by a person in the UI.
 
-### 7.3 Crypto wallets — `upsert_wallets`, `find_wallets`
+### 8.3 Crypto wallets — `upsert_wallets`, `find_wallets`
 
 People and clients we settle with in crypto can have several wallets. They are how a crypto transaction in the Ledger is matched to its counterparty, so an address on a network belongs to exactly one owner and can never be one of our own account addresses.
 
@@ -221,7 +282,7 @@ People and clients we settle with in crypto can have several wallets. They are h
 
 The same EVM address used on several EVM networks is entered once per network. Before booking a crypto transaction, call `find_wallets` with the counterparty address: `wallets[].owner` names the person or client, `ownAccounts` means it is a transfer between our own accounts.
 
-### 7.4 Payees — `list_payees`, `upsert_payees`
+### 8.4 Payees — `list_payees`, `upsert_payees`
 
 A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a crypto wallet (`crypto`) or `other`. It is not always the same human as the person — someone can be paid through a relative's FOP.
 
@@ -237,20 +298,21 @@ A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a c
 | `personId`                       | The person this payee pays; `null` unlinks                 |
 | `makeDefault`                    | `true` makes it the person's default payee for new payouts |
 
-### 7.5 Corrections — `update_transactions`
+### 8.5 Corrections — `update_transactions`
 
 Send the transaction `id` and only what changes. Legs replace the stored ones (`{ account, amount }`, positive amount; `null` removes the leg, e.g. `fee: null`). When the type, accounts or amounts of a transaction that is already allocated to an invoice or payout change, add a `reason` — it goes to the audit log — and the allocations must still fit the new amount. Use it also to link historical rows to people or clients (`personId` / `clientId`) once you recognise them in the description.
 
-## 8. Report to the owner
+## 9. Report to the owner
 
 At the end, report briefly:
 
 - how many were created and how many `duplicate`, per tool;
 - the reconciliation table;
+- for statements: rows left without a party, and the payments and payouts waiting for allocation in the UI (7.5);
 - rows with currency mismatches and roundings;
 - everything skipped, with the reason.
 
-## 9. Do not
+## 10. Do not
 
 - Do not invent amounts, dates or rates. Do not “fit” a balance with adjustments without the owner's explicit permission.
 - Do not create accounts, categories, people or clients “just in case” — only those in the source or named by the owner.
