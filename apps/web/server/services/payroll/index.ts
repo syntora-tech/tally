@@ -194,16 +194,19 @@ async function applyRate(
     .select({ amountUsd: payrollLine.amountUsd })
     .from(payrollLine)
     .where(eq(payrollLine.payrollItemId, item.id));
-  const adjustments = await tx
-    .select({ amount: adjustment.amount, currency: adjustment.currency })
-    .from(adjustment)
-    .where(
-      and(
-        eq(adjustment.periodId, item.periodId),
-        eq(adjustment.personId, item.personId),
-        eq(adjustment.payoutMethod, item.payoutMethod),
-      ),
-    );
+  // Adjustments belong to people; an agency item has none (A-068).
+  const adjustments = item.personId
+    ? await tx
+        .select({ amount: adjustment.amount, currency: adjustment.currency })
+        .from(adjustment)
+        .where(
+          and(
+            eq(adjustment.periodId, item.periodId),
+            eq(adjustment.personId, item.personId),
+            eq(adjustment.payoutMethod, item.payoutMethod),
+          ),
+        )
+    : [];
   const totalUah = payrollTotalUah(
     lines.map((l) => l.amountUsd),
     adjustments,

@@ -37,6 +37,7 @@ export type TxType = (typeof txType.enumValues)[number];
 export const plannedFrequency = pgEnum('planned_frequency', ['monthly', 'quarterly', 'yearly']);
 export const accountKind = pgEnum('account_kind', ['bank', 'crypto', 'cash']);
 export const fxSource = pgEnum('fx_source', ['bank_actual', 'nbu', 'manual']);
+export const payrollItemKind = pgEnum('payroll_item_kind', ['person', 'agency']);
 export const payrollItemStatus = pgEnum('payroll_item_status', [
   'draft',
   'partially_payable',

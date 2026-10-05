@@ -1,5 +1,16 @@
 import { sql } from 'drizzle-orm';
-import { check, index, numeric, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, rolePolicies } from './_common';
 import { assignment, period, timesheet } from './engagements';
 import {
@@ -7,6 +18,7 @@ import {
   fundingSource,
   fxSource,
   payoutMethod,
+  payrollItemKind,
   payrollItemStatus,
   payrollLineStatus,
 } from './enums';
@@ -16,6 +28,7 @@ import { payee, person } from './parties';
 /**
  * What one person gets for a period through one payout method (5.2): fiat items are paid in UAH
  * (`total_uah`), crypto items in USD-pegged coins (`total_usd`). `paid_amount` = Σ allocations.
+ * An `agency` item is the fee of one agency payee for the people it placed (A-068): no person.
  */
 export const payrollItem = pgTable(
   'payroll_item',
@@ -25,9 +38,8 @@ export const payrollItem = pgTable(
     periodId: uuid()
       .notNull()
       .references(() => period.id),
-    personId: uuid()
-      .notNull()
-      .references(() => person.id),
+    kind: payrollItemKind().notNull().default('person'),
+    personId: uuid().references(() => person.id),
     payoutMethod: payoutMethod().notNull(),
     payeeId: uuid().references(() => payee.id),
     status: payrollItemStatus().notNull().default('draft'),
@@ -41,7 +53,16 @@ export const payrollItem = pgTable(
   },
   (t) => [
     unique('payroll_item_legacy_ref_key').on(t.legacyRef),
-    unique('payroll_item_key').on(t.periodId, t.personId, t.payoutMethod),
+    uniqueIndex('payroll_item_person_key')
+      .on(t.periodId, t.personId, t.payoutMethod)
+      .where(sql`${t.kind} = 'person'`),
+    uniqueIndex('payroll_item_agency_key')
+      .on(t.periodId, t.payeeId, t.payoutMethod)
+      .where(sql`${t.kind} = 'agency'`),
+    check(
+      'payroll_item_kind_check',
+      sql`(${t.kind} = 'person') = (${t.personId} is not null) and (${t.kind} = 'person' or ${t.payeeId} is not null)`,
+    ),
     check(
       'payroll_item_fx_check',
       sql`(${t.payoutFxRate} is null) = (${t.totalUah} is null) and (${t.payoutFxRate} is null) = (${t.fxSource} is null)`,
@@ -67,11 +88,13 @@ export const payrollLine = pgTable(
     fundedByInvoiceLineId: uuid().references(() => invoiceLine.id, { onDelete: 'set null' }),
     fundingSource: fundingSource(),
     status: payrollLineStatus().notNull().default('accrued'),
+    /** The agency fee for this timesheet rather than the person's pay; matches the item kind. */
+    agencyFee: boolean().notNull().default(false),
     payableAt: timestamp({ withTimezone: true }),
     overrideReason: text(),
   },
   (t) => [
-    unique('payroll_line_timesheet_key').on(t.timesheetId),
+    unique('payroll_line_timesheet_key').on(t.timesheetId, t.agencyFee),
     unique('payroll_line_assignment_key').on(t.payrollItemId, t.assignmentId),
     check(
       'payroll_line_payable_check',

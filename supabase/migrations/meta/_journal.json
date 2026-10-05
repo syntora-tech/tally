@@ -316,6 +316,20 @@
       "when": 1791212253967,
       "tag": "20261005145733_planned_expense_access",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791212583505,
+      "tag": "20261005150303_agency_terms",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791212596304,
+      "tag": "20261005150316_agency_terms_invariants",
+      "breakpoints": true
     }
   ]
 }

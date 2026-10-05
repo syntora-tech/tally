@@ -169,6 +169,39 @@ export const payTerms = pgTable(
   ],
 );
 
+/**
+ * What an agency gets for placing a person (A-068): a USD rate per hour the person works, paid to
+ * the agency's payee as its own payout. Versioned like pay terms; rate 0 ends the fee.
+ */
+export const agencyTerms = pgTable(
+  'agency_terms',
+  {
+    ...baseColumns,
+    assignmentId: uuid()
+      .notNull()
+      .references(() => assignment.id, { onDelete: 'cascade' }),
+    validFrom: date({ mode: 'string' }).notNull(),
+    payeeId: uuid()
+      .notNull()
+      .references(() => payee.id),
+    ratePerHour: numeric({ precision: 20, scale: 8 }).notNull().default('0'),
+    currency: text().notNull().default('USD'),
+    payoutMethod: payoutMethod().notNull().default('fiat'),
+    releasePolicy: releasePolicy().notNull().default('on_payment_or_due'),
+    graceDays: integer().notNull().default(0),
+  },
+  (t) => [
+    unique('agency_terms_version_key').on(t.assignmentId, t.validFrom),
+    check('agency_terms_valid_from_check', firstOfMonth('valid_from')),
+    check('agency_terms_rate_check', sql`${t.ratePerHour} >= 0`),
+    check('agency_terms_grace_days_check', sql`${t.graceDays} >= 0`),
+    // Payroll lines are accrued in USD (5.2).
+    check('agency_terms_currency_check', sql`${t.currency} = 'USD'`),
+    index('agency_terms_payee_idx').on(t.payeeId),
+    ...rolePolicies('agency_terms', { read: 'finance', write: 'finance' }),
+  ],
+);
+
 /** Month; the close wizard arrives in stage 2, the table is here for I10 (assumptions). */
 export const period = pgTable(
   'period',
