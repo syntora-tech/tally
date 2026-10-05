@@ -72,7 +72,7 @@ export const optionalHttpUrl = z
   .transform((v) => v ?? null);
 
 export const checkbox = z
-  .union([z.literal('on'), z.literal('true'), z.literal('false'), z.boolean()])
+  .union([z.literal(''), z.literal('on'), z.literal('true'), z.literal('false'), z.boolean()])
   .optional()
   .transform((v) => v === true || v === 'on' || v === 'true');
 

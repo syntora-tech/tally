@@ -900,7 +900,8 @@
     "fully": "fully",
     "accountsSubtitle": "Bank, wallets, cash. The currency of an account with postings cannot change",
     "newAccount": "New account",
-    "inactiveSuffix": " · inactive"
+    "inactiveSuffix": " · inactive",
+    "limitReached": "Showing the latest {limit} transactions — narrow the filters to see older ones"
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",

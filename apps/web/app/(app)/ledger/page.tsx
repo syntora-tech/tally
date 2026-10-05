@@ -28,6 +28,9 @@ import { getFormat, getLabels, localizeForUser, pageTitle } from '@/server/i18n'
 
 export const generateMetadata = pageTitle('ledger');
 
+/** The whole journal on open (no default date range); filters narrow it past this cap. */
+const JOURNAL_LIMIT = 1000;
+
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 
@@ -45,7 +48,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const [accounts, categories, journal] = await Promise.all([
     listAccounts.run(ctx, {}),
     listCategories.run(ctx, {}),
-    listTransactions.run(ctx, filters),
+    listTransactions.run(ctx, { ...filters, limit: JOURNAL_LIMIT }),
   ]);
   const accountRows = accounts.unwrapOr([]);
   const [t, fmt, { TX_TYPE_LABELS }] = await Promise.all([
@@ -157,6 +160,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         </Button>
       </form>
 
+      {journal.isOk() && journal.value.length >= JOURNAL_LIMIT && (
+        <p className="text-sm text-muted-foreground">
+          {t('limitReached', { limit: JOURNAL_LIMIT })}
+        </p>
+      )}
       {journal.isErr() ? (
         <p className="text-destructive">{(await localizeForUser(journal.error)).message}</p>
       ) : (

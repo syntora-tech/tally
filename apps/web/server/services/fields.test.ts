@@ -2,7 +2,21 @@ import { CRYPTO_NETWORK_CODES } from '@tally/db/schema';
 import { CRYPTO_NETWORKS } from '@tally/domain';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { normalizeAddressIn, optionalNetwork } from './fields';
+import { checkbox, normalizeAddressIn, optionalNetwork } from './fields';
+
+describe('checkbox URL filters', () => {
+  it.each(['', undefined, false, 'false'])('treats %s as unchecked', (value) => {
+    expect(checkbox.parse(value)).toBe(false);
+  });
+
+  it.each(['on', 'true', true])('preserves checked value %s', (value) => {
+    expect(checkbox.parse(value)).toBe(true);
+  });
+
+  it('rejects an invalid filter value', () => {
+    expect(checkbox.safeParse('unexpected').success).toBe(false);
+  });
+});
 
 describe('crypto networks', () => {
   it('match the DB check constraints', () => {
