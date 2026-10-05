@@ -409,6 +409,12 @@
       "taken": "This address already belongs to {owner}",
       "duplicate": "This wallet is already added",
       "notFound": "Wallet not found"
+    },
+    "planned": {
+      "anchorMonth": "Choose the month of the payment",
+      "dueDay": "A day of the month from 1 to 31",
+      "endsBeforeStart": "The end month is before the start month",
+      "notFound": "Planned expense not found"
     }
   },
   "audit": {
@@ -462,7 +468,8 @@
     "trips": "Trips",
     "login": "Sign in",
     "editTransaction": "Edit transaction",
-    "reconcile": "Reconciliation"
+    "reconcile": "Reconciliation",
+    "planned": "Planned expenses"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -921,7 +928,8 @@
     "edit": "Edit",
     "editTransaction": "Edit transaction",
     "editAllocated": "This transaction is allocated to invoices or payouts: changing its type, accounts or amounts needs a reason, and allocations must still fit.",
-    "reconcile": "Reconcile"
+    "reconcile": "Reconcile",
+    "planned": "Planned expenses"
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",
@@ -1446,5 +1454,35 @@
     "matches": "Balances match",
     "mismatch": "Balances differ: look for missing, duplicate or wrong transactions up to this date",
     "openJournal": "Open the journal of this account up to this date"
+  },
+  "planned": {
+    "title": "Planned expenses",
+    "subtitle": "Recurring company costs beyond payroll: accountant, subscriptions, bank service, taxes. The forecast and the payout calendar count them; they create no transactions",
+    "new": "New planned expense",
+    "name": "Name",
+    "category": "Category",
+    "chooseCategory": "Choose a category",
+    "amount": "Amount",
+    "currency": "Currency",
+    "frequency": "Repeats",
+    "frequencies": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly"
+    },
+    "anchorMonth": "Month",
+    "dueDay": "Day of month",
+    "startsOn": "From month",
+    "endsOn": "To month (optional)",
+    "notes": "Notes",
+    "added": "Planned expense added",
+    "saved": "Planned expense saved",
+    "deleted": "Planned expense deleted",
+    "confirmDelete": "Delete this planned expense? To stop it but keep it in the history, set “To month” instead.",
+    "scheduleMonthly": "monthly on day {day}",
+    "scheduleQuarterly": "quarterly from {month}, day {day}",
+    "scheduleYearly": "yearly in {month}, day {day}",
+    "next": "next {date}",
+    "noNext": "no upcoming dates"
   }
 }

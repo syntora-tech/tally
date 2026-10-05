@@ -6,6 +6,7 @@ import { localEnv, signIn, unique } from './helpers';
 
 const usd = unique('E2E Privat USD');
 const uah = unique('E2E Privat UAH');
+const planned = unique('E2E domain');
 
 test.afterAll(async () => {
   const { db, sql: client } = createDb(
@@ -18,6 +19,7 @@ test.afterAll(async () => {
       where p.transaction_id = t.id and a.id = p.account_id and a.name in (${usd}, ${uah})
     `);
     await db.execute(sql`delete from public.account where name in (${usd}, ${uah})`);
+    await db.execute(sql`delete from public.planned_expense where name = ${planned}`);
   } finally {
     await client.end();
   }
@@ -70,4 +72,22 @@ test('AC 6.7: accounts, revenue with a fee and an exchange with two actual amoun
   await page.getByLabel('Balance from the bank').fill('2,896.78');
   await page.getByRole('button', { name: 'Check' }).click();
   await expect(page.getByText('Balances match')).toBeVisible();
+});
+
+test('planned expenses: a yearly cost with its next date (A-067)', async ({ page }) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  await page.goto('/ledger');
+  await page.getByRole('link', { name: 'Planned expenses' }).click();
+  await page.locator('#pe-new-name').fill(planned);
+  await page.locator('#pe-new-category').selectOption({ label: 'Software / Tools' });
+  await page.locator('#pe-new-amount').fill('40');
+  await page.locator('#pe-new-currency').fill('USD');
+  await page.locator('#pe-new-frequency').selectOption('yearly');
+  await page.locator('#pe-new-anchor').selectOption({ label: 'March' });
+  await page.locator('#pe-new-day').fill('15');
+  await page.getByRole('button', { name: 'Add' }).click();
+  await expect(page.getByText('Planned expense added')).toBeVisible();
+  const card = page.getByTestId('planned-expense').filter({ hasText: planned });
+  await expect(card).toContainText('yearly in March, day 15');
+  await expect(card).toContainText(/next 15\.03\.\d{4}/);
 });

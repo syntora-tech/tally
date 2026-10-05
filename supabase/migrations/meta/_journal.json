@@ -302,6 +302,20 @@
       "when": 1791211626472,
       "tag": "20261005144706_invoice_write_off_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791212249464,
+      "tag": "20261005145729_planned_expense",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791212253967,
+      "tag": "20261005145733_planned_expense_access",
+      "breakpoints": true
     }
   ]
 }

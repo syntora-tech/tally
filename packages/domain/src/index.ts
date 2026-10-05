@@ -13,3 +13,4 @@ export * from './words';
 export * from './period';
 export * from './payroll';
 export * from './crypto';
+export * from './planned-expense';

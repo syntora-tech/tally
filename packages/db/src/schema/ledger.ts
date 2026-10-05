@@ -5,6 +5,7 @@ import {
   date,
   foreignKey,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -14,7 +15,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
-import { accountKind, fxSource, txType } from './enums';
+import { accountKind, fxSource, plannedFrequency, txType } from './enums';
 import { invoice } from './invoices';
 import { client, person } from './parties';
 import { payrollItem } from './payroll';
@@ -181,3 +182,43 @@ export const allocation = pgTable(
 
 export type FxRate = typeof fxRate.$inferSelect;
 export type Allocation = typeof allocation.$inferSelect;
+
+/**
+ * Recurring company costs that are not payroll (accountant, subscriptions, bank service, taxes):
+ * the forecast and the payout calendar count them (6.1, A-067). Plans, not money: no postings.
+ */
+export const plannedExpense = pgTable(
+  'planned_expense',
+  {
+    ...baseColumns,
+    name: text().notNull(),
+    categoryId: uuid().notNull(),
+    txType: txType().notNull().default('expense'),
+    amount: numeric({ precision: 20, scale: 8 }).notNull(),
+    currency: text().notNull(),
+    frequency: plannedFrequency().notNull().default('monthly'),
+    anchorMonth: integer(),
+    dueDay: integer(),
+    startsOn: date({ mode: 'string' }).notNull(),
+    endsOn: date({ mode: 'string' }),
+    notes: text(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'planned_expense_category_type_fk',
+      columns: [t.categoryId, t.txType],
+      foreignColumns: [category.id, category.txType],
+    }),
+    check('planned_expense_type_check', sql`${t.txType} = 'expense'`),
+    check('planned_expense_name_check', sql`length(trim(${t.name})) > 0`),
+    check('planned_expense_amount_check', sql`${t.amount} > 0`),
+    check(
+      'planned_expense_anchor_check',
+      sql`(${t.frequency} = 'monthly') = (${t.anchorMonth} is null) and coalesce(${t.anchorMonth}, 1) between 1 and 12`,
+    ),
+    check('planned_expense_due_day_check', sql`coalesce(${t.dueDay}, 1) between 1 and 31`),
+    check('planned_expense_period_check', sql`${t.endsOn} is null or ${t.endsOn} >= ${t.startsOn}`),
+    currencyCheck('planned_expense_currency_check', t.currency),
+    ...rolePolicies('planned_expense', { read: 'finance', write: 'finance' }),
+  ],
+);
