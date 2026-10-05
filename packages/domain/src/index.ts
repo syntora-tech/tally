@@ -16,3 +16,4 @@ export * from './crypto';
 export * from './planned-expense';
 export * from './usd';
 export * from './forecast';
+export * from './trips';
