@@ -493,7 +493,10 @@
     "login": "Вхід",
     "editTransaction": "Редагування транзакції",
     "reconcile": "Звірка",
-    "planned": "Планові витрати"
+    "planned": "Планові витрати",
+    "newTrip": "Нова поїздка",
+    "editTrip": "Редагувати поїздку",
+    "trip": "Поїздка"
   },
   "login": {
     "subtitle": "Вхід до back-office Syntora.Tech",
@@ -563,7 +566,99 @@
   },
   "trips": {
     "title": "Відрядження",
-    "description": "Поїздки, витрати з чеками та компенсації."
+    "description": "Поїздки, витрати з чеками та компенсації.",
+    "new": "Нова поїздка",
+    "edit": "Редагувати поїздку",
+    "empty": "Поїздок ще немає",
+    "noDates": "дати уточнити",
+    "col": {
+      "trip": "Поїздка",
+      "dates": "Дати",
+      "participants": "Учасники",
+      "status": "Статус",
+      "spent": "Витрачено",
+      "remaining": "До компенсації"
+    },
+    "status": {
+      "planned": "Запланована",
+      "in_progress": "Триває",
+      "awaiting_reimbursement": "Чекає компенсації",
+      "settled": "Закрита"
+    },
+    "form": {
+      "title": "Назва",
+      "location": "Місце",
+      "startsOn": "З",
+      "endsOn": "По",
+      "participants": "Учасники",
+      "notes": "Примітки"
+    },
+    "summary": "По учасниках",
+    "sum": {
+      "spent": "Витрачено",
+      "toReimburse": "До компенсації",
+      "reimbursed": "Компенсовано",
+      "remaining": "Залишок"
+    },
+    "expenses": "Витрати",
+    "expense": {
+      "person": "Учасник",
+      "date": "Дата",
+      "description": "Опис",
+      "amount": "Сума",
+      "currency": "Валюта",
+      "rate": "Курс до UAH",
+      "rateHint": "НБУ на дату",
+      "paidBy": "Хто платив",
+      "reimbursable": "Компенсувати",
+      "ledger": "У Ledger",
+      "account": "Рахунок списання",
+      "accountAmount": "Списано з рахунку",
+      "transaction": "Транзакція Ledger",
+      "receipt": "Чек"
+    },
+    "paidBy": {
+      "person": "Учасник",
+      "company": "Компанія"
+    },
+    "ledgerNew": "Нова витрата з рахунку",
+    "ledgerExisting": "Наявна транзакція з Ledger",
+    "chooseAccount": "Оберіть рахунок",
+    "chooseTransaction": "Оберіть транзакцію",
+    "recordAnyway": "Записати все одно",
+    "addExpense": "Додати витрату",
+    "expenseAdded": "Витрату додано",
+    "expenseDeleted": "Витрату видалено",
+    "confirmDeleteExpense": "Видалити витрату? Витрата в Ledger, створена для неї, лишиться.",
+    "receipt": "чек",
+    "rate": "× {rate} грн",
+    "notReimbursed": "без компенсації",
+    "reimbursements": "Компенсації",
+    "reimbursementsDescription": "Разом із місячною виплатою (коригування у відкритому місяці), позачерговим актом ФОП або прямим платежем. Суми в UAH",
+    "reimbursement": {
+      "amount": "Сума, UAH",
+      "method": "Як",
+      "period": "Місяць",
+      "payee": "Одержувач",
+      "actDate": "Дата акту"
+    },
+    "method": {
+      "act": "Позачерговий акт",
+      "payroll": "Разом із виплатою",
+      "direct_payment": "Прямий платіж"
+    },
+    "choosePeriod": "Оберіть відкритий місяць",
+    "choosePayee": "Оберіть одержувача",
+    "createReimbursement": "Додати компенсацію",
+    "reimbursementCreated": "Компенсацію додано",
+    "reimbursementPaid": "Оплату записано",
+    "pay": "Записати оплату",
+    "reimbursementState": {
+      "paid": "виплачено",
+      "planned": "виплачено {amount}"
+    },
+    "act": "акт {number}",
+    "actDraft": "чернетка акту"
   },
   "fields": {
     "legal_name": "Юридична назва",

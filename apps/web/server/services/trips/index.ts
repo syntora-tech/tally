@@ -1,10 +1,12 @@
 import type { DbTransaction } from '@tally/db';
 import {
   account,
+  allocation,
   category,
   document,
   fxRate,
   person,
+  posting,
   reimbursement,
   supplierAct,
   transaction,
@@ -434,5 +436,53 @@ export const deleteTripExpense = defineService({
         .returning({ tripId: tripExpense.tripId }),
     );
     return row ? ok({ id: row.tripId }) : err(serviceError('not_found', 'trips.expenseNotFound'));
+  },
+});
+
+/**
+ * Ledger expenses a trip can point at (e.g. statement rows entered by an agent): `Travel / Conf.`
+ * from a month before the trip, with what is still unallocated and whether an expense uses it.
+ */
+export const tripLedgerCandidates = defineService({
+  name: 'trips.ledgerCandidates',
+  input: z.object({ since: localDateString }),
+  handler: async (ctx, { since }) => {
+    const rows = await inActorScope(ctx, (tx) =>
+      tx
+        .select({
+          id: transaction.id,
+          occurredOn: transaction.occurredOn,
+          description: transaction.description,
+          counterparty: transaction.counterparty,
+          amount: posting.amount,
+          currency: posting.currency,
+          accountName: account.name,
+          used: sql<string>`coalesce((select sum(a.amount * coalesce(a.fx_rate, 1)) from ${allocation} a where a.transaction_id = "transaction"."id"), 0)`,
+          linked: sql<boolean>`exists (select 1 from ${tripExpense} e where e.transaction_id = "transaction"."id")`,
+        })
+        .from(transaction)
+        .innerJoin(
+          posting,
+          and(eq(posting.transactionId, transaction.id), eq(posting.isFee, false)),
+        )
+        .innerJoin(account, eq(account.id, posting.accountId))
+        .innerJoin(category, eq(category.id, transaction.categoryId))
+        .where(
+          and(
+            eq(transaction.type, 'expense'),
+            eq(category.name, 'Travel / Conf.'),
+            sql`${transaction.occurredOn} >= ${since}`,
+          ),
+        )
+        .orderBy(desc(transaction.occurredOn))
+        .limit(200),
+    );
+    return ok(
+      rows.map(({ used, amount, ...r }) => ({
+        ...r,
+        amount: toDecimal(amount).abs().toFixed(2),
+        remaining: toDecimal(amount).abs().minus(used).toFixed(2),
+      })),
+    );
   },
 });

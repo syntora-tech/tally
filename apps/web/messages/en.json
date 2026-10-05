@@ -493,7 +493,10 @@
     "login": "Sign in",
     "editTransaction": "Edit transaction",
     "reconcile": "Reconciliation",
-    "planned": "Planned expenses"
+    "planned": "Planned expenses",
+    "newTrip": "New trip",
+    "editTrip": "Edit trip",
+    "trip": "Trip"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -563,7 +566,99 @@
   },
   "trips": {
     "title": "Trips",
-    "description": "Trips, expenses with receipts and reimbursements."
+    "description": "Trips, expenses with receipts and reimbursements.",
+    "new": "New trip",
+    "edit": "Edit trip",
+    "empty": "No trips yet",
+    "noDates": "dates to clarify",
+    "col": {
+      "trip": "Trip",
+      "dates": "Dates",
+      "participants": "Participants",
+      "status": "Status",
+      "spent": "Spent",
+      "remaining": "To reimburse"
+    },
+    "status": {
+      "planned": "Planned",
+      "in_progress": "In progress",
+      "awaiting_reimbursement": "Awaiting reimbursement",
+      "settled": "Settled"
+    },
+    "form": {
+      "title": "Title",
+      "location": "Place",
+      "startsOn": "From",
+      "endsOn": "To",
+      "participants": "Participants",
+      "notes": "Notes"
+    },
+    "summary": "Per participant",
+    "sum": {
+      "spent": "Spent",
+      "toReimburse": "To reimburse",
+      "reimbursed": "Reimbursed",
+      "remaining": "Left"
+    },
+    "expenses": "Expenses",
+    "expense": {
+      "person": "Participant",
+      "date": "Date",
+      "description": "Description",
+      "amount": "Amount",
+      "currency": "Currency",
+      "rate": "UAH rate",
+      "rateHint": "NBU on the date",
+      "paidBy": "Paid by",
+      "reimbursable": "To reimburse",
+      "ledger": "In the Ledger",
+      "account": "Paying account",
+      "accountAmount": "Charged to the account",
+      "transaction": "Ledger transaction",
+      "receipt": "Receipt"
+    },
+    "paidBy": {
+      "person": "The participant",
+      "company": "The company"
+    },
+    "ledgerNew": "New expense from an account",
+    "ledgerExisting": "Existing Ledger transaction",
+    "chooseAccount": "Choose an account",
+    "chooseTransaction": "Choose a transaction",
+    "recordAnyway": "Record anyway",
+    "addExpense": "Add expense",
+    "expenseAdded": "Expense added",
+    "expenseDeleted": "Expense deleted",
+    "confirmDeleteExpense": "Delete this expense? A Ledger expense booked for it stays.",
+    "receipt": "receipt",
+    "rate": "× {rate} UAH",
+    "notReimbursed": "not reimbursed",
+    "reimbursements": "Reimbursements",
+    "reimbursementsDescription": "Through the monthly payout (an adjustment in an open month), an extra FOP act, or a direct payment. Amounts in UAH",
+    "reimbursement": {
+      "amount": "Amount, UAH",
+      "method": "How",
+      "period": "Month",
+      "payee": "Recipient",
+      "actDate": "Act date"
+    },
+    "method": {
+      "act": "Extra act",
+      "payroll": "With the monthly payout",
+      "direct_payment": "Direct payment"
+    },
+    "choosePeriod": "Choose an open month",
+    "choosePayee": "Choose the recipient",
+    "createReimbursement": "Add reimbursement",
+    "reimbursementCreated": "Reimbursement added",
+    "reimbursementPaid": "Payment recorded",
+    "pay": "Record payment",
+    "reimbursementState": {
+      "paid": "paid",
+      "planned": "paid {amount}"
+    },
+    "act": "act {number}",
+    "actDraft": "draft act"
   },
   "fields": {
     "legal_name": "Legal name",
