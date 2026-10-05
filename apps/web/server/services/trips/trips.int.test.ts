@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { LocalStorage } from '../../storage/local-storage';
 import { deleteTripExpense, getTrip, listTrips, saveTrip, tripExpenseServices } from '.';
-import { addTripExpenses, upsertTrips } from './batch';
+import { tripBatchServices, upsertTrips } from './batch';
 import { createReimbursement, payReimbursement } from './reimbursements';
 
 const h = intHarness('2048-06-01');
@@ -345,6 +345,7 @@ describe('trips (6.8, A-070)', () => {
     )._unsafeUnwrap();
     const tripId = created.results[0]?.id ?? '';
     ids.trips.push(tripId);
+    const { addTripExpenses } = tripBatchServices(() => new LocalStorage(root));
     const failed = await addTripExpenses.run(h.ctxFor(finance), {
       tripId,
       expenses: [
@@ -379,12 +380,20 @@ describe('trips (6.8, A-070)', () => {
             description: 'Taxi',
             amount: '20',
             currency: 'EUR',
+            receipt: {
+              fileName: 'taxi.jpg',
+              mimeType: 'image/jpeg',
+              contentBase64: Buffer.from('jpeg').toString('base64'),
+            },
           },
         ],
       })
     )._unsafeUnwrap();
-    expect(added.results).toHaveLength(1);
+    expect(added.results).toEqual([expect.objectContaining({ hasReceipt: true })]);
     const card = (await getTrip.run(h.ctxFor(finance), { id: tripId }))._unsafeUnwrap();
     expect(card.expenses[0]?.expense.amountUah).toBe('1000.00');
+    const receiptId = card.expenses[0]?.expense.receiptDocumentId ?? '';
+    const [receipt] = await h.db.select().from(document).where(eq(document.id, receiptId));
+    expect(receipt).toMatchObject({ type: 'receipt', title: 'Taxi', fileName: 'taxi.jpg' });
   });
 });

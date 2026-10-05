@@ -68,7 +68,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `list_trips`            | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
 | `get_trip`              | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
 | `upsert_trips`          | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
-| `add_trip_expenses`     | write | Adds expenses to a trip (≤ 200); NBU rate by default; duplicate receipts refused                                                                        |
+| `add_trip_expenses`     | write | Adds expenses to a trip (≤ 200) with optional receipt files; NBU rate by default; duplicate receipts refused                                            |
 | `search_documents`      | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
 | `get_document`          | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
 | `find_link_targets`     | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
@@ -324,7 +324,8 @@ A trip (6.8) has dates, a place and participants (people from `search_people`). 
    - `fxRate` only when the owner gives the real rate (e.g. the card statement's UAH amount ÷ the EUR amount); otherwise leave it out and the NBU rate of that day is used;
    - **who paid:** the participant's own card → `paidBy: "person"`, `reimbursable: true` unless the owner says the company does not return it; the company's card or account → `paidBy: "company"` with `transactionId` of the Ledger expense (category `Travel / Conf.`, see section 7) — company-paid expenses are never reimbursed;
    - the same date + amount + description already in another trip is refused: it is usually the same receipt pasted twice. Use `allowDuplicate: true` only when the owner confirms they are different.
-3. Receipt photos and reimbursements (through the monthly payout, an extra FOP act or a direct payment) are done by a person in the UI: Trips → the trip.
+   - `receipt` `{fileName, mimeType, contentBase64}` attaches the receipt photo or PDF to the expense (it lands in the trip's `receipts` folder); all receipts of one call together up to 3 MB, so send receipts in small batches.
+3. Reimbursements (through the monthly payout, an extra FOP act or a direct payment) are done by a person in the UI: Trips → the trip.
 
 ### 8.7 Documents — `search_documents`, `get_document`, `add_documents`, `link_documents`
 

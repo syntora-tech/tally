@@ -28,7 +28,7 @@ import {
 } from '../services/documents/agent';
 import { searchDocuments } from '../services/documents/registry';
 import { getTrip, listTrips } from '../services/trips';
-import { addTripExpenses, upsertTrips } from '../services/trips/batch';
+import { tripBatchServices, upsertTrips } from '../services/trips/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
 
 export type ToolKind = 'read' | 'write';
@@ -364,9 +364,9 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'add_trip_expenses',
     title: 'Add trip expenses',
     description:
-      'Adds up to 200 expenses to one trip. Amount is a positive decimal string in the expense currency; fxRate (UAH per unit) defaults to the NBU rate on spentOn. paidBy person + reimbursable true = the company owes it back; paidBy company needs transactionId of the Ledger expense that paid it and is never reimbursed. The same date + amount + description already in another trip is refused unless allowDuplicate. Receipts are attached in the UI. All-or-nothing; errors keyed "expenses.<index>"; use dryRun first.',
+      'Adds up to 200 expenses to one trip. Amount is a positive decimal string in the expense currency; fxRate (UAH per unit) defaults to the NBU rate on spentOn. paidBy person + reimbursable true = the company owes it back; paidBy company needs transactionId of the Ledger expense that paid it and is never reimbursed. The same date + amount + description already in another trip is refused unless allowDuplicate. receipt {fileName, mimeType, contentBase64} attaches the receipt photo/PDF (all receipts of a call up to 3 MB). All-or-nothing; errors keyed "expenses.<index>"; use dryRun first.',
     kind: 'write',
-    service: addTripExpenses,
+    service: (deps: ToolDeps) => tripBatchServices(deps.storage).addTripExpenses,
   }),
   tool({
     name: 'search_documents',
