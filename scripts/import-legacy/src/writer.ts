@@ -56,7 +56,7 @@ export function same(dbValue: unknown, value: unknown): boolean {
 
 type Keyed = PgTable & { id: PgColumn; legacyRef: PgColumn };
 
-async function upsert(
+export async function upsert(
   tx: DbTransaction,
   table: Keyed,
   name: string,

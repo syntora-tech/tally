@@ -48,6 +48,34 @@ export const aliasesSchema = z.object({
   expenseNames: z.array(z.string()).default(['Services', 'Red Jumpers']),
   /** Rows whose "employee" is not a person (e.g. a subcontracting team). */
   skipEmployees: nameList,
+  /**
+   * Business trips (stage 5, A-070), keyed by sheet name: who travelled and what the xlsx does not
+   * say — dates, the act that reimbursed it, rows covered by the card statement.
+   */
+  trips: z
+    .record(
+      z.string(),
+      z.object({
+        participant: z.string().min(1),
+        title: z.string().optional(),
+        location: z.string().optional(),
+        startsOn: z.string().optional(),
+        endsOn: z.string().optional(),
+        /** The card statement on the right of the sheet belongs to this trip. */
+        cards: z.boolean().default(false),
+        /** Summary rows ("Food") that the card rows break down; skipped to avoid double counting. */
+        cardReplaces: nameList,
+        /** Rows marked "No" that were in fact reimbursed (A14). */
+        reimbursable: nameList,
+        /** The UAH column was copied from another sheet; recompute from the rate. */
+        ignoreUah: z.boolean().default(false),
+        /** Number of the FOP act that reimbursed the trip, e.g. "1003 - А8". */
+        act: z.string().optional(),
+        /** Reimbursed outside Tally; the note says what is known. */
+        compensated: z.string().optional(),
+      }),
+    )
+    .default({}),
   /** A2/A3: proration of fixed monthly billing; default is by_hours. */
   prorationOverrides: z
     .array(
