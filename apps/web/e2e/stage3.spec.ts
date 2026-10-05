@@ -308,7 +308,15 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   const heading = page.getByRole('heading', { name: /Invoice No\. S\d+\/43/ });
   await expect(heading).toBeVisible();
   const newNumber = (await heading.innerText()).match(/S\d+\/43/)?.[0];
+  const reissuedUrl = page.url();
   expect(newNumber).not.toBe(oldNumber);
   await page.goto('/payroll');
   await expect(itemCard(page, people.p3)).toContainText(`invoice ${newNumber ?? ''}`);
+
+  // 7. The client never pays: the owner writes the debt off without touching the Ledger (A-065).
+  await page.goto(reissuedUrl);
+  await page.getByLabel('Write-off reason').fill('Client closed');
+  await page.getByRole('button', { name: 'Write off' }).click();
+  await expect(page.getByText('Invoice written off')).toBeVisible();
+  await expect(page.getByTestId('write-off')).toContainText('Client closed');
 });

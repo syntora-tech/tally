@@ -27,6 +27,7 @@ import {
   reissueInvoiceAction,
   saveInvoiceAction,
   voidInvoiceAction,
+  writeOffInvoiceAction,
   type InvoiceFormState,
 } from '@/server/actions/invoices';
 
@@ -290,6 +291,45 @@ export function VoidForm({ invoiceId }: { invoiceId: string }) {
       </FormField>
       <Button type="submit" variant="destructive" disabled={pending}>
         {t('void')}
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function WriteOffForm({ invoiceId, today }: { invoiceId: string; today: string }) {
+  const t = useTranslations('invoiceForms');
+  // The form disappears once the invoice is written off, so the toast fires from the action.
+  const [state, action, pending] = useActionState<InvoiceFormState, FormData>(
+    async (prev, formData) => {
+      const result = await writeOffInvoiceAction(prev, formData);
+      if (result?.ok) toast.success(t('writtenOff'));
+      return result;
+    },
+    null,
+  );
+  const error = state && !state.ok ? state.error : null;
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={invoiceId} />
+      <FormField
+        label={t('writeOffReason')}
+        htmlFor="write-off-reason"
+        error={error?.fieldErrors?.reason}
+      >
+        <Input id="write-off-reason" name="reason" required className="w-80" />
+      </FormField>
+      <FormField
+        label={t('writeOffDate')}
+        htmlFor="write-off-date"
+        error={error?.fieldErrors?.writtenOffOn}
+      >
+        <Input id="write-off-date" name="writtenOffOn" type="date" defaultValue={today} />
+      </FormField>
+      <Button type="submit" variant="destructive" disabled={pending}>
+        {t('writeOff')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />

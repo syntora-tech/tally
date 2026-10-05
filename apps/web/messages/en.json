@@ -206,7 +206,8 @@
       "voidReason": "Enter the reason for voiding",
       "network": "Choose a network from the list",
       "networkRequired": "Choose the network of this address",
-      "walletAddress": "This is not a valid address for the chosen network"
+      "walletAddress": "This is not a valid address for the chosen network",
+      "writeOffReason": "Enter the reason for the write-off"
     },
     "general": {
       "checkInput": "Check the entered data",
@@ -317,7 +318,8 @@
       "voidState": "Only an issued unpaid or partially paid invoice can be voided",
       "reissueState": "Only a void invoice can be reissued",
       "pdfIssuedOnly": "A PDF is generated only for an issued invoice",
-      "pdfExists": "This revision already has a PDF"
+      "pdfExists": "This revision already has a PDF",
+      "writeOffState": "Only an issued unpaid or partially paid invoice can be written off"
     },
     "auth": {
       "email": "Enter a valid email",
@@ -530,7 +532,9 @@
     "timezone": "Time zone",
     "contact_owner": "Contact person",
     "default_payee_id": "Payee",
-    "notes": "Notes"
+    "notes": "Notes",
+    "written_off_on": "Written off on",
+    "write_off_reason": "Write-off reason"
   },
   "clients": {
     "title": "Clients",
@@ -1146,7 +1150,11 @@
       "total": "Amount",
       "reason": "Reason for change",
       "changed": "Changed"
-    }
+    },
+    "writeOff": "Write-off (bad debt)",
+    "writeOffDescription": "The client will not pay the rest: {amount} goes to Bad Debt. Account balances do not change. Owner only, cannot be undone",
+    "writtenOff": "Written off on {date}",
+    "badDebt": "Bad debt {amount}"
   },
   "invoiceForms": {
     "revisionSaved": "New revision saved",
@@ -1191,7 +1199,11 @@
     "rate": "Rate (receipt units per 1)",
     "allocate": "Allocate payment",
     "allocationRemoved": "Allocation removed",
-    "remove": "Remove"
+    "remove": "Remove",
+    "writeOff": "Write off",
+    "writtenOff": "Invoice written off",
+    "writeOffReason": "Write-off reason",
+    "writeOffDate": "Write-off date"
   },
   "payroll": {
     "title": "Payroll",

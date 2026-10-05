@@ -29,6 +29,7 @@ import {
   ReissueForm,
   SignedCopyForm,
   VoidForm,
+  WriteOffForm,
 } from './invoice-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
@@ -133,6 +134,20 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             <div className="text-muted-foreground">{t('paid')}</div>
             {fmt.amount(inv.paidAmount, inv.currency)}
           </div>
+          {inv.status === 'written_off' && (
+            <div className="sm:col-span-4" data-testid="write-off">
+              <div className="text-muted-foreground">
+                {t('writtenOff', { date: fmt.date(inv.writtenOffOn ?? '') })}
+              </div>
+              {t('badDebt', {
+                amount: fmt.amount(
+                  toDecimal(inv.total).minus(inv.paidAmount).toString(),
+                  inv.currency,
+                ),
+              })}{' '}
+              · {inv.writeOffReason}
+            </div>
+          )}
           {inv.voidReason && (
             <div className="sm:col-span-4">
               <div className="text-muted-foreground">{t('voidReason')}</div>
@@ -169,7 +184,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('lines')}</CardTitle>
-            {inv.status !== 'void' && <CardDescription>{t('lockedDescription')}</CardDescription>}
+            {!['void', 'written_off'].includes(inv.status) && (
+              <CardDescription>{t('lockedDescription')}</CardDescription>
+            )}
           </CardHeader>
           <CardContent>
             <Table>
@@ -315,6 +332,25 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </CardHeader>
           <CardContent>
             <VoidForm invoiceId={inv.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {voidable && ctx.actor.role === 'owner' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('writeOff')}</CardTitle>
+            <CardDescription>
+              {t('writeOffDescription', {
+                amount: fmt.amount(
+                  toDecimal(inv.total).minus(inv.paidAmount).toString(),
+                  inv.currency,
+                ),
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WriteOffForm invoiceId={inv.id} today={ctx.today} />
           </CardContent>
         </Card>
       )}

@@ -394,6 +394,33 @@ export const voidInvoice = defineService({
   },
 });
 
+/**
+ * Bad debt (5.3 rule 7, A-065): the client will not pay the rest. Owner only (enforced in the DB);
+ * no Ledger posting, since the money never reached an account — the loss is total − paid.
+ */
+export const writeOffInvoice = defineService({
+  name: 'invoices.writeOff',
+  input: z.object({
+    id: z.uuid(),
+    reason: requiredText('field.writeOffReason'),
+    writtenOffOn: z.preprocess((v) => (v === '' ? undefined : v), localDateString.optional()),
+  }),
+  handler: async (ctx, { id, reason, writtenOffOn }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .update(invoice)
+        .set({
+          status: 'written_off',
+          writeOffReason: reason,
+          writtenOffOn: writtenOffOn ?? ctx.today,
+        })
+        .where(and(eq(invoice.id, id), inArray(invoice.status, ['issued', 'partially_paid'])))
+        .returning({ id: invoice.id }),
+    );
+    return row ? ok(row) : err(serviceError('conflict', 'invoices.writeOffState'));
+  },
+});
+
 /** "Перевипустити" (6.5): a draft copy of a void invoice that takes over its hours. */
 export const reissueInvoice = defineService({
   name: 'invoices.reissue',

@@ -51,6 +51,9 @@ export const invoice = pgTable(
     pdfFileId: text(),
     dateOverrideReason: text(),
     voidReason: text(),
+    /** Bad debt (5.3 rule 7, A-065): no Ledger posting, the unpaid rest is the loss. */
+    writtenOffOn: date({ mode: 'string' }),
+    writeOffReason: text(),
     /** Bumped on every edit of an issued, still unpaid invoice (owner decision, A-044). */
     revision: integer().notNull().default(1),
   },
@@ -65,6 +68,10 @@ export const invoice = pgTable(
     check(
       'invoice_void_reason_check',
       sql`${t.status} <> 'void' or length(trim(coalesce(${t.voidReason}, ''))) > 0`,
+    ),
+    check(
+      'invoice_write_off_check',
+      sql`${t.status} <> 'written_off' or (${t.writtenOffOn} is not null and length(trim(coalesce(${t.writeOffReason}, ''))) > 0)`,
     ),
     check('invoice_amounts_check', sql`${t.total} >= 0 and ${t.paidAmount} >= 0`),
     check('invoice_due_check', sql`${t.dueDate} >= ${t.issueDate}`),

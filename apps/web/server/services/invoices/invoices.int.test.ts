@@ -24,11 +24,13 @@ import {
   reissueInvoice,
   saveInvoice,
   voidInvoice,
+  writeOffInvoice,
 } from '.';
 
 const h = intHarness('2037-08-03');
 const SEQUENCE = 'test:int-invoice';
 let finance: Awaited<ReturnType<typeof h.user>>;
+let owner: Awaited<ReturnType<typeof h.user>>;
 let root: string;
 let services: ReturnType<typeof documentServices>;
 const ids = { company: '', client: '', contract: '', invoices: [] as string[] };
@@ -44,6 +46,7 @@ beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'tally-invoices-'));
   services = documentServices(() => new LocalStorage(root));
   finance = await h.user('finance');
+  owner = await h.user('owner');
   await h.db
     .insert(numberSequence)
     .values({ key: SEQUENCE, template: 'T{seq}/{yy}', yearScoped: true, currentYear: 2037 });
@@ -199,5 +202,37 @@ describe('invoices (spec 6.5, A-044)', () => {
     const card = (await getInvoice.run(h.ctxFor(finance), { id: copy.id }))._unsafeUnwrap();
     expect(card.invoice).toMatchObject({ status: 'draft', number: null, total: '8272.00000000' });
     expect(card.lines).toHaveLength(1);
+  });
+
+  it('writes off the unpaid rest: owner only, final, no more payments (A-065)', async () => {
+    const draft = ids.invoices.at(-1) ?? '';
+    const issued = await issueInvoice.run(h.ctxFor(finance), {
+      id: draft,
+      issueDate: '2037-08-04',
+    });
+    expect(issued.isOk()).toBe(true);
+    await h.payInvoice(draft, '1000', '2037-08-25');
+
+    const byFinance = await writeOffInvoice.run(h.ctxFor(finance), {
+      id: draft,
+      reason: 'Client went bankrupt',
+    });
+    expect(byFinance._unsafeUnwrapErr().code).toBe('forbidden');
+    const noReason = await writeOffInvoice.run(h.ctxFor(owner), { id: draft, reason: ' ' });
+    expect(noReason._unsafeUnwrapErr().fieldErrors?.reason).toBeDefined();
+
+    (
+      await writeOffInvoice.run(h.ctxFor(owner), { id: draft, reason: 'Client went bankrupt' })
+    )._unsafeUnwrap();
+    const card = (await getInvoice.run(h.ctxFor(finance), { id: draft }))._unsafeUnwrap();
+    expect(card.invoice).toMatchObject({
+      status: 'written_off',
+      writtenOffOn: '2037-08-03',
+      writeOffReason: 'Client went bankrupt',
+      paidAmount: '1000.00000000',
+    });
+    const again = await writeOffInvoice.run(h.ctxFor(owner), { id: draft, reason: 'Twice' });
+    expect(again._unsafeUnwrapErr().code).toBe('conflict');
+    await expect(h.payInvoice(draft, '1', '2037-08-26')).rejects.toThrow();
   });
 });

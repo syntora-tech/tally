@@ -288,6 +288,20 @@
       "when": 1791195545816,
       "tag": "20261005101905_transaction_edit_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791211618675,
+      "tag": "20261005144658_invoice_write_off",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791211626472,
+      "tag": "20261005144706_invoice_write_off_guard",
+      "breakpoints": true
     }
   ]
 }

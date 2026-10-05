@@ -15,6 +15,7 @@ import {
   reissueInvoice,
   saveInvoice,
   voidInvoice,
+  writeOffInvoice,
 } from '../services/invoices';
 import { toActionResult, type ActionResult } from './to-action-result';
 
@@ -87,6 +88,17 @@ export async function voidInvoiceAction(
   return result.isErr()
     ? { ok: false, error: await localizeForUser(result.error) }
     : done(result.value.id);
+}
+
+export async function writeOffInvoiceAction(
+  _prev: InvoiceFormState,
+  formData: FormData,
+): Promise<InvoiceFormState> {
+  const ctx = await requireUserContext();
+  const result = await writeOffInvoice.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  return done(result.value.id);
 }
 
 export async function reissueInvoiceAction(
