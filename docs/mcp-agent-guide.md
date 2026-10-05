@@ -1,6 +1,6 @@
 # Tally MCP: guide for agents
 
-This document is for an AI agent (Claude Code, Claude, Cowork) that reads and enters Tally data over MCP: the Ledger, people and clients. Decisions and limits: `docs/assumptions.md` A-054…A-056, A-061…A-064. Monthly bank statements: section 7. How clients, contracts, assignments and projects fit together, and what gets its own record versus a note: **`docs/agent-projects-guide.md`** — read it before entering people and clients.
+This document is for an AI agent (Claude Code, Claude, Cowork) that reads and enters Tally data over MCP: the Ledger, people, clients and trips. Decisions and limits: `docs/assumptions.md` A-054…A-056, A-061…A-066, A-070. Monthly bank statements: section 7. How clients, contracts, assignments and projects fit together, and what gets its own record versus a note: **`docs/agent-projects-guide.md`** — read it before entering people and clients.
 
 ## 1. What it is
 
@@ -65,6 +65,10 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                                            |
 | `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
 | `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
+| `list_trips`            | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
+| `get_trip`              | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
+| `upsert_trips`          | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
+| `add_trip_expenses`     | write | Adds expenses to a trip (≤ 200); NBU rate by default; duplicate receipts refused                                                                        |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only.
 
@@ -302,6 +306,18 @@ A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a c
 ### 8.5 Corrections — `update_transactions`
 
 Send the transaction `id` and only what changes. Legs replace the stored ones (`{ account, amount }`, positive amount; `null` removes the leg, e.g. `fee: null`). When the type, accounts or amounts of a transaction that is already allocated to an invoice or payout change, add a `reason` — it goes to the audit log — and the allocations must still fit the new amount. Use it also to link historical rows to people or clients (`personId` / `clientId`) once you recognise them in the description.
+
+### 8.6 Trips — `upsert_trips`, `add_trip_expenses`
+
+A trip (6.8) has dates, a place and participants (people from `search_people`). Its expenses are what each participant spent; the company returns what a person paid and marked as reimbursable. Status is derived: before the dates `planned`, during `in_progress`, after them `awaiting_reimbursement` until everything reimbursable is returned, then `settled`.
+
+1. `list_trips` — do not create a trip that already exists. Otherwise `upsert_trips` with `title`, `startsOn`, `endsOn`, `location`, `participantIds`.
+2. `add_trip_expenses` per trip, one item per receipt or card row:
+   - `spentOn`, `description` (as on the receipt), `amount` and `currency` as paid (EUR stays EUR);
+   - `fxRate` only when the owner gives the real rate (e.g. the card statement's UAH amount ÷ the EUR amount); otherwise leave it out and the NBU rate of that day is used;
+   - **who paid:** the participant's own card → `paidBy: "person"`, `reimbursable: true` unless the owner says the company does not return it; the company's card or account → `paidBy: "company"` with `transactionId` of the Ledger expense (category `Travel / Conf.`, see section 7) — company-paid expenses are never reimbursed;
+   - the same date + amount + description already in another trip is refused: it is usually the same receipt pasted twice. Use `allowDuplicate: true` only when the owner confirms they are different.
+3. Receipt photos and reimbursements (through the monthly payout, an extra FOP act or a direct payment) are done by a person in the UI: Trips → the trip.
 
 ## 9. Report to the owner
 
