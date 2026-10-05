@@ -273,7 +273,10 @@
       "chooseDestinationAccount": "Choose the destination account",
       "chooseOneAccount": "Choose exactly one account",
       "txAllocated": "The transaction is allocated to documents — remove the allocation first",
-      "txNotFound": "Transaction not found"
+      "txNotFound": "Transaction not found",
+      "oneParty": "Link the transaction to one person or one client",
+      "addressNeedsCrypto": "A counterparty wallet needs a crypto account in the transaction",
+      "editReason": "This transaction is allocated: enter the reason for changing its money"
     },
     "fx": {
       "ratePositive": "The rate must be > 0",
@@ -449,7 +452,8 @@
     "newAct": "Extra act",
     "act": "Act",
     "trips": "Trips",
-    "login": "Sign in"
+    "login": "Sign in",
+    "editTransaction": "Edit transaction"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -901,7 +905,11 @@
     "accountsSubtitle": "Bank, wallets, cash. The currency of an account with postings cannot change",
     "newAccount": "New account",
     "inactiveSuffix": " · inactive",
-    "limitReached": "Showing the latest {limit} transactions — narrow the filters to see older ones"
+    "limitReached": "Showing the latest {limit} transactions — narrow the filters to see older ones",
+    "explorer": "Open in explorer",
+    "edit": "Edit",
+    "editTransaction": "Edit transaction",
+    "editAllocated": "This transaction is allocated to invoices or payouts: changing its type, accounts or amounts needs a reason, and allocations must still fit."
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",
@@ -959,7 +967,14 @@
     "txHash": "Transaction hash",
     "bankRef": "Bank reference / hash",
     "description": "Description",
-    "submit": "Save transaction"
+    "submit": "Save transaction",
+    "party": "Person or client",
+    "noParty": "Not linked",
+    "client": "client",
+    "counterpartyAddress": "Counterparty wallet",
+    "counterpartyAddressHint": "A known wallet links its owner automatically",
+    "reason": "Reason for the change",
+    "reasonHint": "Required when money of an allocated transaction changes; kept in the history"
   },
   "periods": {
     "title": "Periods",

@@ -1,4 +1,5 @@
-import { shortAddress, toDecimal } from '@tally/domain';
+import { isCryptoNetwork, shortAddress, toDecimal, transactionExplorerUrl } from '@tally/domain';
+import { ExternalLink, Pencil } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { FormField, NativeSelect } from '@/components/form-field';
@@ -177,7 +178,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                 <TableHead>{t('col.postings')}</TableHead>
                 <TableHead>{t('col.description')}</TableHead>
                 <TableHead>{t('col.allocated')}</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -190,6 +191,17 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
               )}
               {journal.value.map((tx) => {
                 const rate = impliedRate(tx.postings);
+                const network = tx.postings.map((p) => p.network).find((n) => n !== null) ?? null;
+                const explorer = transactionExplorerUrl(
+                  network && isCryptoNetwork(network) ? network : null,
+                  tx.transaction.externalRef,
+                  tx.transaction.description,
+                );
+                const party = tx.transaction.personId
+                  ? { href: `/people/${tx.transaction.personId}`, name: tx.personName }
+                  : tx.transaction.clientId
+                    ? { href: `/clients/${tx.transaction.clientId}`, name: tx.clientName }
+                    : null;
                 const settles =
                   tx.transaction.type === 'revenue' || tx.transaction.type === 'expense';
                 const open =
@@ -218,11 +230,39 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {tx.transaction.counterparty && (
-                        <div className="font-medium">{tx.transaction.counterparty}</div>
+                    <TableCell className="max-w-md min-w-48 whitespace-normal break-words">
+                      {party && (
+                        <Link href={party.href} className="font-medium hover:underline">
+                          {party.name}
+                        </Link>
                       )}
-                      {tx.transaction.description}
+                      {tx.transaction.counterparty && (
+                        <div className={party ? 'text-muted-foreground' : 'font-medium'}>
+                          {tx.transaction.counterparty}
+                        </div>
+                      )}
+                      {tx.transaction.counterpartyAddress && (
+                        <div
+                          className="font-mono text-xs text-muted-foreground"
+                          title={tx.transaction.counterpartyAddress}
+                        >
+                          {shortAddress(tx.transaction.counterpartyAddress)}
+                        </div>
+                      )}
+                      <div className="line-clamp-3" title={tx.transaction.description ?? undefined}>
+                        {tx.transaction.description}
+                      </div>
+                      {explorer && (
+                        <a
+                          href={explorer}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          <ExternalLink className="size-3" />
+                          {t('explorer')}
+                        </a>
+                      )}
                     </TableCell>
                     <TableCell>
                       {settles ? (
@@ -241,9 +281,19 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                       )}
                     </TableCell>
                     <TableCell>
-                      {toDecimal(tx.allocated).isZero() && (
-                        <DeleteTransactionButton id={tx.transaction.id} />
-                      )}
+                      <div className="flex items-center">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={t('edit')}
+                          render={<Link href={`/ledger/${tx.transaction.id}/edit`} />}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        {toDecimal(tx.allocated).isZero() && (
+                          <DeleteTransactionButton id={tx.transaction.id} />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

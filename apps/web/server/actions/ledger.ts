@@ -11,6 +11,7 @@ import {
   deleteTransaction,
   saveAccount,
   saveCategory,
+  updateTransaction,
 } from '../services/ledger';
 import type { ActionResult } from './to-action-result';
 
@@ -23,6 +24,18 @@ export async function createTransactionAction(
   const ctx = await requireUserContext();
   const input = nestPrefixed(formDataToObject(formData), ['from', 'to', 'fee']);
   const result = await createTransaction.run(ctx, input);
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/ledger');
+  redirect('/ledger');
+}
+
+export async function updateTransactionAction(
+  _prev: LedgerFormState,
+  formData: FormData,
+): Promise<LedgerFormState> {
+  const ctx = await requireUserContext();
+  const input = nestPrefixed(formDataToObject(formData), ['from', 'to', 'fee']);
+  const result = await updateTransaction.run(ctx, input);
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   redirect('/ledger');

@@ -16,7 +16,7 @@ import {
   optionalText,
   requiredText,
 } from '../fields';
-import { bookTransaction, transactionInput, TX_TYPES } from '.';
+import { bookTransaction, resolveParty, transactionInput, TX_TYPES } from '.';
 
 // Batch writes for agents and bulk entry (spec 13.3, A-053): every batch is one DB transaction,
 // supports a dry run, and reports per-item outcomes or per-item errors (`items.<index>`).
@@ -185,7 +185,18 @@ export const transactionItem = z.object({
   type: z.enum(TX_TYPES),
   category: z.string().trim().min(1).describe('Category id or name of a category of this type'),
   description: optionalText,
-  counterparty: optionalText,
+  counterparty: optionalText.describe('Free-text counterparty as on the statement'),
+  personId: z
+    .uuid()
+    .optional()
+    .describe('Person the money came from / went to (from search_people)'),
+  clientId: z
+    .uuid()
+    .optional()
+    .describe('Client the money came from / went to (from list_clients)'),
+  counterpartyAddress: optionalText.describe(
+    'Counterparty wallet of a crypto transaction; a known wallet links its owner automatically',
+  ),
   from: legRef
     .optional()
     .describe('Money leaving an account: expense, and the source of two-leg types'),
@@ -263,6 +274,9 @@ export const addTransactions = defineService({
           description: item.description,
           counterparty: item.counterparty,
           externalRef: item.externalRef,
+          personId: item.personId,
+          clientId: item.clientId,
+          counterpartyAddress: item.counterpartyAddress,
           from: leg(item.from, 'from'),
           to: leg(item.to, 'to'),
           fee: leg(item.fee, 'fee'),
@@ -276,9 +290,14 @@ export const addTransactions = defineService({
           errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
           continue;
         }
+        const party = await resolveParty(tx, parsed.data);
+        if (party.isErr()) {
+          errors[key] = [party.error.message];
+          continue;
+        }
         try {
           const row = await tx.transaction(async (sp) => {
-            const booked = await bookTransaction(sp, parsed.data);
+            const booked = await bookTransaction(sp, parsed.data, party.value);
             // Checks this item's deferred I5 shape now, so a failure names the item.
             await sp.execute(sql`set constraints all immediate`);
             return booked;

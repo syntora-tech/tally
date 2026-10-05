@@ -1,12 +1,22 @@
 import type { DbTransaction } from '@tally/db';
-import { account, allocation, category, posting, transaction, type TxType } from '@tally/db/schema';
-import { derivedRate, toDecimal } from '@tally/domain';
+import {
+  account,
+  allocation,
+  category,
+  client,
+  cryptoWallet,
+  person,
+  posting,
+  transaction,
+  type TxType,
+} from '@tally/db/schema';
+import { derivedRate, isCryptoNetwork, normalizeWalletAddress, toDecimal } from '@tally/domain';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { serviceError, type ServiceError } from '../errors';
 import {
   checkbox,
   currencyCode,
@@ -171,17 +181,21 @@ export const listTransactions = defineService({
         .select({
           transaction,
           categoryName: category.name,
+          personName: person.fullName,
+          clientName: sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`,
           mainAmount,
           allocated,
         })
         .from(transaction)
         .innerJoin(category, eq(category.id, transaction.categoryId))
+        .leftJoin(person, eq(person.id, transaction.personId))
+        .leftJoin(client, eq(client.id, transaction.clientId))
         .where(and(...conditions))
         .orderBy(desc(transaction.occurredOn), desc(transaction.createdAt))
         .limit(f.limit);
       const postings = txs.length
         ? await tx
-            .select({ posting, accountName: account.name })
+            .select({ posting, accountName: account.name, network: account.network })
             .from(posting)
             .innerJoin(account, eq(account.id, posting.accountId))
             .where(
@@ -195,7 +209,7 @@ export const listTransactions = defineService({
         ...t,
         postings: postings
           .filter((p) => p.posting.transactionId === t.transaction.id)
-          .map((p) => ({ ...p.posting, accountName: p.accountName })),
+          .map((p) => ({ ...p.posting, accountName: p.accountName, network: p.network })),
       }));
     });
     return ok(rows);
@@ -211,6 +225,10 @@ const optionalLeg = z.preprocess(
   leg.optional(),
 );
 
+const optionalParty = z
+  .preprocess(emptyToUndefined, z.uuid().optional())
+  .transform((v) => v ?? null);
+
 export const transactionInput = z
   .object({
     type: z.enum(TX_TYPES),
@@ -219,6 +237,11 @@ export const transactionInput = z
     description: optionalText,
     counterparty: optionalText,
     externalRef: optionalText,
+    /** Party the money came from / went to (A-061); at most one. */
+    personId: optionalParty,
+    clientId: optionalParty,
+    /** Counterparty wallet of a crypto transaction; its known owner becomes the party. */
+    counterpartyAddress: optionalText,
     /** Money leaving an account (expense, source of two-leg types); amount entered positive. */
     from: optionalLeg,
     /** Money arriving (revenue, destination of two-leg types). */
@@ -236,6 +259,9 @@ export const transactionInput = z
       need('from', 'ledger.chooseFromAccount');
       need('to', 'ledger.chooseDestinationAccount');
     }
+    if (t.personId && t.clientId) {
+      c.addIssue({ code: 'custom', path: ['clientId'], message: 'ledger.oneParty' });
+    }
     if (t.type === 'adjustment' && Boolean(t.from) === Boolean(t.to)) {
       c.addIssue({ code: 'custom', path: ['to', 'accountId'], message: 'ledger.chooseOneAccount' });
     }
@@ -249,30 +275,62 @@ export const transactionInput = z
 
 export type TransactionInput = z.output<typeof transactionInput>;
 
+type Party = {
+  personId: string | null;
+  clientId: string | null;
+  counterpartyAddress: string | null;
+};
+
 /**
- * Books a transaction with its postings in one DB transaction; currencies come from the accounts
- * (I4) and the shape is verified by the DB at commit (I5).
+ * The party of a transaction (A-061). A counterparty address is validated for the network of the
+ * crypto account in the legs and stored canonically; when no party is chosen, the owner of that
+ * wallet becomes the party.
  */
-export async function bookTransaction(tx: DbTransaction, input: TransactionInput) {
-  const ids = [input.from, input.to, input.fee].flatMap((l) => (l ? [l.accountId] : []));
-  const accounts = await tx
-    .select({ id: account.id, currency: account.currency })
-    .from(account)
-    .where(inArray(account.id, ids));
-  const currencyOf = (id: string) => accounts.find((a) => a.id === id)?.currency ?? '';
-  const [row] = await tx
-    .insert(transaction)
-    .values({
-      occurredOn: input.occurredOn,
-      type: input.type,
-      categoryId: input.categoryId,
-      description: input.description,
-      counterparty: input.counterparty,
-      externalRef: input.externalRef,
-    })
-    .returning({ id: transaction.id });
-  if (!row) throw new Error('Transaction insert returned no row');
-  const postings = [
+export async function resolveParty(
+  tx: DbTransaction,
+  input: TransactionInput,
+): Promise<Result<Party, ServiceError>> {
+  let { personId, clientId } = input;
+  if (!input.counterpartyAddress) return ok({ personId, clientId, counterpartyAddress: null });
+  const ids = [input.from, input.to].flatMap((l) => (l ? [l.accountId] : []));
+  const networks = ids.length
+    ? await tx
+        .select({ network: account.network })
+        .from(account)
+        .where(and(inArray(account.id, ids), eq(account.kind, 'crypto')))
+    : [];
+  const network = networks.map((n) => n.network).find((n) => n !== null);
+  if (!network || !isCryptoNetwork(network)) {
+    return err(
+      serviceError('validation_error', 'ledger.addressNeedsCrypto', {
+        counterpartyAddress: ['ledger.addressNeedsCrypto'],
+      }),
+    );
+  }
+  const address = normalizeWalletAddress(network, input.counterpartyAddress);
+  if (address.isErr()) {
+    return err(
+      serviceError('validation_error', 'field.walletAddress', {
+        counterpartyAddress: ['field.walletAddress'],
+      }),
+    );
+  }
+  if (!personId && !clientId) {
+    const [owner] = await tx
+      .select({ personId: cryptoWallet.personId, clientId: cryptoWallet.clientId })
+      .from(cryptoWallet)
+      .where(and(eq(cryptoWallet.network, network), eq(cryptoWallet.address, address.value)));
+    personId = owner?.personId ?? null;
+    clientId = owner?.clientId ?? null;
+  }
+  return ok({ personId, clientId, counterpartyAddress: address.value });
+}
+
+type NewPosting = { accountId: string; amount: string; isFee: boolean };
+
+/** Signed postings of an input: `from` and `fee` leave (negative), `to` arrives. */
+function postingsOf(input: TransactionInput): NewPosting[] {
+  return [
     input.from && {
       accountId: input.from.accountId,
       amount: toDecimal(input.from.amount).neg().toString(),
@@ -285,20 +343,147 @@ export async function bookTransaction(tx: DbTransaction, input: TransactionInput
       isFee: true,
     },
   ].filter((p) => p !== undefined);
-  await tx.insert(posting).values(
-    postings.map((p) => ({
-      transactionId: row.id,
-      ...p,
-      currency: currencyOf(p.accountId),
-    })),
-  );
+}
+
+async function insertPostings(tx: DbTransaction, transactionId: string, postings: NewPosting[]) {
+  const accounts = await tx
+    .select({ id: account.id, currency: account.currency })
+    .from(account)
+    .where(
+      inArray(
+        account.id,
+        postings.map((p) => p.accountId),
+      ),
+    );
+  const currencyOf = (id: string) => accounts.find((a) => a.id === id)?.currency ?? '';
+  await tx
+    .insert(posting)
+    .values(postings.map((p) => ({ transactionId, ...p, currency: currencyOf(p.accountId) })));
+}
+
+/**
+ * Books a transaction with its postings in one DB transaction; currencies come from the accounts
+ * (I4) and the shape is verified by the DB at commit (I5).
+ */
+export async function bookTransaction(tx: DbTransaction, input: TransactionInput, party: Party) {
+  const [row] = await tx
+    .insert(transaction)
+    .values({
+      occurredOn: input.occurredOn,
+      type: input.type,
+      categoryId: input.categoryId,
+      description: input.description,
+      counterparty: input.counterparty,
+      externalRef: input.externalRef,
+      ...party,
+    })
+    .returning({ id: transaction.id });
+  if (!row) throw new Error('Transaction insert returned no row');
+  await insertPostings(tx, row.id, postingsOf(input));
   return row;
 }
 
 export const createTransaction = defineService({
   name: 'ledger.transactions.create',
   input: transactionInput,
-  handler: async (ctx, input) => ok(await inActorScope(ctx, (tx) => bookTransaction(tx, input))),
+  handler: async (ctx, input) =>
+    inActorScope(ctx, async (tx) => {
+      const party = await resolveParty(tx, input);
+      return party.isErr() ? err(party.error) : ok(await bookTransaction(tx, input, party.value));
+    }),
+});
+
+const samePostings = (a: readonly NewPosting[], b: readonly NewPosting[]) => {
+  const key = (p: NewPosting) =>
+    `${p.accountId}|${toDecimal(p.amount).toString()}|${String(p.isFee)}`;
+  return a.length === b.length && a.map(key).sort().join() === b.map(key).sort().join();
+};
+
+export const transactionUpdateInput = z
+  .object({
+    id: z.uuid(),
+    reason: optionalText.describe(
+      'Required when the type, accounts or amounts of an allocated transaction change; kept in the audit log',
+    ),
+  })
+  .and(transactionInput);
+
+/**
+ * Manual edit of a transaction (A-061): every field can change. When money of an allocated
+ * transaction changes (type, accounts, amounts) a reason is required; the DB re-checks that the
+ * allocations still fit (I7) and the shape (I5) at commit.
+ */
+export async function editTransaction(
+  tx: DbTransaction,
+  { id, reason, ...input }: z.output<typeof transactionUpdateInput>,
+): Promise<Result<{ id: string; status: 'updated' | 'unchanged' }, ServiceError>> {
+  const [current] = await tx.select().from(transaction).where(eq(transaction.id, id));
+  if (!current) return err(serviceError('not_found', 'ledger.txNotFound'));
+  const party = await resolveParty(tx, input);
+  if (party.isErr()) return err(party.error);
+  const stored = await tx
+    .select({ accountId: posting.accountId, amount: posting.amount, isFee: posting.isFee })
+    .from(posting)
+    .where(eq(posting.transactionId, id));
+  const next = postingsOf(input);
+  const moneyChanged = current.type !== input.type || !samePostings(stored, next);
+  if (moneyChanged && !reason) {
+    const [linked] = await tx
+      .select({ id: allocation.id })
+      .from(allocation)
+      .where(eq(allocation.transactionId, id))
+      .limit(1);
+    if (linked) {
+      return err(
+        serviceError('validation_error', 'ledger.editReason', { reason: ['ledger.editReason'] }),
+      );
+    }
+  }
+  const values = {
+    occurredOn: input.occurredOn,
+    type: input.type,
+    categoryId: input.categoryId,
+    description: input.description,
+    counterparty: input.counterparty,
+    externalRef: input.externalRef,
+    ...party.value,
+  };
+  const unchanged =
+    !moneyChanged &&
+    (Object.keys(values) as (keyof typeof values)[]).every((k) => current[k] === values[k]);
+  if (unchanged) return ok({ id, status: 'unchanged' });
+  if (reason) await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
+  await tx.update(transaction).set(values).where(eq(transaction.id, id));
+  if (moneyChanged) {
+    await tx.delete(posting).where(eq(posting.transactionId, id));
+    await insertPostings(tx, id, next);
+  }
+  return ok({ id, status: 'updated' });
+}
+
+export const updateTransaction = defineService({
+  name: 'ledger.transactions.update',
+  input: transactionUpdateInput,
+  handler: (ctx, input) => inActorScope(ctx, (tx) => editTransaction(tx, input)),
+});
+
+export const getTransaction = defineService({
+  name: 'ledger.transactions.get',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) => {
+    const found = await inActorScope(ctx, async (tx) => {
+      const [row] = await tx.select().from(transaction).where(eq(transaction.id, id));
+      if (!row) return null;
+      const postings = await tx.select().from(posting).where(eq(posting.transactionId, id));
+      const [linked] = await tx
+        .select({ id: allocation.id })
+        .from(allocation)
+        .where(eq(allocation.transactionId, id))
+        .limit(1);
+      return { transaction: row, postings, allocated: Boolean(linked) };
+    });
+    return found ? ok(found) : err(serviceError('not_found', 'ledger.txNotFound'));
+  },
 });
 
 /** Allocated money stays tied to its documents: unlink allocations before deleting. */

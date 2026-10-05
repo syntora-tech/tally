@@ -16,6 +16,7 @@ import {
 import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
 import { accountKind, fxSource, txType } from './enums';
 import { invoice } from './invoices';
+import { client, person } from './parties';
 import { payrollItem } from './payroll';
 
 /** Bank account, wallet or cash box (spec 6.7); balance = opening + Σ postings. */
@@ -77,6 +78,11 @@ export const transaction = pgTable(
     counterparty: text(),
     /** Bank reference or transaction hash; used for statement de-duplication (stage 4). */
     externalRef: text(),
+    /** Who the money came from / went to (A-061); at most one of person and client. */
+    personId: uuid().references(() => person.id, { onDelete: 'set null' }),
+    clientId: uuid().references(() => client.id, { onDelete: 'set null' }),
+    /** Counterparty wallet of a crypto transaction, canonical form; matched to `crypto_wallet`. */
+    counterpartyAddress: text(),
   },
   (t) => [
     unique('transaction_legacy_ref_key').on(t.legacyRef),
@@ -87,6 +93,10 @@ export const transaction = pgTable(
     }),
     index('transaction_occurred_on_idx').on(t.occurredOn),
     index('transaction_external_ref_idx').on(t.externalRef),
+    check('transaction_party_check', sql`num_nonnulls(${t.personId}, ${t.clientId}) <= 1`),
+    index('transaction_person_idx').on(t.personId),
+    index('transaction_client_idx').on(t.clientId),
+    index('transaction_counterparty_address_idx').on(t.counterpartyAddress),
     ...rolePolicies('transaction', { read: 'finance', write: 'finance' }),
   ],
 );

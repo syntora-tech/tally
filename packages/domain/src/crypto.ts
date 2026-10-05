@@ -100,3 +100,59 @@ export function normalizeWalletAddress(
     ? ok(canonical)
     : err({ code: 'invalid_address', network });
 }
+
+const EXPLORER_TX: Record<CryptoNetwork, string> = {
+  ETH: 'https://etherscan.io/tx/',
+  BSC: 'https://bscscan.com/tx/',
+  POLYGON: 'https://polygonscan.com/tx/',
+  ARBITRUM: 'https://arbiscan.io/tx/',
+  BASE: 'https://basescan.org/tx/',
+  OPTIMISM: 'https://optimistic.etherscan.io/tx/',
+  AVALANCHE: 'https://snowtrace.io/tx/',
+  TRON: 'https://tronscan.org/#/transaction/',
+  SOLANA: 'https://solscan.io/tx/',
+  BTC: 'https://mempool.space/tx/',
+  TON: 'https://tonviewer.com/transaction/',
+};
+
+const TX_HASH: Record<CryptoNetwork, RegExp> = {
+  ...(Object.fromEntries(EVM.map((n) => [n, /^0x[0-9a-fA-F]{64}$/])) as Record<
+    (typeof EVM)[number],
+    RegExp
+  >),
+  TRON: /^[0-9a-fA-F]{64}$/,
+  BTC: /^[0-9a-fA-F]{64}$/,
+  SOLANA: new RegExp(`^${BASE58}{64,90}$`),
+  TON: /^([0-9a-fA-F]{64}|[A-Za-z0-9_+/-]{43}=?)$/,
+};
+
+/** Explorer page of a transaction hash on its network, or null when the text is not such a hash. */
+export function explorerTxUrl(network: CryptoNetwork, hash: string): string | null {
+  const trimmed = hash.trim();
+  return TX_HASH[network].test(trimmed)
+    ? `${EXPLORER_TX[network]}${encodeURIComponent(trimmed)}`
+    : null;
+}
+
+const URL_IN_TEXT = /https?:\/\/[^\s)]+/g;
+const EXPLORER_HOSTS = Object.values(EXPLORER_TX).map((u) => new URL(u).host);
+
+/**
+ * Explorer link for a Ledger transaction: its `externalRef` hash on the account network, else an
+ * explorer URL or EVM hash pasted into the description (legacy rows keep hashes there).
+ */
+export function transactionExplorerUrl(
+  network: CryptoNetwork | null,
+  externalRef: string | null,
+  description: string | null,
+): string | null {
+  if (network && externalRef) {
+    const byRef = explorerTxUrl(network, externalRef);
+    if (byRef) return byRef;
+  }
+  for (const url of description?.match(URL_IN_TEXT) ?? []) {
+    if (EXPLORER_HOSTS.includes(new URL(url).host)) return url;
+  }
+  const evmHash = description?.match(/\b0x[0-9a-fA-F]{64}\b/)?.[0];
+  return network && evmHash ? explorerTxUrl(network, evmHash) : null;
+}

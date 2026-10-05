@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isCryptoNetwork, normalizeWalletAddress, parseCryptoNetwork } from './crypto';
+import {
+  explorerTxUrl,
+  isCryptoNetwork,
+  normalizeWalletAddress,
+  parseCryptoNetwork,
+  transactionExplorerUrl,
+} from './crypto';
 
 describe('normalizeWalletAddress', () => {
   it('lower-cases EVM addresses on every EVM network', () => {
@@ -51,5 +57,28 @@ describe('isCryptoNetwork', () => {
   it('knows only the listed networks', () => {
     expect(isCryptoNetwork('TRON')).toBe(true);
     expect(isCryptoNetwork('tron')).toBe(false);
+  });
+});
+
+describe('explorer links', () => {
+  const evm = `0x${'a1'.repeat(32)}`;
+  const tron = 'b2'.repeat(32);
+
+  it('builds the explorer URL of a hash on its network', () => {
+    expect(explorerTxUrl('ETH', evm)).toBe(`https://etherscan.io/tx/${evm}`);
+    expect(explorerTxUrl('TRON', tron)).toBe(`https://tronscan.org/#/transaction/${tron}`);
+    expect(explorerTxUrl('TRON', evm)).toBeNull();
+  });
+
+  it('prefers externalRef, then an explorer URL or hash in the description', () => {
+    expect(transactionExplorerUrl('BSC', evm, null)).toBe(`https://bscscan.com/tx/${evm}`);
+    expect(
+      transactionExplorerUrl('ETH', null, `D.Energy - https://etherscan.io/tx/${evm} paid`),
+    ).toBe(`https://etherscan.io/tx/${evm}`);
+    expect(transactionExplorerUrl('ETH', 'PB-123', `fee ${evm}`)).toBe(
+      `https://etherscan.io/tx/${evm}`,
+    );
+    expect(transactionExplorerUrl(null, null, 'see https://example.com/tx/1')).toBeNull();
+    expect(transactionExplorerUrl(null, evm, null)).toBeNull();
   });
 });

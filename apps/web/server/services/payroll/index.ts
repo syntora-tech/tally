@@ -31,7 +31,7 @@ import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError, msg } from '../errors';
 import { decimalString, localDateString, optionalText } from '../fields';
-import { bookTransaction } from '../ledger';
+import { bookTransaction, type TransactionInput } from '../ledger';
 import { loadCalendar } from '../periods';
 import { refreshPayability } from './payability';
 
@@ -326,7 +326,7 @@ export const payItem = defineService({
         return err(
           serviceError('not_found', msg('payroll.noCategory', { category: input.categoryName })),
         );
-      const booked = await bookTransaction(tx, {
+      const payout: TransactionInput = {
         type: 'expense',
         occurredOn: input.occurredOn,
         categoryId: cat.id,
@@ -336,9 +336,17 @@ export const payItem = defineService({
             .join(' · ') || null,
         counterparty: item.personName,
         externalRef: null,
+        personId: item.item.personId,
+        clientId: null,
+        counterpartyAddress: null,
         from: { accountId: acc.id, amount: input.amount },
         to: undefined,
         fee: undefined,
+      };
+      const booked = await bookTransaction(tx, payout, {
+        personId: item.item.personId,
+        clientId: null,
+        counterpartyAddress: null,
       });
       await tx.insert(allocation).values({
         transactionId: booked.id,
