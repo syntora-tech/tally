@@ -1,4 +1,4 @@
-import { addMonths } from '@tally/domain';
+import { addMonths, toDecimal } from '@tally/domain';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/table';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { getAssignment } from '@/server/services/assignments';
+import { agencyPayeeOptions, getAssignment } from '@/server/services/assignments';
 import { AddVersionForm } from '../add-version-form';
+import { AgencyVersionForm } from '../agency-version-form';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('assignment');
@@ -36,9 +37,12 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     contractNumber,
     billing,
     pay,
+    agency,
     hours,
     margin,
   } = result.value;
+  const payees = (await agencyPayeeOptions.run(ctx, {})).unwrapOr([]);
+  const lastAgency = agency[0]?.terms;
   const nextMonth = addMonths(ctx.today, 1).slice(0, 7);
   const [lastBilling] = billing;
   const [lastPay] = pay;
@@ -97,7 +101,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         </CardHeader>
         <CardContent>
           {margin ? (
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
               <div>
                 <div className="text-muted-foreground">{t('toClient')}</div>
                 <div className="text-lg font-medium">
@@ -108,6 +112,14 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 <div className="text-muted-foreground">{t('toPerson')}</div>
                 <div className="text-lg font-medium">{fmt.amount(margin.pay, margin.currency)}</div>
               </div>
+              {margin.agency !== '0.00' && (
+                <div>
+                  <div className="text-muted-foreground">{t('agencyTitle')}</div>
+                  <div className="text-lg font-medium">
+                    {fmt.amount(margin.agency, margin.currency)}
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="text-muted-foreground">{t('margin')}</div>
                 <div className="text-lg font-semibold" data-testid="assignment-margin">
@@ -214,6 +226,61 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('agencyTitle')}</CardTitle>
+          <CardDescription>{t('agencyDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {agency.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('fromMonth')}</TableHead>
+                  <TableHead>{t('agency')}</TableHead>
+                  <TableHead>{t('ratePerHour')}</TableHead>
+                  <TableHead>{t('details')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {agency.map(({ terms: v, payeeName }) => (
+                  <TableRow key={v.id}>
+                    <TableCell>{month(v.validFrom)}</TableCell>
+                    <TableCell>{payeeName}</TableCell>
+                    <TableCell>
+                      {toDecimal(v.ratePerHour).isZero()
+                        ? t('agencyEnded')
+                        : fmt.amount(v.ratePerHour, v.currency)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {PAYOUT_METHOD_LABELS[v.payoutMethod]} ·{' '}
+                      {RELEASE_POLICY_LABELS[v.releasePolicy]}
+                      {v.graceDays > 0 ? t('graceDays', { days: v.graceDays }) : ''}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <AgencyVersionForm
+            assignmentId={a.id}
+            suggestedMonth={nextMonth}
+            payees={payees}
+            defaults={
+              lastAgency
+                ? {
+                    payeeId: lastAgency.payeeId,
+                    ratePerHour: toDecimal(lastAgency.ratePerHour).toString(),
+                    payoutMethod: lastAgency.payoutMethod,
+                    releasePolicy: lastAgency.releasePolicy,
+                    graceDays: lastAgency.graceDays,
+                  }
+                : null
+            }
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BillingTermsInput, PayTermsInput } from './billing';
 import { parseLocalDate, type LocalDate } from './local-date';
 import { sum } from './money';
-import { draftLine, payrollPlan, periodPreview, type PeriodAssignment } from './period';
+import { agencyPlan, draftLine, payrollPlan, periodPreview, type PeriodAssignment } from './period';
 
 const d = (s: string): LocalDate => parseLocalDate(s)._unsafeUnwrap();
 const JAN = d('2026-01-01');
@@ -223,5 +223,42 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
       draftLine('x', { type: 'hourly', rate: '47', prorationPolicy: 'full_month' }, '0', '184'),
     ).toBeNull();
     expect(draftLine('x', none, '184', '184')).toBeNull();
+  });
+});
+
+describe('agencyPlan (A-068)', () => {
+  const andrii = july.find((x) => x.personName === 'Andrii');
+  const placed = (over: Partial<PeriodAssignment>): PeriodAssignment => ({
+    ...(andrii as PeriodAssignment),
+    agency: [
+      { validFrom: JAN, payeeId: 'redjumpers', ratePerHour: '4' },
+      { validFrom: d('2026-09-01'), payeeId: 'redjumpers', ratePerHour: '0' },
+    ],
+    ...over,
+  });
+
+  it('accrues rate × hours to the agency payee', () => {
+    const plan = agencyPlan(d('2026-07-01'), [...july, placed({ assignmentId: 'andrii:agency' })]);
+    expect(plan).toEqual([
+      {
+        payeeId: 'redjumpers',
+        payoutMethod: 'fiat',
+        totalUsd: '736.00',
+        lines: [
+          {
+            assignmentId: 'andrii:agency',
+            amountUsd: '736.00',
+            releasePolicy: 'on_payment_or_due',
+            graceDays: 0,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('gives nothing without hours, after a zero-rate version or for people without an agency', () => {
+    expect(agencyPlan(d('2026-07-01'), [placed({ hours: '0' })])).toEqual([]);
+    expect(agencyPlan(d('2026-09-01'), [placed({})])).toEqual([]);
+    expect(agencyPlan(d('2026-07-01'), july)).toEqual([]);
   });
 });

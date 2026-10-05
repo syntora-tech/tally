@@ -59,17 +59,18 @@ export const listPayroll = defineService({
           month: period.month,
         })
         .from(payrollItem)
-        .innerJoin(person, eq(person.id, payrollItem.personId))
+        .leftJoin(person, eq(person.id, payrollItem.personId))
         .innerJoin(period, eq(period.id, payrollItem.periodId))
         .leftJoin(payee, eq(payee.id, payrollItem.payeeId))
         .where(periodId ? eq(payrollItem.periodId, periodId) : undefined)
-        .orderBy(desc(period.month), asc(person.fullName));
+        .orderBy(desc(period.month), asc(payrollItem.kind), asc(person.fullName));
       const itemIds = items.map((i) => i.item.id);
       const cal = await loadCalendar(tx);
       if (itemIds.length === 0) return { items: [], lines: [], adjustments: [], terms: [], cal };
       const lines = await tx
         .select({
           line: payrollLine,
+          personName: person.fullName,
           clientName: sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`,
           roleTitle: assignment.roleTitle,
           invoiceNumber: invoice.number,
@@ -78,6 +79,7 @@ export const listPayroll = defineService({
         })
         .from(payrollLine)
         .innerJoin(assignment, eq(assignment.id, payrollLine.assignmentId))
+        .innerJoin(person, eq(person.id, assignment.personId))
         .leftJoin(contract, eq(contract.id, assignment.contractId))
         .leftJoin(client, eq(client.id, contract.clientId))
         .leftJoin(invoiceLine, eq(invoiceLine.id, payrollLine.fundedByInvoiceLineId))
@@ -116,6 +118,7 @@ export const listPayroll = defineService({
           );
           return {
             ...l.line,
+            personName: l.personName,
             clientName: l.clientName,
             roleTitle: l.roleTitle,
             invoiceNumber: l.invoiceNumber,
@@ -289,9 +292,14 @@ export const payItem = defineService({
         }
       }
       const [item] = await tx
-        .select({ item: payrollItem, personName: person.fullName })
+        .select({
+          item: payrollItem,
+          // An agency item is paid to the agency, not to a person (A-068).
+          personName: sql<string>`coalesce(${person.fullName}, ${payee.legalNameUa}, ${payee.legalNameEn}, '')`,
+        })
         .from(payrollItem)
-        .innerJoin(person, eq(person.id, payrollItem.personId))
+        .leftJoin(person, eq(person.id, payrollItem.personId))
+        .leftJoin(payee, eq(payee.id, payrollItem.payeeId))
         .where(eq(payrollItem.id, input.itemId));
       if (!item) return err(serviceError('not_found', 'payroll.notFound'));
       const fiat = item.item.payoutMethod === 'fiat';
@@ -357,7 +365,9 @@ export const payItem = defineService({
         }
         // A statement row usually has no person yet; never overwrite one (pay may go to another's FOP).
         const patch = {
-          ...(main.personId === null && main.clientId === null && { personId: item.item.personId }),
+          ...(main.personId === null &&
+            main.clientId === null &&
+            item.item.personId !== null && { personId: item.item.personId }),
           ...(advanceNote && {
             description: [main.description, advanceNote].filter(Boolean).join(' · '),
           }),

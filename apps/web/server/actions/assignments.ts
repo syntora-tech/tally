@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { formDataToObject, nestPrefixed } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import {
+  addAgencyVersion,
   addBillingVersion,
   addPayVersion,
   createAssignment,
@@ -26,6 +27,24 @@ export async function saveAssignment(
     : await createAssignment.run(ctx, input);
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/people/assignments/${result.value.id}`);
+}
+
+export async function addAgencyVersionAction(
+  _prev: AssignmentFormState,
+  formData: FormData,
+): Promise<AssignmentFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await addAgencyVersion.run(ctx, {
+    ...input,
+    ratePerHour:
+      typeof input.ratePerHour === 'string'
+        ? input.ratePerHour.replace(',', '.')
+        : input.ratePerHour,
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath(`/people/assignments/${result.value.id}`);
+  return { ok: true, data: result.value };
 }
 
 export async function addTermsVersion(

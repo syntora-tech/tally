@@ -1,13 +1,16 @@
 import type { DbTransaction } from '@tally/db';
 import {
+  agencyTerms,
   assignment,
   billingTerms,
   client,
   contract,
+  payee,
   payTerms,
   period,
   person,
   timesheet,
+  type AgencyTerms,
   type BillingTerms,
   type PayTerms,
 } from '@tally/db/schema';
@@ -25,6 +28,7 @@ import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import {
+  addAgencyVersionInput,
   addBillingVersionInput,
   addPayVersionInput,
   createAssignmentInput,
@@ -38,6 +42,7 @@ export type TermsMarginView = {
   workHours: number;
   billing: string;
   pay: string;
+  agency: string;
   margin: string;
   currency: string;
 } | null;
@@ -47,16 +52,19 @@ export function assignmentMargin(
   billing: BillingTerms[],
   pay: PayTerms[],
   today: LocalDate,
+  agency: AgencyTerms[] = [],
 ): TermsMarginView {
   const month = startOfMonth(today);
   const b = effectiveVersion(billing as Versioned<BillingTerms>[], month);
   const p = effectiveVersion(pay as Versioned<PayTerms>[], month);
+  const fee = effectiveVersion(agency as Versioned<AgencyTerms>[], month);
   if (!b && !p) return null;
   const workHours = weekdayHoursInMonth(month);
   const margin = marginByTerms(
     b && { type: b.type, rate: b.rate, prorationPolicy: b.prorationPolicy, currency: b.currency },
     p && { type: p.type, amount: p.amount, currency: p.currency },
     String(workHours),
+    fee?.ratePerHour ?? '0',
   );
   if (!margin) return null;
   return {
@@ -64,16 +72,18 @@ export function assignmentMargin(
     workHours,
     billing: margin.billing.toFixed(2),
     pay: margin.pay.toFixed(2),
+    agency: margin.agency.toFixed(2),
     margin: margin.margin.toFixed(2),
     currency: b?.currency ?? p?.currency ?? 'USD',
   };
 }
 
 const clientLabel = sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`;
+const payeeName = sql<string | null>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`;
 
 async function loadTerms(tx: DbTransaction, assignmentIds: string[]) {
-  if (assignmentIds.length === 0) return { billing: [], pay: [] };
-  const [billing, pay] = await Promise.all([
+  if (assignmentIds.length === 0) return { billing: [], pay: [], agency: [] };
+  const [billing, pay, agency] = await Promise.all([
     tx
       .select()
       .from(billingTerms)
@@ -84,8 +94,9 @@ async function loadTerms(tx: DbTransaction, assignmentIds: string[]) {
       .from(payTerms)
       .where(inArray(payTerms.assignmentId, assignmentIds))
       .orderBy(desc(payTerms.validFrom)),
+    tx.select().from(agencyTerms).where(inArray(agencyTerms.assignmentId, assignmentIds)),
   ]);
-  return { billing, pay };
+  return { billing, pay, agency };
 }
 
 const assignmentSelect = {
@@ -117,7 +128,8 @@ export const listPersonAssignments = defineService({
       return list.map((r) => {
         const billing = terms.billing.filter((t) => t.assignmentId === r.assignment.id);
         const pay = terms.pay.filter((t) => t.assignmentId === r.assignment.id);
-        return { ...r, margin: assignmentMargin(billing, pay, ctx.today) };
+        const agency = terms.agency.filter((t) => t.assignmentId === r.assignment.id);
+        return { ...r, margin: assignmentMargin(billing, pay, ctx.today, agency) };
       });
     });
     return ok(rows);
@@ -137,7 +149,13 @@ export const getAssignment = defineService({
         .leftJoin(client, eq(client.id, contract.clientId))
         .where(eq(assignment.id, id));
       if (!row) return null;
-      const { billing, pay } = await loadTerms(tx, [id]);
+      const { billing, pay, agency: agencyVersions } = await loadTerms(tx, [id]);
+      const agency = await tx
+        .select({ terms: agencyTerms, payeeName })
+        .from(agencyTerms)
+        .innerJoin(payee, eq(payee.id, agencyTerms.payeeId))
+        .where(eq(agencyTerms.assignmentId, id))
+        .orderBy(desc(agencyTerms.validFrom));
       const hours = await tx
         .select({
           month: period.month,
@@ -149,7 +167,14 @@ export const getAssignment = defineService({
         .innerJoin(period, eq(period.id, timesheet.periodId))
         .where(eq(timesheet.assignmentId, id))
         .orderBy(desc(period.month));
-      return { ...row, billing, pay, hours, margin: assignmentMargin(billing, pay, ctx.today) };
+      return {
+        ...row,
+        billing,
+        pay,
+        agency,
+        hours,
+        margin: assignmentMargin(billing, pay, ctx.today, agencyVersions),
+      };
     });
     return card ? ok(card) : err(serviceError('not_found', 'assignments.notFound'));
   },
@@ -227,5 +252,35 @@ export const addPayVersion = defineService({
     return row
       ? ok({ id: input.assignmentId })
       : err(serviceError('internal_error', 'general.saveFailed'));
+  },
+});
+
+/** A new agency fee version (A-068); closed periods are guarded by I10 like the other terms. */
+export const addAgencyVersion = defineService({
+  name: 'assignments.addAgencyVersion',
+  input: addAgencyVersionInput,
+  handler: async (ctx, input) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx.insert(agencyTerms).values(input).returning({ id: agencyTerms.id }),
+    );
+    return row
+      ? ok({ id: input.assignmentId })
+      : err(serviceError('internal_error', 'general.saveFailed'));
+  },
+});
+
+/** Payees an agency fee can go to: FOPs and other legal recipients, not crypto wallets. */
+export const agencyPayeeOptions = defineService({
+  name: 'assignments.agencyPayeeOptions',
+  input: z.object({}),
+  handler: async (ctx) => {
+    const rows = await inActorScope(ctx, (tx) =>
+      tx
+        .select({ id: payee.id, name: payeeName })
+        .from(payee)
+        .where(inArray(payee.kind, ['fop', 'other']))
+        .orderBy(asc(payeeName)),
+    );
+    return ok(rows.map((r) => ({ value: r.id, label: r.name ?? '' })));
   },
 });

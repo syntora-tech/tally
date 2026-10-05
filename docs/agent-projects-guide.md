@@ -28,6 +28,7 @@ Company ─┬─ Client contract (MSA No. …) ── Client
 | **Assignment**      | A person on a client contract: contract, SOW/Annex, role, FTE (0 < FTE ≤ 1), start, end. Or internal (CEO/CTO on our own company) — no contract, no billing         | UI only: person card → “New assignment”        |
 | **Client terms**    | Type `hourly` / `fixed_monthly` / `none`, rate, currency, invoice channel (fiat / crypto), partial-month policy                                                     | With the assignment; changes via “Add version” |
 | **Person terms**    | Type `fixed` / `hourly` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                              | With the assignment; changes via “Add version” |
+| **Agency fee**      | When an agency placed the person: the agency's payee, USD per hour the person works, payout method. Rate 0 from a month ends it                                     | Assignment page → “Agency fee” (UI only)       |
 | **Period**          | Calendar month: hours norm, reference rate, status `open` / `closed`                                                                                                | UI “Periods”                                   |
 | **Timesheet**       | Hours per assignment × month + a “project” note                                                                                                                     | UI “Periods” → step 2 (form or CSV)            |
 
@@ -72,6 +73,8 @@ The “project” note is internal. It does **not** appear on the client invoice
 
 All of a person's assignments in a month roll into **one payout** per method (fiat and crypto separately). The recipient is the default payee from the person card.
 
+**Agency fee** (A-068): if an agency placed the person (e.g. RedJumpers gets 4 USD for every hour Andrii works), the assignment has agency terms. Each month the agency gets **its own payout** = rate × hours, with its own FOP act; it waits for the client exactly like the person's pay. It is not part of the person's pay and not on the invoice.
+
 **When it can be paid** (5.3): by default “After client payment or at the deadline” (`on_payment_or_due`) — when the client has paid the invoice in full or its due date has come (then the company pays), whichever is first. “Immediately” (`immediate`) — right after the month is closed.
 
 **A closed month** is frozen: hours, notes and terms do not change retroactively. They can change only after the owner reopens the period.
@@ -105,6 +108,7 @@ Start: <YYYY-MM-DD>           End: <YYYY-MM-DD or empty>
 Client: <hourly 47 USD/h | fixed_monthly 5500 USD, full_month|by_hours|trunc_hourly | none>, channel fiat|crypto
 Person: <fixed 2300 USD/month (already with FTE) | hourly 7360 USD/month for the full norm | included>, payout fiat|crypto,
         when: on_payment_or_due | immediate
+Agency: <none | agency payee name, N USD per hour, payout fiat|crypto>
 Projects under this SOW (for timesheet notes): <Mobile app, Admin panel, …>
 ```
 

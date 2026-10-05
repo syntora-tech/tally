@@ -93,6 +93,7 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
       workHours: 184,
       billing: '5500.00',
       pay: '5000.00',
+      agency: '0.00',
       margin: '500.00',
       currency: 'USD',
     });

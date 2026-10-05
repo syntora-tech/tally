@@ -58,6 +58,8 @@ export function payrollLineAmount(
 export type TermsMargin = {
   billing: Decimal;
   pay: Decimal;
+  /** Agency fee for the month (A-068), USD per hour × H. */
+  agency: Decimal;
   margin: Decimal;
 };
 
@@ -69,9 +71,13 @@ export function marginByTerms(
   billing: (BillingTermsInput & { currency: string }) | null,
   pay: (PayTermsInput & { currency: string }) | null,
   workHours: DecimalInput,
+  agencyRatePerHour: DecimalInput = '0',
 ): TermsMargin | null {
   if (billing && pay && billing.currency !== pay.currency) return null;
+  const agency = toDecimal(agencyRatePerHour).times(toDecimal(workHours));
+  // Agency fees are in USD; without a rate there is no margin in another currency.
+  if (!agency.isZero() && (billing?.currency ?? pay?.currency ?? 'USD') !== 'USD') return null;
   const billed = (billing && billingLineAmount(billing, workHours, workHours)) ?? new Decimal(0);
   const paid = pay ? payrollLineAmount(pay, workHours, workHours) : new Decimal(0);
-  return { billing: billed, pay: paid, margin: billed.minus(paid) };
+  return { billing: billed, pay: paid, agency, margin: billed.minus(paid).minus(agency) };
 }

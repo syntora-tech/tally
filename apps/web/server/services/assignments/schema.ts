@@ -89,3 +89,14 @@ export const addPayVersionInput = payTermsFields.extend({
   assignmentId: z.uuid(),
   validFrom: monthStart,
 });
+
+/** Agency fee (A-068): USD per hour the person works, paid to the agency payee. Rate 0 ends it. */
+export const addAgencyVersionInput = z.object({
+  assignmentId: z.uuid(),
+  validFrom: monthStart,
+  payeeId: z.uuid({ error: 'assignments.chooseAgency' }),
+  ratePerHour: amountOrZero,
+  payoutMethod: z.enum(PAYOUT_METHODS).default('fiat'),
+  releasePolicy: z.enum(RELEASE_POLICIES).default('on_payment_or_due'),
+  graceDays: z.coerce.number().int().min(0).max(60).default(0),
+});

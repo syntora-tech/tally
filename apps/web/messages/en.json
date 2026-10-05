@@ -289,7 +289,8 @@
       "fte": "FTE from 0.01 to 1",
       "contractOrInternal": "Choose a contract or mark the assignment as internal",
       "endBeforeStart": "The end date is before the start date",
-      "notFound": "Assignment not found"
+      "notFound": "Assignment not found",
+      "chooseAgency": "Choose the agency payee"
     },
     "payees": {
       "iban": "Invalid IBAN format",
@@ -743,7 +744,12 @@
     "norm": "Norm",
     "source": "Source",
     "sourceImport": "import",
-    "sourceManual": "manual"
+    "sourceManual": "manual",
+    "agencyTitle": "Agency fee",
+    "agencyDescription": "If an agency placed this person, it gets a USD rate for every hour they work. Each month it becomes a separate payout to the agency, with its own act. A rate of 0 from a month ends the fee",
+    "agency": "Agency",
+    "ratePerHour": "Per hour",
+    "agencyEnded": "ended"
   },
   "assignmentForm": {
     "person": "Person",
@@ -774,7 +780,10 @@
     "graceDays": "Extra working days after the deadline",
     "validFrom": "Effective from month",
     "versionSaved": "New terms version saved",
-    "addVersion": "Add version"
+    "addVersion": "Add version",
+    "agencyPayee": "Agency (payee)",
+    "chooseAgency": "Choose the agency",
+    "ratePerHour": "USD per hour"
   },
   "payees": {
     "title": "Payout recipients",
@@ -1249,7 +1258,8 @@
     "released": "released: {reason}",
     "fundingClient": "client",
     "fundingCompany": "company",
-    "left": "left {amount}"
+    "left": "left {amount}",
+    "agencyTitle": "{payee} · agency fee"
   },
   "payDialog": {
     "paid": "Payout recorded",

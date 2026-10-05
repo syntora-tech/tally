@@ -253,3 +253,4 @@ export type Assignment = typeof assignment.$inferSelect;
 export type BillingTerms = typeof billingTerms.$inferSelect;
 export type PayTerms = typeof payTerms.$inferSelect;
 export type Period = typeof period.$inferSelect;
+export type AgencyTerms = typeof agencyTerms.$inferSelect;

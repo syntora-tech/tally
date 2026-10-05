@@ -11,10 +11,12 @@ import {
 import {
   resolvePayability,
   resolvePayee,
+  type AgencyPlanItem,
   type LocalDate,
   type PeriodAssignment,
   type PlanAdjustment,
   type PlanItem,
+  type PlanLine,
   type WorkCalendar,
 } from '@tally/domain';
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
@@ -39,14 +41,17 @@ export const toPlanAdjustments = (
   }));
 
 /**
- * Step 5 (6.4): payroll items and lines from the plan. A line is funded by the invoice line of the
- * same timesheet (5.3 rule 1); its status comes from resolvePayability at the closing date.
+ * Step 5 (6.4): payroll items and lines from the plan, then one item per agency payee for the
+ * agency fees (A-068). A line is funded by the invoice line of the same timesheet (5.3 rule 1) —
+ * agency fees too, so they wait for the client like the person's pay; its status comes from
+ * resolvePayability at the closing date.
  */
 export async function createPayroll(
   tx: DbTransaction,
   input: {
     periodId: string;
     plan: PlanItem[];
+    agency: AgencyPlanItem[];
     assignments: readonly PeriodAssignment[];
     timesheetIds: Map<string, string>;
     today: LocalDate;
@@ -91,6 +96,35 @@ export async function createPayroll(
         )
     : [];
 
+  const insertLines = async (itemId: string, lines: PlanLine[], agencyFee: boolean) => {
+    if (lines.length === 0) return;
+    await tx.insert(payrollLine).values(
+      lines.map((l) => {
+        const timesheetId = input.timesheetIds.get(l.assignmentId) ?? null;
+        const fund = timesheetId ? fundingOf.get(timesheetId) : undefined;
+        const state = resolvePayability(
+          fund
+            ? { total: fund.total, paidAmount: fund.paidAmount, dueDate: fund.dueDate as LocalDate }
+            : null,
+          { releasePolicy: l.releasePolicy, graceDays: l.graceDays },
+          input.today,
+          input.cal,
+        );
+        return {
+          payrollItemId: itemId,
+          assignmentId: l.assignmentId,
+          timesheetId,
+          amountUsd: l.amountUsd,
+          agencyFee,
+          fundedByInvoiceLineId: fund?.lineId ?? null,
+          status: state.payable ? ('payable' as const) : ('awaiting_client' as const),
+          fundingSource: state.payable ? state.funding : null,
+          payableAt: state.payable ? new Date() : null,
+        };
+      }),
+    );
+  };
+
   let items = 0;
   for (const plan of input.plan) {
     const owner = people.find((p) => p.id === plan.personId);
@@ -108,36 +142,23 @@ export async function createPayroll(
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
-    if (plan.lines.length) {
-      await tx.insert(payrollLine).values(
-        plan.lines.map((l) => {
-          const timesheetId = input.timesheetIds.get(l.assignmentId) ?? null;
-          const fund = timesheetId ? fundingOf.get(timesheetId) : undefined;
-          const state = resolvePayability(
-            fund
-              ? {
-                  total: fund.total,
-                  paidAmount: fund.paidAmount,
-                  dueDate: fund.dueDate as LocalDate,
-                }
-              : null,
-            { releasePolicy: l.releasePolicy, graceDays: l.graceDays },
-            input.today,
-            input.cal,
-          );
-          return {
-            payrollItemId: item.id,
-            assignmentId: l.assignmentId,
-            timesheetId,
-            amountUsd: l.amountUsd,
-            fundedByInvoiceLineId: fund?.lineId ?? null,
-            status: state.payable ? ('payable' as const) : ('awaiting_client' as const),
-            fundingSource: state.payable ? state.funding : null,
-            payableAt: state.payable ? new Date() : null,
-          };
-        }),
-      );
-    }
+    await insertLines(item.id, plan.lines, false);
+    await tx.execute(sql`select public.refresh_payroll_item(${item.id})`);
+    items++;
+  }
+  for (const plan of input.agency) {
+    const [item] = await tx
+      .insert(payrollItem)
+      .values({
+        kind: 'agency',
+        periodId: input.periodId,
+        payeeId: plan.payeeId,
+        payoutMethod: plan.payoutMethod,
+        totalUsd: plan.totalUsd,
+      })
+      .returning({ id: payrollItem.id });
+    if (!item) throw new Error('Payroll item insert returned no row');
+    await insertLines(item.id, plan.lines, true);
     await tx.execute(sql`select public.refresh_payroll_item(${item.id})`);
     items++;
   }

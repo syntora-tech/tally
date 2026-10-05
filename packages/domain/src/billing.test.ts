@@ -101,6 +101,17 @@ describe('marginByTerms (assumptions A-015)', () => {
     expect(m?.margin.toFixed(2)).toBe('5648.00');
   });
 
+  it('an agency fee per hour comes off the margin (A-068)', () => {
+    const m = marginByTerms(
+      { type: 'hourly', rate: '47', prorationPolicy: 'full_month', currency: 'USD' },
+      { type: 'fixed', amount: '3000', currency: 'USD' },
+      H,
+      '4',
+    );
+    expect(m?.agency.toFixed(2)).toBe('736.00');
+    expect(m?.margin.toFixed(2)).toBe('4912.00');
+  });
+
   it('internal assignment without billing has negative margin', () => {
     const m = marginByTerms(null, { type: 'fixed', amount: '2020', currency: 'USD' }, H);
     expect(m?.margin.toFixed(2)).toBe('-2020.00');

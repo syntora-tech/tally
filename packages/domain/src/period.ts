@@ -24,6 +24,16 @@ export type PeriodPayTerms = PayTermsInput & {
   graceDays?: number;
 };
 
+/** Agency fee terms (A-068): `ratePerHour` USD for every hour the person works. */
+export type PeriodAgencyTerms = {
+  validFrom: LocalDate;
+  payeeId: string;
+  ratePerHour: DecimalInput;
+  payoutMethod?: PayoutMethod;
+  releasePolicy?: ReleasePolicy;
+  graceDays?: number;
+};
+
 export type PeriodAssignment = {
   assignmentId: string;
   /** Groups payroll items (5.2); defaults to the name in tests that do not need it. */
@@ -37,6 +47,8 @@ export type PeriodAssignment = {
   endsOn: LocalDate | null;
   billing: (BillingTermsInput & { validFrom: LocalDate; currency: string })[];
   pay: PeriodPayTerms[];
+  /** Absent when the person was not placed by an agency. */
+  agency?: PeriodAgencyTerms[];
   hours: string | null;
   /** Project note of the month's timesheet row. */
   note?: string | null;
@@ -230,4 +242,47 @@ export function payrollPlan(
       totalUahApprox: uah?.isOk() ? uah.value.toFixed(2) : null,
     };
   });
+}
+
+export type AgencyPlanItem = {
+  payeeId: string;
+  payoutMethod: PayoutMethod;
+  lines: PlanLine[];
+  totalUsd: string;
+};
+
+/**
+ * Agency fees for a month (A-068): rate × hours for every active assignment whose agency terms
+ * apply, one item per agency payee × payout method. Months without hours give no line.
+ */
+export function agencyPlan(
+  month: LocalDate,
+  assignments: readonly PeriodAssignment[],
+): AgencyPlanItem[] {
+  const items = new Map<string, AgencyPlanItem>();
+  for (const a of assignments) {
+    if (!isActiveInMonth(a, month)) continue;
+    const terms = effectiveVersion(a.agency ?? [], month);
+    const hours = toDecimal(a.hours ?? '0');
+    if (!terms || hours.isZero() || toDecimal(terms.ratePerHour).isZero()) continue;
+    const method = terms.payoutMethod ?? 'fiat';
+    const key = `${terms.payeeId}:${method}`;
+    const item = items.get(key) ?? {
+      payeeId: terms.payeeId,
+      payoutMethod: method,
+      lines: [],
+      totalUsd: '0',
+    };
+    item.lines.push({
+      assignmentId: a.assignmentId,
+      amountUsd: roundHalfUp(toDecimal(terms.ratePerHour).times(hours), 2).toFixed(2),
+      releasePolicy: terms.releasePolicy ?? 'on_payment_or_due',
+      graceDays: terms.graceDays ?? 0,
+    });
+    items.set(key, item);
+  }
+  return [...items.values()].map((item) => ({
+    ...item,
+    totalUsd: sum(item.lines.map((l) => l.amountUsd)).toFixed(2),
+  }));
 }

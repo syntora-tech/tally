@@ -1,5 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import {
+  agencyTerms,
   assignment,
   billingTerms,
   client,
@@ -15,6 +16,7 @@ import {
   workCalendarException,
 } from '@tally/db/schema';
 import {
+  agencyPlan,
   defaultInvoiceDate,
   draftLine,
   dueDate,
@@ -80,16 +82,17 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
     ),
   );
   const ids = active.map((r) => r.assignment.id);
-  const [billing, pay, hours] = ids.length
+  const [billing, pay, agency, hours] = ids.length
     ? await Promise.all([
         tx.select().from(billingTerms).where(inArray(billingTerms.assignmentId, ids)),
         tx.select().from(payTerms).where(inArray(payTerms.assignmentId, ids)),
+        tx.select().from(agencyTerms).where(inArray(agencyTerms.assignmentId, ids)),
         tx
           .select()
           .from(timesheet)
           .where(and(eq(timesheet.periodId, p.id), inArray(timesheet.assignmentId, ids))),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const assignments: PeriodAssignment[] = active.map((r) => ({
     assignmentId: r.assignment.id,
     personId: r.assignment.personId,
@@ -116,6 +119,16 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
         amount: t.amount,
         currency: t.currency,
         validFrom: t.validFrom as LocalDate,
+        payoutMethod: t.payoutMethod,
+        releasePolicy: t.releasePolicy,
+        graceDays: t.graceDays,
+      })),
+    agency: agency
+      .filter((t) => t.assignmentId === r.assignment.id)
+      .map((t) => ({
+        validFrom: t.validFrom as LocalDate,
+        payeeId: t.payeeId,
+        ratePerHour: t.ratePerHour,
         payoutMethod: t.payoutMethod,
         releasePolicy: t.releasePolicy,
         graceDays: t.graceDays,
@@ -212,7 +225,7 @@ export const getPeriodOverview = defineService({
       const payroll = await tx
         .select({ item: payrollItem, personName: person.fullName })
         .from(payrollItem)
-        .innerJoin(person, eq(person.id, payrollItem.personId))
+        .leftJoin(person, eq(person.id, payrollItem.personId))
         .where(eq(payrollItem.periodId, periodId))
         .orderBy(person.fullName);
       return {
@@ -382,6 +395,7 @@ export const closePeriod = defineService({
       const payrollItems = await createPayroll(tx, {
         periodId,
         plan: payrollPlan(month, p.workHours, p.referenceFxUsdUah, assignments, adjustments),
+        agency: agencyPlan(month, assignments),
         assignments,
         timesheetIds,
         today: ctx.today,

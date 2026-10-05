@@ -1,4 +1,4 @@
-import { invoice, invoiceLine, payrollItem, payrollLine, person } from '@tally/db/schema';
+import { assignment, invoice, invoiceLine, payrollLine, person } from '@tally/db/schema';
 import { sum } from '@tally/domain';
 import { and, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { ok } from 'neverthrow';
@@ -24,8 +24,9 @@ export const creditToClients = defineService({
           invoiceId: invoice.id,
         })
         .from(payrollLine)
-        .innerJoin(payrollItem, eq(payrollItem.id, payrollLine.payrollItemId))
-        .innerJoin(person, eq(person.id, payrollItem.personId))
+        // Through the assignment, so agency fee lines (A-068) count too.
+        .innerJoin(assignment, eq(assignment.id, payrollLine.assignmentId))
+        .innerJoin(person, eq(person.id, assignment.personId))
         .innerJoin(invoiceLine, eq(invoiceLine.id, payrollLine.fundedByInvoiceLineId))
         .innerJoin(invoice, eq(invoice.id, invoiceLine.invoiceId))
         .where(

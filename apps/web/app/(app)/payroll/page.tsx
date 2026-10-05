@@ -135,7 +135,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                   <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
                     <div>
                       <CardTitle className="text-base">
-                        {i.personName} · {fmt.month(i.month)}
+                        {i.item.kind === 'agency'
+                          ? t('agencyTitle', { payee: i.payeeName ?? '' })
+                          : i.personName}{' '}
+                        · {fmt.month(i.month)}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
                         {fiat ? 'fiat' : 'crypto'} · {i.payeeName ?? t('noPayee')}
@@ -175,6 +178,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         {i.lines.map((l) => (
                           <TableRow key={l.id}>
                             <TableCell>
+                              {l.agencyFee && `${l.personName} · `}
                               {l.clientName ?? tc('internal')}
                               {l.invoiceNumber && (
                                 <span className="text-muted-foreground">
