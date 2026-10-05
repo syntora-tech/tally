@@ -295,7 +295,9 @@
       "kind": "Choose the payee type",
       "name": "Enter the name in Ukrainian or English",
       "wallet": "A crypto payee needs a wallet address",
-      "notFound": "Payee not found"
+      "notFound": "Payee not found",
+      "ambiguousTaxId": "Several payees have tax ID {taxId}: pass the id",
+      "defaultNeedsPerson": "A default payee needs personId"
     },
     "people": {
       "notFound": "Person not found",

@@ -1,5 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import { account, category, fxRate, posting, transaction } from '@tally/db/schema';
+import { definedOnly } from '../patch';
 import { toDecimal } from '@tally/domain';
 import { eq, inArray, or, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
@@ -16,7 +17,7 @@ import {
   optionalText,
   requiredText,
 } from '../fields';
-import { bookTransaction, resolveParty, transactionInput, TX_TYPES } from '.';
+import { bookTransaction, editTransaction, resolveParty, transactionInput, TX_TYPES } from '.';
 
 // Batch writes for agents and bulk entry (spec 13.3, A-053): every batch is one DB transaction,
 // supports a dry run, and reports per-item outcomes or per-item errors (`items.<index>`).
@@ -336,3 +337,142 @@ async function existingRefs(tx: DbTransaction, refs: string[]) {
   }
   return known;
 }
+
+const transactionPatch = z.object({
+  id: z.uuid().describe('Transaction id (from list_transactions)'),
+  occurredOn: localDateString.optional().describe('YYYY-MM-DD'),
+  type: z
+    .enum(TX_TYPES)
+    .optional()
+    .describe('Changing the type usually needs new legs and category'),
+  category: z.string().trim().min(1).optional().describe('Category id or name of the (new) type'),
+  description: optionalText.optional(),
+  counterparty: optionalText.optional(),
+  externalRef: optionalText.optional().describe('Bank reference or transaction hash'),
+  personId: z.uuid().nullable().optional().describe('Linked person; null unlinks'),
+  clientId: z.uuid().nullable().optional().describe('Linked client; null unlinks'),
+  counterpartyAddress: optionalText
+    .optional()
+    .describe('Counterparty wallet of a crypto transaction'),
+  from: legRef.nullable().optional().describe('Replaces the outgoing leg; null removes it'),
+  to: legRef.nullable().optional().describe('Replaces the incoming leg; null removes it'),
+  fee: legRef.nullable().optional().describe('Replaces the fee; null removes it'),
+  reason: optionalText
+    .optional()
+    .describe('Required when type, accounts or amounts of an allocated transaction change'),
+});
+
+/**
+ * Manual corrections in bulk for agents (A-062): only the fields sent change, the rest is taken
+ * from the stored transaction; the same rules as the UI edit apply (A-061). All-or-nothing.
+ */
+export const updateTransactions = defineService({
+  name: 'ledger.transactions.updateBatch',
+  input: z.object({ transactions: z.array(transactionPatch).min(1).max(100), dryRun }),
+  handler: (ctx, input) =>
+    inActorScopeAtomic(ctx, input, async (tx) => {
+      const errors: ItemErrors = {};
+      const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
+      const categories = await tx
+        .select({ id: category.id, name: category.name, txType: category.txType })
+        .from(category);
+      const results: { index: number; id: string; status: 'updated' | 'unchanged' }[] = [];
+      for (const [index, item] of input.transactions.entries()) {
+        const key = `transactions.${String(index)}`;
+        const [current] = await tx.select().from(transaction).where(eq(transaction.id, item.id));
+        if (!current) {
+          errors[key] = ['ledger.txNotFound'];
+          continue;
+        }
+        const stored = await tx.select().from(posting).where(eq(posting.transactionId, item.id));
+        const legs = stored.filter((p) => !p.isFee);
+        const storedLeg = (p: (typeof stored)[number] | undefined) =>
+          p && { accountId: p.accountId, amount: toDecimal(p.amount).abs().toString() };
+        const problems: string[] = [];
+        const leg = (
+          l: z.output<typeof legRef> | null | undefined,
+          name: string,
+          keep: unknown,
+        ) => {
+          if (l === undefined) return keep as { accountId: string; amount: string } | undefined;
+          if (l === null) return undefined;
+          const id = accounts.find((a) =>
+            uuidLike.test(l.account) ? a.id === l.account.toLowerCase() : a.name === l.account,
+          )?.id;
+          if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
+          return { accountId: id ?? '', amount: l.amount };
+        };
+        const type = item.type ?? current.type;
+        const categoryId = item.category
+          ? categories.find((c) =>
+              uuidLike.test(item.category ?? '')
+                ? c.id === item.category?.toLowerCase()
+                : c.txType === type && c.name === item.category,
+            )?.id
+          : current.categoryId;
+        if (!categoryId)
+          problems.push(msg('batch.categoryNotFound', { category: item.category ?? '', type }));
+        const patch = definedOnly({
+          occurredOn: item.occurredOn,
+          description: item.description,
+          counterparty: item.counterparty,
+          externalRef: item.externalRef,
+          personId: item.personId,
+          clientId: item.clientId,
+          counterpartyAddress: item.counterpartyAddress,
+        });
+        const merged = {
+          id: item.id,
+          reason: item.reason ?? null,
+          type,
+          categoryId: categoryId ?? '',
+          occurredOn: current.occurredOn,
+          description: current.description,
+          counterparty: current.counterparty,
+          externalRef: current.externalRef,
+          personId: current.personId,
+          clientId: current.clientId,
+          counterpartyAddress: current.counterpartyAddress,
+          ...patch,
+          from: leg(item.from, 'from', storedLeg(legs.find((p) => toDecimal(p.amount).isNeg()))),
+          to: leg(item.to, 'to', storedLeg(legs.find((p) => !toDecimal(p.amount).isNeg()))),
+          fee: leg(item.fee, 'fee', storedLeg(stored.find((p) => p.isFee))),
+        };
+        if (problems.length) {
+          errors[key] = problems;
+          continue;
+        }
+        const parsed = transactionInput.safeParse(merged);
+        if (!parsed.success) {
+          errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+          continue;
+        }
+        try {
+          const outcome = await tx.transaction(async (sp) => {
+            const edited = await editTransaction(sp, {
+              ...parsed.data,
+              id: item.id,
+              reason: item.reason ?? null,
+            });
+            if (edited.isOk()) await sp.execute(sql`set constraints all immediate`);
+            return edited;
+          });
+          if (outcome.isErr()) {
+            errors[key] = [
+              ...Object.values(outcome.error.fieldErrors ?? {}).flat(),
+              ...(outcome.error.fieldErrors ? [] : [outcome.error.message]),
+            ];
+            continue;
+          }
+          results.push({ index, id: item.id, status: outcome.value.status });
+        } catch (error) {
+          const mapped = mapDbError(error);
+          if (!mapped) throw error;
+          errors[key] = [mapped.message];
+        } finally {
+          await tx.execute(sql`set constraints all deferred`);
+        }
+      }
+      return Object.keys(errors).length ? err(batchFailure(errors)) : ok({ transactions: results });
+    }),
+});

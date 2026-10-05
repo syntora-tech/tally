@@ -9,10 +9,13 @@ import { listAccounts, listCategories, listTransactions } from '../services/ledg
 import {
   addTransactions,
   setFxRates,
+  updateTransactions,
   upsertAccounts,
   upsertCategories,
 } from '../services/ledger/batch';
 import { getPerson, searchPeople, type PersonRow } from '../services/people';
+import { listPayees } from '../services/payees';
+import { upsertPayees } from '../services/payees/batch';
 import { upsertPeople } from '../services/people/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
 
@@ -45,7 +48,7 @@ function tool<S extends z.ZodType, T>(
   };
 }
 
-/** Bench profile only: payees (tax ids, IBANs, payout wallets) never leave through MCP (13.2). */
+/** Bench profile; payee details come only from list_payees (A-062). */
 function benchProfile(p: PersonRow) {
   return {
     id: p.id,
@@ -70,8 +73,8 @@ function benchProfile(p: PersonRow) {
 
 /**
  * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
- * A-054, A-056). Deletions, payees, contracts, terms, payouts, allocations and document actions
- * are deliberately absent from MCP (13.3 «не виставляються»).
+ * A-054, A-056). Deletions, contracts, terms, payouts, allocations and document actions are
+ * deliberately absent from MCP (13.3 «не виставляються»); payees are allowed since A-062.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -119,6 +122,9 @@ export const TOOLS: readonly ToolDef[] = [
         category: categoryName,
         description: t.description,
         counterparty: t.counterparty,
+        personId: t.personId,
+        clientId: t.clientId,
+        counterpartyAddress: t.counterpartyAddress,
         externalRef: t.externalRef ?? t.legacyRef,
         allocated,
         postings: postings.map((p) => ({
@@ -152,10 +158,10 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'get_person',
     title: 'Person profile',
     description:
-      'One person by id: bench profile, current load and crypto wallets (network, address, label, isActive), without payee details.',
+      'One person by id: bench profile, current load, crypto wallets (network, address, label, isActive) and the default payee {id, name}; payee details are in list_payees.',
     kind: 'read',
     service: getPerson,
-    present: (p) => ({ ...benchProfile(p), wallets: p.wallets }),
+    present: (p) => ({ ...benchProfile(p), wallets: p.wallets, defaultPayee: p.defaultPayee }),
   }),
   tool({
     name: 'list_clients',
@@ -172,6 +178,14 @@ export const TOOLS: readonly ToolDef[] = [
       'Crypto wallets of people and clients with their owner, plus our own accounts with that address (ownAccounts). Use it to identify the counterparty of a crypto transaction: pass the exact address (EVM case does not matter) and optionally the network; without address it lists all wallets.',
     kind: 'read',
     service: findWallets,
+  }),
+  tool({
+    name: 'list_payees',
+    title: 'Payees',
+    description:
+      "Legal recipients of payouts: id, kind (fop|crypto|other), name, taxId, iban, payout wallet (walletAddress, walletNetwork) and the linked person (personId, personName). A person may be paid through someone else's FOP.",
+    kind: 'read',
+    service: listPayees,
   }),
   tool({
     name: 'upsert_person_profile',
@@ -198,6 +212,14 @@ export const TOOLS: readonly ToolDef[] = [
     service: upsertWallets,
   }),
   tool({
+    name: 'upsert_payees',
+    title: 'Create, update or link payees',
+    description:
+      'Payees in bulk (max 100). Matched by id, else by taxId; only the fields sent change, a missing payee is created (kind defaults to fop; a name in Ukrainian or English is required; crypto needs walletAddress). personId links the payee to a person (null unlinks); makeDefault also makes it that person\'s default payee for new payouts. IBAN and tax id formats are checked. All-or-nothing; errors keyed "payees.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertPayees,
+  }),
+  tool({
     name: 'upsert_accounts',
     title: 'Create or update accounts',
     description:
@@ -220,6 +242,14 @@ export const TOOLS: readonly ToolDef[] = [
       'Stores manual rates (max 500); a rate for the same date and pair replaces the previous manual one. Rate = quote units per 1 base, e.g. base USD quote UAH rate "41.25".',
     kind: 'write',
     service: setFxRates,
+  }),
+  tool({
+    name: 'update_transactions',
+    title: 'Correct transactions',
+    description:
+      'Edits up to 100 transactions by id; only the fields sent change. Legs (from/to/fee) take {account, amount} with a positive amount, or null to remove the leg; the postings are rewritten. personId/clientId link the party (null unlinks). If money (type, accounts, amounts) of an allocated transaction changes, a reason is required and the allocations must still fit. All-or-nothing; errors keyed "transactions.<index>"; use dryRun first.',
+    kind: 'write',
+    service: updateTransactions,
   }),
   tool({
     name: 'add_transactions',

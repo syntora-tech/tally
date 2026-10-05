@@ -54,15 +54,18 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `upsert_categories`     | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                       |
 | `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                 |
 | `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                            |
+| `update_transactions`   | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                      |
 | `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data |
 | `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                            |
 | `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                     |
 | `find_wallets`          | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                           |
+| `list_payees`           | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                    |
 | `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                       |
 | `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                               |
 | `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                        |
+| `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                         |
 
-Deleting or changing transactions over MCP is impossible by design. Likewise MCP has no access to payee details (FOP, tax IDs, IBANs, payout wallets), contracts, billing and pay rates, or assignments of people to projects — those are UI only. A mistake is fixed by a person in the UI (`/ledger`), after which the row can be entered again.
+Deleting transactions over MCP is impossible by design; a wrong row is corrected with `update_transactions` or deleted by a person in the UI (`/ledger`). Contracts, billing and pay rates, and assignments of people to projects are UI only.
 
 ## 4. Rules for every call
 
@@ -216,6 +219,26 @@ People and clients we settle with in crypto can have several wallets. They are h
 | `isActive`               | `false` deactivates; wallets are never deleted so old transactions stay identifiable                 |
 
 The same EVM address used on several EVM networks is entered once per network. Before booking a crypto transaction, call `find_wallets` with the counterparty address: `wallets[].owner` names the person or client, `ownAccounts` means it is a transfer between our own accounts.
+
+### 7.4 Payees — `list_payees`, `upsert_payees`
+
+A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a crypto wallet (`crypto`) or `other`. It is not always the same human as the person — someone can be paid through a relative's FOP.
+
+| Field                            | Format                                                     |
+| -------------------------------- | ---------------------------------------------------------- |
+| `id` or `taxId`                  | Match key; without both a new payee is created             |
+| `kind`                           | `fop` (default for new), `crypto`, `other`                 |
+| `legalNameUa` / `legalNameEn`    | At least one; e.g. `ФОП Іваненко Іван Іванович`            |
+| `taxId`                          | ІПН / ЄДРПОУ, 8–12 digits                                  |
+| `edrRecord`, `edrDate`           | EDR record and its date `YYYY-MM-DD` (used in FOP acts)    |
+| `addressUa`, `iban`, `bankName`  | Requisites for acts; IBAN may contain spaces               |
+| `walletAddress`, `walletNetwork` | Payout wallet of a `crypto` payee (required for that kind) |
+| `personId`                       | The person this payee pays; `null` unlinks                 |
+| `makeDefault`                    | `true` makes it the person's default payee for new payouts |
+
+### 7.5 Corrections — `update_transactions`
+
+Send the transaction `id` and only what changes. Legs replace the stored ones (`{ account, amount }`, positive amount; `null` removes the leg, e.g. `fee: null`). When the type, accounts or amounts of a transaction that is already allocated to an invoice or payout change, add a `reason` — it goes to the audit log — and the allocations must still fit the new amount. Use it also to link historical rows to people or clients (`personId` / `clientId`) once you recognise them in the description.
 
 ## 8. Report to the owner
 

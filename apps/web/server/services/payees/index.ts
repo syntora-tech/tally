@@ -82,6 +82,8 @@ export const listPayees = defineService({
           taxId: payee.taxId,
           iban: payee.iban,
           walletNetwork: payee.walletNetwork,
+          walletAddress: payee.walletAddress,
+          personId: payee.personId,
           personName: person.fullName,
         })
         .from(payee)

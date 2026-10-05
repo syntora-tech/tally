@@ -7,6 +7,7 @@ import {
   client,
   mcpCallLog,
   mcpClientPolicy,
+  payee,
   person,
   transaction,
 } from '@tally/db/schema';
@@ -73,6 +74,7 @@ afterAll(() =>
   h.cleanup(async (db) => {
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
     await db.delete(account).where(like(account.name, `M ${tag}%`));
+    await db.delete(payee).where(like(payee.legalNameUa, `ФОП M ${tag}%`));
     await db.delete(person).where(like(person.fullName, `M ${tag}%`));
     await db.delete(client).where(like(client.legalName, `M ${tag}%`));
     await db.delete(mcpCallLog).where(inArray(mcpCallLog.clientId, clientIds));
@@ -116,13 +118,14 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'get_person',
       'list_clients',
       'find_wallets',
+      'list_payees',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(15);
+    expect(tools).toHaveLength(18);
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -203,6 +206,20 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     const balances = (await mcp.callTool({ name: 'get_balances', arguments: {} })) as ToolResult;
     const items = balances.structuredContent?.items as { name: string; balance: string }[];
     expect(items.find((a) => a.name === usd)?.balance).toBe('150.00000000');
+
+    const edited = (await mcp.callTool({
+      name: 'update_transactions',
+      arguments: {
+        idempotencyKey: `edit-${tag}`,
+        transactions: [
+          { id: row?.id, description: 'Corrected by agent', to: { account: usd, amount: '40' } },
+        ],
+      },
+    })) as ToolResult;
+    expect(edited.structuredContent).toMatchObject({ transactions: [{ status: 'updated' }] });
+    const after = (await mcp.callTool({ name: 'get_balances', arguments: {} })) as ToolResult;
+    const afterItems = after.structuredContent?.items as { name: string; balance: string }[];
+    expect(afterItems.find((a) => a.name === usd)?.balance).toBe('140.00000000');
   });
 
   it('returns business errors as isError with per-item keys', async () => {
@@ -251,7 +268,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       name: 'get_person',
       arguments: { id: people[0]?.id },
     })) as ToolResult;
-    expect(card.structuredContent).not.toHaveProperty('defaultPayee');
+    expect(card.structuredContent).toMatchObject({ defaultPayee: null });
 
     const address = `0x${tag}${'ab'.repeat(16)}`;
     const wallet = (await mcp.callTool({
@@ -283,6 +300,29 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       wallets: [{ owner: { kind: 'person', name: fullName } }],
       ownAccounts: [],
     });
+
+    const taxId = String(Date.now()).slice(-10);
+    const payee = (await mcp.callTool({
+      name: 'upsert_payees',
+      arguments: {
+        idempotencyKey: `payees-${tag}`,
+        payees: [
+          {
+            legalNameUa: `ФОП M ${tag}`,
+            taxId,
+            iban: 'UA21 3223 1300 0002 6007 2335 6600 1',
+            personId: people[0]?.id,
+            makeDefault: true,
+          },
+        ],
+      },
+    })) as ToolResult;
+    expect(payee.structuredContent).toMatchObject({ payees: [{ status: 'created' }] });
+    const linked = (await mcp.callTool({
+      name: 'get_person',
+      arguments: { id: people[0]?.id },
+    })) as ToolResult;
+    expect(linked.structuredContent).toMatchObject({ defaultPayee: { name: `ФОП M ${tag}` } });
 
     const legalName = `M ${tag} Client Ltd`;
     const saved = (await mcp.callTool({

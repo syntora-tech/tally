@@ -226,7 +226,7 @@ const optionalLeg = z.preprocess(
 );
 
 const optionalParty = z
-  .preprocess(emptyToUndefined, z.uuid().optional())
+  .preprocess((v) => (v === null ? undefined : emptyToUndefined(v)), z.uuid().optional())
   .transform((v) => v ?? null);
 
 export const transactionInput = z
@@ -452,7 +452,8 @@ export async function editTransaction(
     !moneyChanged &&
     (Object.keys(values) as (keyof typeof values)[]).every((k) => current[k] === values[k]);
   if (unchanged) return ok({ id, status: 'unchanged' });
-  if (reason) await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
+  // Transaction-local setting: reset it so a batch does not carry one item's reason to the next.
+  await tx.execute(sql`select set_config('app.reason', ${reason ?? ''}, true)`);
   await tx.update(transaction).set(values).where(eq(transaction.id, id));
   if (moneyChanged) {
     await tx.delete(posting).where(eq(posting.transactionId, id));

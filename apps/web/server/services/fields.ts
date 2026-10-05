@@ -78,6 +78,9 @@ export const checkbox = z
 
 export const cryptoNetwork = z.enum(CRYPTO_NETWORKS, { error: 'field.network' });
 
+/** Network list for tool descriptions. */
+export const CRYPTO_NETWORK_HINT = CRYPTO_NETWORKS.join(', ');
+
 /** Network code from the fixed list (A-060); empty input becomes null. */
 export const optionalNetwork = z
   .preprocess(emptyToNull, cryptoNetwork.nullable().optional())
