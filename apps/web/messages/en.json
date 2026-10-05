@@ -208,7 +208,8 @@
       "network": "Choose a network from the list",
       "networkRequired": "Choose the network of this address",
       "walletAddress": "This is not a valid address for the chosen network",
-      "writeOffReason": "Enter the reason for the write-off"
+      "writeOffReason": "Enter the reason for the write-off",
+      "description": "Enter a description"
     },
     "general": {
       "checkInput": "Check the entered data",
@@ -403,7 +404,8 @@
       "versionExists": "A terms version from this date already exists",
       "duplicate": "Such a record already exists",
       "referenced": "The record is linked to other data",
-      "invalid": "The data did not pass validation"
+      "invalid": "The data did not pass validation",
+      "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -417,6 +419,26 @@
       "dueDay": "A day of the month from 1 to 31",
       "endsBeforeStart": "The end month is before the start month",
       "notFound": "Planned expense not found"
+    },
+    "trips": {
+      "notFound": "Trip not found",
+      "endBeforeStart": "The trip ends before it starts",
+      "chooseParticipants": "Choose at least one participant",
+      "participantInUse": "A participant with expenses or reimbursements cannot be removed",
+      "choosePerson": "Choose the participant",
+      "companyLedger": "A company-paid expense goes to the Ledger: choose the paying account or an existing transaction",
+      "noRate": "No exchange rate for this date — enter the rate",
+      "duplicate": "This receipt looks like one already entered in another trip",
+      "duplicateIn": "The same date, amount and description are already in “{trip}”. Tick “Record anyway” if it is a different receipt",
+      "accountAmount": "The account is in another currency: enter the amount charged to it",
+      "noTravelCategory": "No Travel / Conf. expense category",
+      "notExpense": "Choose an expense transaction",
+      "expenseNotFound": "Expense not found",
+      "choosePeriod": "Choose the open month whose payout carries it",
+      "choosePayee": "Choose who receives the money",
+      "noFopContract": "This payee has no FOP contract for an act",
+      "reimbursementNotFound": "Reimbursement not found",
+      "paidWithPayroll": "This reimbursement is paid with the monthly payout"
     }
   },
   "audit": {

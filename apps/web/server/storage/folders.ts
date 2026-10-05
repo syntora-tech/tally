@@ -25,7 +25,7 @@ export function folderPathFor(type: DocumentType, anchor: FolderAnchor, year: st
         ? `payees/${slugify(anchor.name)}/acts/${year}`
         : `payees/${slugify(anchor.name)}/${CONTRACT_LIKE.includes(type) ? 'contracts' : 'docs'}`;
     case 'trip':
-      return `trips/${anchor.year}/${slugify(anchor.name)}`;
+      return `trips/${anchor.year}/${slugify(anchor.name)}${type === 'receipt' ? '/receipts' : ''}`;
     case 'none':
       return type === 'statement' ? `ledger/statements/${year}` : 'documents';
   }

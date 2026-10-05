@@ -28,6 +28,11 @@ describe('folderPathFor (spec 7.3)', () => {
       { kind: 'trip', name: 'Bits&Pretzels Munich', year: '2026' },
       'trips/2026/bits-pretzels-munich',
     ],
+    [
+      'receipt',
+      { kind: 'trip', name: 'Bits&Pretzels Munich', year: '2026' },
+      'trips/2026/bits-pretzels-munich/receipts',
+    ],
     ['statement', { kind: 'none' }, 'ledger/statements/2026'],
     ['other', { kind: 'none' }, 'documents'],
   ] as const)('%s + %j → %s', (type, anchor, path) => {

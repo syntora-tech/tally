@@ -28,7 +28,13 @@ export const serviceError = (
   fieldErrors?: Record<string, string[]>,
 ): ServiceError => (fieldErrors ? { code, message, fieldErrors } : { code, message });
 
-type PgError = { code: string; hint?: string; detail?: string; constraint_name?: string };
+type PgError = {
+  code: string;
+  message?: string;
+  hint?: string;
+  detail?: string;
+  constraint_name?: string;
+};
 
 function findPgError(error: unknown): PgError | null {
   let current: unknown = error;
@@ -84,7 +90,12 @@ export function mapDbError(error: unknown): ServiceError | null {
     case 'TL052':
       return serviceError('conflict', 'db.allocationTarget');
     case 'TL053':
-      return serviceError('validation_error', msg('db.overInvoice', { detail: pg.detail ?? '' }));
+      return serviceError(
+        'validation_error',
+        msg(pg.message?.includes('reimbursement') ? 'db.overReimbursement' : 'db.overInvoice', {
+          detail: pg.detail ?? '',
+        }),
+      );
     case 'TL054':
       return serviceError(
         'validation_error',

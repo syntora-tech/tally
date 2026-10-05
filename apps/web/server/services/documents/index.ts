@@ -9,6 +9,7 @@ import {
   LINK_ENTITY_TYPES,
   payee,
   person,
+  trip,
 } from '@tally/db/schema';
 import { and, eq, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -60,6 +61,7 @@ type LinkInput = z.output<typeof documentLinkInput>;
 async function resolveAnchor(
   tx: DbTransaction,
   link: LinkInput | undefined,
+  today: string,
 ): Promise<FolderAnchor> {
   if (!link) return { kind: 'none' };
   const { entityType, entityId } = link;
@@ -83,6 +85,15 @@ async function resolveAnchor(
       .from(payee)
       .where(eq(payee.id, entityId));
     return p ? { kind: 'payee', name: p.name } : { kind: 'none' };
+  }
+  if (entityType === 'trip') {
+    const [t] = await tx
+      .select({ title: trip.title, startsOn: trip.startsOn })
+      .from(trip)
+      .where(eq(trip.id, entityId));
+    return t
+      ? { kind: 'trip', name: t.title, year: (t.startsOn ?? today).slice(0, 4) }
+      : { kind: 'none' };
   }
   if (entityType === 'contract' || entityType === 'assignment') {
     const contractId =
@@ -128,7 +139,7 @@ export async function insertDocument(
 ): Promise<{ id: string }> {
   let stored: { key: string; fileName: string; mimeType: string; sizeBytes: number } | null = null;
   if (input.file) {
-    const anchor = await inActorScope(ctx, (tx) => resolveAnchor(tx, input.links[0]));
+    const anchor = await inActorScope(ctx, (tx) => resolveAnchor(tx, input.links[0], ctx.today));
     const year = (input.docDate ?? ctx.today).slice(0, 4);
     const { key } = await storage.upload({
       folderPath: folderPathFor(input.type, anchor, year),
