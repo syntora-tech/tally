@@ -8,6 +8,7 @@ import { listRates } from '../services/fx';
 import { listAccounts, listCategories, listTransactions } from '../services/ledger';
 import {
   addTransactions,
+  deleteTransactions,
   setFxRates,
   updateTransactions,
   upsertAccounts,
@@ -26,6 +27,8 @@ export type ToolDef = {
   title: string;
   description: string;
   kind: ToolKind;
+  /** Write tools that remove data are announced as destructive to MCP clients. */
+  destructive?: boolean;
   input: z.ZodType;
   run: (ctx: ServiceContext, rawInput: unknown) => Promise<ServiceResult<unknown>>;
   /** Shapes the service result for agents; defaults to the raw value. */
@@ -34,7 +37,7 @@ export type ToolDef = {
 
 /** Keeps each tool's `present` typed against its own service result. */
 function tool<S extends z.ZodType, T>(
-  def: Pick<ToolDef, 'name' | 'title' | 'description' | 'kind'> & {
+  def: Pick<ToolDef, 'name' | 'title' | 'description' | 'kind' | 'destructive'> & {
     service: Service<S, T>;
     present?: (value: T) => unknown;
   },
@@ -73,8 +76,9 @@ function benchProfile(p: PersonRow) {
 
 /**
  * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
- * A-054, A-056). Deletions, contracts, terms, payouts, allocations and document actions are
- * deliberately absent from MCP (13.3 «не виставляються»); payees are allowed since A-062.
+ * A-054, A-056). Contracts, terms, payouts, allocations, document actions and deletions other
+ * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
+ * payees are allowed since A-062, deleting transactions since A-063.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -258,6 +262,15 @@ export const TOOLS: readonly ToolDef[] = [
       'Books up to 500 transactions. Amounts are positive decimal strings in the account currency; the leg gives the sign: revenue → to, expense → from, transfer/fx_exchange/crypto_* → from + to, adjustment → exactly one of from/to; fee is optional and always booked negative. Items whose externalRef already exists are skipped as "duplicate", so a batch can be re-sent. Any invalid item rolls back the whole batch and errors are keyed "transactions.<index>". Use dryRun first.',
     kind: 'write',
     service: addTransactions,
+  }),
+  tool({
+    name: 'delete_transactions',
+    title: 'Delete transactions',
+    description:
+      'Permanently deletes up to 500 transactions by id together with their postings; balances change accordingly. A transaction allocated to an invoice or payout is refused. All-or-nothing; errors keyed "ids.<index>". Only on the owner\'s explicit request; always run dryRun first and show the owner what will be deleted.',
+    kind: 'write',
+    destructive: true,
+    service: deleteTransactions,
   }),
 ];
 

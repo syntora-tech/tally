@@ -1,5 +1,5 @@
 import type { DbTransaction } from '@tally/db';
-import { account, category, fxRate, posting, transaction } from '@tally/db/schema';
+import { account, allocation, category, fxRate, posting, transaction } from '@tally/db/schema';
 import { definedOnly } from '../patch';
 import { toDecimal } from '@tally/domain';
 import { eq, inArray, or, sql } from 'drizzle-orm';
@@ -474,5 +474,40 @@ export const updateTransactions = defineService({
         }
       }
       return Object.keys(errors).length ? err(batchFailure(errors)) : ok({ transactions: results });
+    }),
+});
+
+/**
+ * Deletion in bulk for agents (A-063), e.g. to restart bookkeeping from a date. Same rule as the
+ * UI delete: a transaction allocated to documents is refused. All-or-nothing.
+ */
+export const deleteTransactions = defineService({
+  name: 'ledger.transactions.deleteBatch',
+  input: z.object({
+    ids: z.array(z.uuid()).min(1).max(500).describe('Transaction ids (from list_transactions)'),
+    dryRun,
+  }),
+  handler: (ctx, input) =>
+    inActorScopeAtomic(ctx, input, async (tx) => {
+      const errors: ItemErrors = {};
+      const ids = [...new Set(input.ids)];
+      const found = await tx
+        .select({ id: transaction.id })
+        .from(transaction)
+        .where(inArray(transaction.id, ids));
+      const allocated = await tx
+        .selectDistinct({ id: allocation.transactionId })
+        .from(allocation)
+        .where(inArray(allocation.transactionId, ids));
+      const known = new Set(found.map((r) => r.id));
+      const linked = new Set(allocated.map((r) => r.id));
+      for (const [index, id] of input.ids.entries()) {
+        const key = `ids.${String(index)}`;
+        if (!known.has(id)) errors[key] = ['ledger.txNotFound'];
+        else if (linked.has(id)) errors[key] = ['ledger.txAllocated'];
+      }
+      if (Object.keys(errors).length) return err(batchFailure(errors));
+      await tx.delete(transaction).where(inArray(transaction.id, ids));
+      return ok({ deleted: ids.length, ids });
     }),
 });

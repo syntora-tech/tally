@@ -125,7 +125,9 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(18);
+    expect(tools).toHaveLength(19);
+    const del = tools.find((t) => t.name === 'delete_transactions');
+    expect(del?.annotations).toMatchObject({ destructiveHint: true });
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -220,6 +222,26 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     const after = (await mcp.callTool({ name: 'get_balances', arguments: {} })) as ToolResult;
     const afterItems = after.structuredContent?.items as { name: string; balance: string }[];
     expect(afterItems.find((a) => a.name === usd)?.balance).toBe('140.00000000');
+
+    const preview = (await mcp.callTool({
+      name: 'delete_transactions',
+      arguments: { idempotencyKey: `delete-dry-${tag}`, ids: [row?.id], dryRun: true },
+    })) as ToolResult;
+    expect(preview.structuredContent).toMatchObject({ deleted: 1 });
+    const missing = (await mcp.callTool({
+      name: 'delete_transactions',
+      arguments: { idempotencyKey: `delete-bad-${tag}`, ids: [row?.id, crypto.randomUUID()] },
+    })) as ToolResult;
+    expect(missing.isError).toBe(true);
+    expect(JSON.stringify(missing.structuredContent)).toContain('ids.1');
+    const deleted = (await mcp.callTool({
+      name: 'delete_transactions',
+      arguments: { idempotencyKey: `delete-${tag}`, ids: [row?.id] },
+    })) as ToolResult;
+    expect(deleted.structuredContent).toMatchObject({ deleted: 1 });
+    const final = (await mcp.callTool({ name: 'get_balances', arguments: {} })) as ToolResult;
+    const finalItems = final.structuredContent?.items as { name: string; balance: string }[];
+    expect(finalItems.find((a) => a.name === usd)?.balance).toBe('100.00000000');
   });
 
   it('returns business errors as isError with per-item keys', async () => {

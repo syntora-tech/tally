@@ -55,6 +55,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                 |
 | `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                            |
 | `update_transactions`   | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                      |
+| `delete_transactions`   | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request   |
 | `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data |
 | `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                            |
 | `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                     |
@@ -65,7 +66,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                        |
 | `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                         |
 
-Deleting transactions over MCP is impossible by design; a wrong row is corrected with `update_transactions` or deleted by a person in the UI (`/ledger`). Contracts, billing and pay rates, and assignments of people to projects are UI only.
+A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only.
 
 ## 4. Rules for every call
 

@@ -106,7 +106,7 @@ export function createMcpServer(session: McpSession): McpServer {
           ? { readOnlyHint: true, openWorldHint: false }
           : {
               readOnlyHint: false,
-              destructiveHint: false,
+              destructiveHint: t.destructive ?? false,
               idempotentHint: true,
               openWorldHint: false,
             },
