@@ -289,7 +289,9 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
     .first()
     .getAttribute('value');
   await p2.locator('select[name=transactionId]').selectOption(statementRow ?? '');
-  await expect(p2.getByLabel('Amount, UAH')).not.toHaveValue('10000.00');
+  // A fresh DB has no rate to suggest for 2043, so set it; the payout is then below the row.
+  await p2.getByLabel('USD→UAH rate').fill('41.05');
+  await expect(p2.getByLabel('Amount, UAH')).toHaveValue('7330.30');
   await p2.getByRole('button', { name: 'Record payout' }).click();
   await expect(page.getByText('Payout recorded')).toBeVisible();
 
