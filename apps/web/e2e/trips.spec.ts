@@ -53,7 +53,7 @@ async function createTrip(page: Page, title: string) {
 }
 
 async function addExpense(page: Page) {
-  await page.locator('#exp-description').fill('Uber');
+  await page.locator('#exp-description').fill(`Taxi ${tag}`);
   await page.locator('#exp-amount').fill('10.98');
   await page.locator('#exp-rate').fill('51.8');
   await page.getByRole('button', { name: 'Add expense' }).click();
