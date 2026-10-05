@@ -72,6 +72,8 @@ export function intHarness(today = '2026-09-29') {
       .insert(account)
       .values({ name: `int ${randomUUID()}`, kind: 'bank', currency, openingDate: on })
       .returning();
+    // Registered first, so a payment the DB rejects does not leak its account.
+    ledger.accounts.push(acc?.id ?? '');
     const [cat] = await db
       .select()
       .from(category)
@@ -89,7 +91,6 @@ export function intHarness(today = '2026-09-29') {
         .values({ transactionId: t?.id ?? '', amount, currency, invoiceId });
       return t?.id ?? '';
     });
-    ledger.accounts.push(acc?.id ?? '');
     ledger.transactions.push(txId);
     return txId;
   }
@@ -97,6 +98,8 @@ export function intHarness(today = '2026-09-29') {
   async function cleanup(extra?: (db: Db) => Promise<unknown>) {
     if (ledger.transactions.length) {
       await db.delete(transaction).where(inArray(transaction.id, ledger.transactions));
+    }
+    if (ledger.accounts.length) {
       await db.delete(account).where(inArray(account.id, ledger.accounts));
     }
     if (extra) await extra(db);
