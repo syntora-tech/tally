@@ -19,10 +19,12 @@ import {
   timesheet,
   transaction,
 } from '@tally/db/schema';
+import { toDecimal } from '@tally/domain';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { addAgencyVersion } from '../assignments';
+import { monthMargin } from '../dashboard/margin';
 import { issueInvoice } from '../invoices';
 import { closePeriod, openPeriod, setHours } from '../periods';
 import { listPayroll, payItem } from '.';
@@ -244,5 +246,24 @@ describe('agency fees (A-068)', () => {
       amountUah: '26240.00',
     });
     expect((await agencyItem())?.status).toBe('paid');
+  });
+
+  it('the month margin takes the agency fee off the client and the person (6.1)', async () => {
+    const [p] = await h.db.select().from(period).where(eq(period.id, ids.period));
+    const pay = toDecimal('3000')
+      .div(p?.workHours ?? '1')
+      .times('160')
+      .toFixed(2);
+    const margin = (
+      await monthMargin.run(h.ctxFor(finance), { periodId: ids.period })
+    )._unsafeUnwrap();
+    const expected = {
+      revenueUsd: '7520.00',
+      payUsd: pay,
+      agencyUsd: '640.00',
+      marginUsd: toDecimal('7520').minus(pay).minus('640').toFixed(2),
+    };
+    expect(margin?.byClient.find((r) => r.id === ids.client)).toMatchObject(expected);
+    expect(margin?.byPerson.find((r) => r.id === ids.person)).toMatchObject(expected);
   });
 });

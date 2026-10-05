@@ -258,6 +258,8 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.goto('/dashboard');
   const creditBefore = await page.getByTestId('credit-to-clients').innerText();
   expect(creditBefore).not.toMatch(/^0\.00/);
+  await expect(page.getByTestId('payable-total')).not.toHaveText(/^0\.00/);
+  await expect(page.getByTestId('forecast-month')).toHaveCount(6);
 
   // 3. Late payment on 25.09 → invoice paid, credit falls, funding stays with the company.
   await setToday(page, '2043-09-25');

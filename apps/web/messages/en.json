@@ -483,10 +483,60 @@
   },
   "dashboard": {
     "title": "Overview",
-    "comingSoon": "Balances, receivables, the deadline calendar and margin arrive at stage 4",
     "creditTitle": "Credit to clients",
-    "creditDescription": "Payouts at the company's expense for work the client has not paid yet",
-    "invoice": "invoice {number}"
+    "invoice": "invoice {number}",
+    "subtitle": "Money, debts and obligations today, the next 30 days and six months ahead. Amounts in USD at the latest rates",
+    "financeOnly": "The overview is for owners and finance",
+    "noRate": "No rate for {currencies}: these amounts are left out of the USD totals. Add a rate in Ledger → Rates",
+    "kpi": {
+      "treasury": "Treasury",
+      "receivables": "Receivables",
+      "awaiting": "Accrued, waiting for clients",
+      "payable": "Can be paid now",
+      "badDebt": "Bad debt (written off)"
+    },
+    "shortfall": "If no client pays, money runs out on {date}: after the next 30 days of payouts and planned expenses {amount}",
+    "balances": "Account balances",
+    "receivables": "Unpaid invoices",
+    "noReceivables": "No unpaid invoices",
+    "overdue": "{days, plural, one {# day} other {# days}} overdue",
+    "dueIn": "due {date} ({days, plural, one {# day} other {# days}})",
+    "calendar": "Next 30 days",
+    "calendarDescription": "Payouts, client due dates, planned expenses and document dates. Cash after the outflows if no client pays: {amount}",
+    "noEvents": "Nothing in the next 30 days",
+    "event": {
+      "invoice_due": "Client due",
+      "payout_deadline": "Payout deadline",
+      "payable_now": "Can pay now",
+      "planned": "Planned expense",
+      "invoice_date": "Invoice date",
+      "act_date": "Act date"
+    },
+    "marginTitle": "Margin for {month}",
+    "marginEmpty": "Margin appears once a month is closed",
+    "marginMonths": "Month",
+    "internal": "Internal",
+    "margin": {
+      "byClient": "Client",
+      "byPerson": "Person",
+      "revenue": "Invoiced",
+      "pay": "Pay",
+      "agency": "Agency",
+      "margin": "Margin",
+      "total": "Total"
+    },
+    "forecast": "Forecast for six months",
+    "forecastDescription": "By accrual: active assignments at the norm × FTE under their current terms, agency fees and planned expenses. Cash starts from today’s treasury.",
+    "plannedLink": "Planned expenses",
+    "forecastCol": {
+      "month": "Month",
+      "revenue": "Revenue",
+      "payroll": "Pay",
+      "agency": "Agency",
+      "planned": "Planned",
+      "net": "Net",
+      "cash": "Cash at month end"
+    }
   },
   "trips": {
     "title": "Trips",
