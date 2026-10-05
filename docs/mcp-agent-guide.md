@@ -93,6 +93,7 @@ Every transaction is an event with postings. Amounts in `from` / `to` / `fee` ar
 | `adjustment`                               | exactly one of `from` / `to` | Balance correction                                       |
 
 - `fee` is an optional fee; it is always debited (a negative posting) from the given account.
+- **Crypto gas** (A-065): every outgoing on-chain transaction books its network fee in `fee` against the wallet's gas-token account (`Crypto ETH - ETH`, `Crypto TRON - TRX`), not against the token account. Take the fee from the explorer (ETH: `gasUsed × effectiveGasPrice`; TRON: burned TRX for energy and bandwidth, `0` when staked resources covered it — then omit `fee`). Amounts have at most 8 decimals: round wei to 8. Only the main token account of a wallet carries its `address` (one account per network + address); the other token and gas accounts of the same wallet have none.
 - `account` is the exact account name or its `id`.
 - `category` is the name of a category **of the same type** (or its `id`).
 - The currency comes from the account. A transaction has no currency field (invariant I4).
