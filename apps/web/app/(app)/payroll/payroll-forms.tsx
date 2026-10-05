@@ -36,10 +36,15 @@ export type PayDialogProps = {
   suggestion: { rate: string; source: string } | null;
   remaining: string | null;
   accounts: { id: string; label: string }[];
+  /** Unallocated payout expenses already in the Ledger (statement rows), best matches first. */
+  candidates: { id: string; label: string; remaining: string }[];
   isOwner: boolean;
 };
 
-/** "Виплатити" (6.6): rate with its source badge, UAH total, account; creates expense + allocation. */
+/**
+ * "Виплатити" (6.6): rate with its source badge, UAH total, then either a new expense from an
+ * account or an existing Ledger expense; either way it is allocated to the item.
+ */
 export function PayDialog(p: PayDialogProps) {
   const t = useTranslations('payDialog');
   const tc = useTranslations('common');
@@ -66,7 +71,16 @@ export function PayDialog(p: PayDialogProps) {
       ? payrollTotalUah(p.linesUsd, p.adjustments, parsed.value)
       : null;
   const preview = totalUah?.isOk() ? totalUah.value.toFixed(2) : null;
-  const amountDefault = p.remaining ?? preview ?? '';
+  const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>('new');
+  const [transactionId, setTransactionId] = useState('');
+  const picked = p.candidates.find((c) => c.id === transactionId);
+  const itemAmount = p.remaining ?? preview ?? '';
+  const itemLeft = parseDecimal(itemAmount);
+  // Linking a statement row: never suggest more than is left on either side.
+  const amountDefault =
+    paidFrom === 'existing' && picked && !(itemLeft.isOk() && itemLeft.value.lt(picked.remaining))
+      ? picked.remaining
+      : itemAmount;
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -114,22 +128,64 @@ export function PayDialog(p: PayDialogProps) {
           )}
         </div>
       )}
+      <FormField label={t('source')} htmlFor={`source-${p.itemId}`}>
+        <NativeSelect
+          id={`source-${p.itemId}`}
+          value={paidFrom}
+          onChange={(e) => {
+            setPaidFrom(e.target.value === 'existing' ? 'existing' : 'new');
+          }}
+          options={[
+            { value: 'new', label: t('sourceNew') },
+            { value: 'existing', label: t('sourceExisting') },
+          ]}
+        />
+      </FormField>
       <div className="flex flex-wrap items-end gap-3">
-        <FormField
-          label={t('account')}
-          htmlFor={`acc-${p.itemId}`}
-          error={error?.fieldErrors?.accountId}
-        >
-          <NativeSelect
-            id={`acc-${p.itemId}`}
-            name="accountId"
-            placeholder={t('chooseAccount')}
-            options={p.accounts.map((a) => ({ value: a.id, label: a.label }))}
-          />
-        </FormField>
-        <FormField label={t('date')} htmlFor={`date-${p.itemId}`}>
-          <Input id={`date-${p.itemId}`} name="occurredOn" type="date" defaultValue={p.today} />
-        </FormField>
+        {paidFrom === 'existing' ? (
+          <FormField
+            label={t('transaction')}
+            htmlFor={`tx-${p.itemId}`}
+            error={error?.fieldErrors?.transactionId}
+          >
+            {p.candidates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('noCandidates')}</p>
+            ) : (
+              <NativeSelect
+                id={`tx-${p.itemId}`}
+                name="transactionId"
+                placeholder={t('chooseTransaction')}
+                value={transactionId}
+                onChange={(e) => {
+                  setTransactionId(e.target.value);
+                }}
+                options={p.candidates.map((c) => ({ value: c.id, label: c.label }))}
+              />
+            )}
+          </FormField>
+        ) : (
+          <>
+            <FormField
+              label={t('account')}
+              htmlFor={`acc-${p.itemId}`}
+              error={error?.fieldErrors?.accountId}
+            >
+              <NativeSelect
+                id={`acc-${p.itemId}`}
+                name="accountId"
+                placeholder={t('chooseAccount')}
+                options={p.accounts.map((a) => ({ value: a.id, label: a.label }))}
+              />
+            </FormField>
+            <FormField
+              label={t('date')}
+              htmlFor={`date-${p.itemId}`}
+              error={error?.fieldErrors?.occurredOn}
+            >
+              <Input id={`date-${p.itemId}`} name="occurredOn" type="date" defaultValue={p.today} />
+            </FormField>
+          </>
+        )}
         <FormField
           label={t('amount', { currency: p.fiat ? 'UAH' : 'USD' })}
           htmlFor={`amount-${p.itemId}`}
@@ -144,17 +200,19 @@ export function PayDialog(p: PayDialogProps) {
             className="w-36"
           />
         </FormField>
-        <FormField label={t('category')} htmlFor={`cat-${p.itemId}`}>
-          <NativeSelect
-            id={`cat-${p.itemId}`}
-            name="categoryName"
-            defaultValue="Contractors"
-            options={[
-              { value: 'Contractors', label: 'Contractors' },
-              { value: 'Payroll', label: 'Payroll' },
-            ]}
-          />
-        </FormField>
+        {paidFrom === 'new' && (
+          <FormField label={t('category')} htmlFor={`cat-${p.itemId}`}>
+            <NativeSelect
+              id={`cat-${p.itemId}`}
+              name="categoryName"
+              defaultValue="Contractors"
+              options={[
+                { value: 'Contractors', label: 'Contractors' },
+                { value: 'Payroll', label: 'Payroll' },
+              ]}
+            />
+          </FormField>
+        )}
       </div>
       {p.isOwner && (
         <FormField

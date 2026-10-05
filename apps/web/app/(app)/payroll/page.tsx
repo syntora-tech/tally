@@ -15,7 +15,7 @@ import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { suggestRate } from '@/server/services/fx';
 import { listAccounts } from '@/server/services/ledger';
-import { listPayroll, type PayrollGroup } from '@/server/services/payroll';
+import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
 import { OverrideForm, PayDialog } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
@@ -38,6 +38,12 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     suggestRate.run(ctx, { onDate: ctx.today }),
   ]);
   const items = rows.unwrapOr([]);
+  const unpaidMonths = items.filter((i) => i.group !== 'paid').map((i) => i.month);
+  const candidates = unpaidMonths.length
+    ? (
+        await payoutCandidates.run(ctx, { since: unpaidMonths.reduce((a, b) => (a < b ? a : b)) })
+      ).unwrapOr([])
+    : [];
   const [t, tc, fmt, { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS }] = await Promise.all([
     getTranslations('payroll'),
     getTranslations('common'),
@@ -54,6 +60,27 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     label: `${a.name} · ${fmt.amount(balance, a.currency)}`,
   }));
   const isOwner = ctx.actor.role === 'owner';
+  const USD_LIKE = ['USD', 'USDT', 'USDC'];
+  const candidatesFor = (i: (typeof items)[number]) =>
+    candidates
+      .filter(
+        (c) =>
+          c.occurredOn >= i.month &&
+          (i.item.payoutMethod === 'fiat' ? c.currency === 'UAH' : USD_LIKE.includes(c.currency)),
+      )
+      .sort(
+        (a, b) => Number(b.personId === i.item.personId) - Number(a.personId === i.item.personId),
+      )
+      .map((c) => ({
+        id: c.id,
+        remaining: c.remaining,
+        label: [
+          fmt.date(c.occurredOn),
+          c.counterparty ?? c.description ?? '—',
+          c.accountName,
+          t('left', { amount: fmt.amount(c.remaining, c.currency) }),
+        ].join(' · '),
+      }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -208,11 +235,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         suggestion={suggestion.unwrapOr(null)}
                         remaining={i.remaining}
                         isOwner={isOwner}
+                        candidates={candidatesFor(i)}
                         accounts={accountRows
                           .filter((a) =>
-                            fiat
-                              ? a.currency === 'UAH'
-                              : ['USD', 'USDT', 'USDC'].includes(a.currency),
+                            fiat ? a.currency === 'UAH' : USD_LIKE.includes(a.currency),
                           )
                           .map(({ id, label }) => ({ id, label }))}
                       />

@@ -3,6 +3,7 @@ import {
   adjustment,
   assignment,
   billingTerms,
+  category,
   client,
   company,
   contract,
@@ -17,13 +18,14 @@ import {
   timesheet,
   transaction,
 } from '@tally/db/schema';
-import { parseLocalDate } from '@tally/domain';
+import { parseLocalDate, toDecimal } from '@tally/domain';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { issueInvoice, reissueInvoice, voidInvoice } from '../invoices';
 import { closePeriod, openPeriod, setHours } from '../periods';
-import { listPayroll, payItem } from '.';
+import { createTransaction } from '../ledger';
+import { listPayroll, payItem, payoutCandidates, setPayoutRate } from '.';
 import { overridePayable, refreshPayability } from './payability';
 
 // Spec 9.4 calendar shifted to 2043, where 20 September is also a Sunday: invoice 01.09, due 20.09,
@@ -258,5 +260,79 @@ describe('pay-when-paid (5.3, 9.4)', () => {
       .where(eq(payrollItem.id, target?.item.id ?? ''));
     expect(after).toMatchObject({ status: 'paid', fxSource: 'nbu', payoutFxRate: '44.480000' });
     expect((await lineOf(ids.assignments[1] ?? ''))?.status).toBe('paid');
+  });
+
+  it('links an existing statement expense instead of booking a second one (6.6)', async () => {
+    const [uah] = await h.db
+      .insert(account)
+      .values({
+        name: `Statement UAH ${String(Date.now())}`,
+        kind: 'bank',
+        currency: 'UAH',
+        openingDate: '2043-01-01',
+      })
+      .returning();
+    ids.accounts.push(uah?.id ?? '');
+    const [contractors] = await h.db
+      .select({ id: category.id })
+      .from(category)
+      .where(and(eq(category.txType, 'expense'), eq(category.name, 'Contractors')));
+    const queue = (
+      await listPayroll.run(h.ctxFor(finance, d('2043-09-22')), { periodId: ids.period })
+    )._unsafeUnwrap();
+    const target = queue.find((q) => q.item.personId === ids.people[0]);
+    expect(target?.group).toBe('ready');
+    const noSource = await payItem.run(h.ctxFor(finance), {
+      itemId: target?.item.id ?? '',
+      amount: '1',
+    });
+    expect(noSource._unsafeUnwrapErr().fieldErrors?.accountId).toBeDefined();
+    await setPayoutRate.run(h.ctxFor(finance), {
+      itemId: target?.item.id ?? '',
+      rate: '44.48',
+      source: 'nbu',
+    });
+    const [item] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.id, target?.item.id ?? ''));
+    const total = item?.totalUah ?? '';
+    expect(total).not.toBe('');
+
+    const stmt = (
+      await createTransaction.run(h.ctxFor(finance), {
+        type: 'expense',
+        occurredOn: '2043-09-23',
+        categoryId: contractors?.id ?? '',
+        counterparty: 'FOP Early Bird',
+        externalRef: 'P24-int-1',
+        from: { accountId: uah?.id ?? '', amount: toDecimal(total).plus(100).toFixed(2) },
+      })
+    )._unsafeUnwrap();
+    ids.transactions.push(stmt.id);
+    const before = (
+      await payoutCandidates.run(h.ctxFor(finance), { since: '2043-09-01' })
+    )._unsafeUnwrap();
+    expect(before.find((c) => c.id === stmt.id)?.remaining).toBe(
+      toDecimal(total).plus(100).toFixed(2),
+    );
+
+    const paid = await payItem.run(h.ctxFor(finance), {
+      itemId: target?.item.id ?? '',
+      transactionId: stmt.id,
+      amount: total,
+    });
+    expect(paid._unsafeUnwrap().transactionId).toBe(stmt.id);
+    const [after] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.id, target?.item.id ?? ''));
+    expect(after?.status).toBe('paid');
+    const [linked] = await h.db.select().from(transaction).where(eq(transaction.id, stmt.id));
+    expect(linked?.personId).toBe(ids.people[0]);
+    const left = (
+      await payoutCandidates.run(h.ctxFor(finance), { since: '2043-09-01' })
+    )._unsafeUnwrap();
+    expect(left.find((c) => c.id === stmt.id)?.remaining).toBe('100.00');
   });
 });

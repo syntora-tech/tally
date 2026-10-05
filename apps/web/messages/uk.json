@@ -367,7 +367,10 @@
       "overrideOwnerOnly": "Розблокувати виплату достроково може лише власник",
       "alreadyPayable": "Рядок уже доступний до виплати",
       "unsupportedCurrency": "Непідтримувана валюта {currency}",
-      "noCategory": "Немає категорії {category}"
+      "noCategory": "Немає категорії {category}",
+      "transactionMismatch": "Ця транзакція не є витратою на виплату у валюті виплати",
+      "chooseUahExpense": "Оберіть витрату з гривневого рахунку",
+      "chooseUsdExpense": "Оберіть витрату з рахунку USD/USDT/USDC"
     },
     "db": {
       "termsClosedFrom": "Не можна змінювати умови заднім числом у закритому періоді. Нова версія може починатися не раніше {date}.",
@@ -1222,7 +1225,8 @@
     "until": " до {date}",
     "released": "розблоковано: {reason}",
     "fundingClient": "клієнт",
-    "fundingCompany": "компанія"
+    "fundingCompany": "компанія",
+    "left": "залишок {amount}"
   },
   "payDialog": {
     "paid": "Виплату записано",
@@ -1239,7 +1243,13 @@
     "released": "Рядок розблоковано",
     "reason": "Причина",
     "releaseReason": "Причина розблокування",
-    "release": "Розблокувати"
+    "release": "Розблокувати",
+    "source": "Оплата",
+    "sourceNew": "Новий платіж з рахунку",
+    "sourceExisting": "Наявна транзакція з Ledger",
+    "transaction": "Транзакція",
+    "chooseTransaction": "Оберіть транзакцію",
+    "noCandidates": "Немає нерозподілених витрат Contractors / Payroll у цій валюті з початку місяця"
   },
   "acts": {
     "back": "← Виплати",

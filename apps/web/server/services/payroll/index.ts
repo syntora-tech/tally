@@ -14,6 +14,8 @@ import {
   payTerms,
   period,
   person,
+  posting,
+  transaction,
 } from '@tally/db/schema';
 import {
   effectiveVersion,
@@ -230,22 +232,35 @@ async function applyRate(
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
-export const payItemInput = z.object({
-  itemId: z.uuid(),
-  accountId: z.uuid({ error: 'ledger.chooseFromAccount' }),
-  occurredOn: localDateString,
-  amount: decimalString.refine((v) => toDecimal(v).gt(0), 'field.positive'),
-  rate: z.preprocess(emptyToUndefined, decimalString.optional()),
-  rateSource: z.preprocess(emptyToUndefined, z.enum(['bank_actual', 'nbu', 'manual']).optional()),
-  categoryName: z.enum(['Contractors', 'Payroll']).default('Contractors'),
-  description: optionalText,
-  /** Paying more than the payable part is an advance: owner only, with a reason (5.3 rule 6). */
-  overrideReason: optionalText,
-});
+export const payItemInput = z
+  .object({
+    itemId: z.uuid(),
+    /** An expense already in the Ledger (e.g. from a bank statement) instead of booking a new one. */
+    transactionId: z.preprocess(emptyToUndefined, z.uuid().optional()),
+    accountId: z.preprocess(emptyToUndefined, z.uuid().optional()),
+    occurredOn: z.preprocess(emptyToUndefined, localDateString.optional()),
+    amount: decimalString.refine((v) => toDecimal(v).gt(0), 'field.positive'),
+    rate: z.preprocess(emptyToUndefined, decimalString.optional()),
+    rateSource: z.preprocess(emptyToUndefined, z.enum(['bank_actual', 'nbu', 'manual']).optional()),
+    categoryName: z.enum(['Contractors', 'Payroll']).default('Contractors'),
+    description: optionalText,
+    /** Paying more than the payable part is an advance: owner only, with a reason (5.3 rule 6). */
+    overrideReason: optionalText,
+  })
+  .superRefine((v, issues) => {
+    if (v.transactionId) return;
+    if (!v.accountId) {
+      issues.addIssue({ code: 'custom', path: ['accountId'], message: 'ledger.chooseFromAccount' });
+    }
+    if (!v.occurredOn) {
+      issues.addIssue({ code: 'custom', path: ['occurredOn'], message: 'field.date' });
+    }
+  });
 
 /**
- * "Виплатити" (6.6): optional rate, an expense from the chosen account and its allocation to the
- * item, in one transaction. Fiat items are paid from UAH accounts, crypto from USD-pegged wallets.
+ * "Виплатити" (6.6): optional rate, an expense from the chosen account (or an existing one from a
+ * statement) and its allocation to the item, in one transaction. Fiat items are paid from UAH
+ * accounts, crypto from USD-pegged wallets.
  */
 export const payItem = defineService({
   name: 'payroll.pay',
@@ -277,16 +292,7 @@ export const payItem = defineService({
         .where(eq(payrollItem.id, input.itemId));
       if (!item) return err(serviceError('not_found', 'payroll.notFound'));
       const fiat = item.item.payoutMethod === 'fiat';
-      const [acc] = await tx.select().from(account).where(eq(account.id, input.accountId));
-      if (!acc) return err(serviceError('not_found', 'ledger.accountNotFound'));
-      const accountOk = fiat ? acc.currency === 'UAH' : USD_LIKE.includes(acc.currency);
-      if (!accountOk) {
-        return err(
-          serviceError('validation_error', 'payroll.accountCurrency', {
-            accountId: [fiat ? 'payroll.chooseUahAccount' : 'payroll.chooseUsdAccount'],
-          }),
-        );
-      }
+      const currencyOk = (c: string) => (fiat ? c === 'UAH' : USD_LIKE.includes(c));
 
       const lines = await tx
         .select({ status: payrollLine.status, amountUsd: payrollLine.amountUsd })
@@ -318,43 +324,144 @@ export const payItem = defineService({
         return err(serviceError('forbidden', 'payroll.advanceOwnerOnly'));
       }
 
-      const [cat] = await tx
-        .select({ id: category.id })
-        .from(category)
-        .where(and(eq(category.txType, 'expense'), eq(category.name, input.categoryName)));
-      if (!cat)
-        return err(
-          serviceError('not_found', msg('payroll.noCategory', { category: input.categoryName })),
-        );
-      const payout: TransactionInput = {
-        type: 'expense',
-        occurredOn: input.occurredOn,
-        categoryId: cat.id,
-        description:
-          [input.description, input.overrideReason && `Advance: ${input.overrideReason}`]
-            .filter(Boolean)
-            .join(' · ') || null,
-        counterparty: item.personName,
-        externalRef: null,
-        personId: item.item.personId,
-        clientId: null,
-        counterpartyAddress: null,
-        from: { accountId: acc.id, amount: input.amount },
-        to: undefined,
-        fee: undefined,
-      };
-      const booked = await bookTransaction(tx, payout, {
-        personId: item.item.personId,
-        clientId: null,
-        counterpartyAddress: null,
-      });
+      const advanceNote = input.overrideReason && `Advance: ${input.overrideReason}`;
+      let transactionId: string;
+      let currency: string;
+      if (input.transactionId) {
+        const [main] = await tx
+          .select({
+            type: transaction.type,
+            description: transaction.description,
+            personId: transaction.personId,
+            clientId: transaction.clientId,
+            currency: posting.currency,
+          })
+          .from(transaction)
+          .innerJoin(
+            posting,
+            and(eq(posting.transactionId, transaction.id), eq(posting.isFee, false)),
+          )
+          .where(eq(transaction.id, input.transactionId))
+          .orderBy(desc(sql`abs(${posting.amount})`))
+          .limit(1);
+        if (!main) return err(serviceError('not_found', 'ledger.txNotFound'));
+        if (main.type !== 'expense' || !currencyOk(main.currency)) {
+          return err(
+            serviceError('validation_error', 'payroll.transactionMismatch', {
+              transactionId: [fiat ? 'payroll.chooseUahExpense' : 'payroll.chooseUsdExpense'],
+            }),
+          );
+        }
+        // A statement row usually has no person yet; never overwrite one (pay may go to another's FOP).
+        const patch = {
+          ...(main.personId === null && main.clientId === null && { personId: item.item.personId }),
+          ...(advanceNote && {
+            description: [main.description, advanceNote].filter(Boolean).join(' · '),
+          }),
+        };
+        if (Object.keys(patch).length > 0) {
+          await tx.update(transaction).set(patch).where(eq(transaction.id, input.transactionId));
+        }
+        transactionId = input.transactionId;
+        currency = fiat ? 'UAH' : main.currency;
+      } else {
+        const [acc] = await tx
+          .select()
+          .from(account)
+          .where(eq(account.id, input.accountId ?? ''));
+        if (!acc) return err(serviceError('not_found', 'ledger.accountNotFound'));
+        if (!currencyOk(acc.currency)) {
+          return err(
+            serviceError('validation_error', 'payroll.accountCurrency', {
+              accountId: [fiat ? 'payroll.chooseUahAccount' : 'payroll.chooseUsdAccount'],
+            }),
+          );
+        }
+        const [cat] = await tx
+          .select({ id: category.id })
+          .from(category)
+          .where(and(eq(category.txType, 'expense'), eq(category.name, input.categoryName)));
+        if (!cat)
+          return err(
+            serviceError('not_found', msg('payroll.noCategory', { category: input.categoryName })),
+          );
+        const payout: TransactionInput = {
+          type: 'expense',
+          occurredOn: input.occurredOn ?? ctx.today,
+          categoryId: cat.id,
+          description: [input.description, advanceNote].filter(Boolean).join(' · ') || null,
+          counterparty: item.personName,
+          externalRef: null,
+          personId: item.item.personId,
+          clientId: null,
+          counterpartyAddress: null,
+          from: { accountId: acc.id, amount: input.amount },
+          to: undefined,
+          fee: undefined,
+        };
+        const booked = await bookTransaction(tx, payout, {
+          personId: item.item.personId,
+          clientId: null,
+          counterpartyAddress: null,
+        });
+        transactionId = booked.id;
+        currency = fiat ? 'UAH' : acc.currency;
+      }
       await tx.insert(allocation).values({
-        transactionId: booked.id,
+        transactionId,
         payrollItemId: item.item.id,
         amount: input.amount,
-        currency: fiat ? 'UAH' : acc.currency,
+        currency,
       });
       const act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
-      return ok({ id: item.item.id, transactionId: booked.id, actId: act?.id ?? null });
+      return ok({ id: item.item.id, transactionId, actId: act?.id ?? null });
+    }),
+});
+
+/**
+ * Payout expenses from the Ledger with money not yet allocated (6.6), e.g. rows an agent entered
+ * from a bank statement: "Pay" links one of them instead of booking a second expense.
+ */
+export const payoutCandidates = defineService({
+  name: 'payroll.candidates',
+  input: z.object({ since: localDateString }),
+  handler: async (ctx, { since }) =>
+    inActorScope(ctx, async (tx) => {
+      const rows = await tx
+        .select({
+          id: transaction.id,
+          occurredOn: transaction.occurredOn,
+          counterparty: transaction.counterparty,
+          description: transaction.description,
+          personId: transaction.personId,
+          amount: posting.amount,
+          currency: posting.currency,
+          accountName: account.name,
+          used: sql<string>`coalesce((select sum(a.amount * coalesce(a.fx_rate, 1)) from ${allocation} a where a.transaction_id = "transaction"."id"), 0)`,
+        })
+        .from(transaction)
+        .innerJoin(
+          posting,
+          and(eq(posting.transactionId, transaction.id), eq(posting.isFee, false)),
+        )
+        .innerJoin(account, eq(account.id, posting.accountId))
+        .innerJoin(category, eq(category.id, transaction.categoryId))
+        .where(
+          and(
+            eq(transaction.type, 'expense'),
+            inArray(category.name, ['Contractors', 'Payroll']),
+            sql`${transaction.occurredOn} >= ${since}`,
+          ),
+        )
+        .orderBy(desc(transaction.occurredOn))
+        .limit(300);
+      return ok(
+        rows
+          .map(({ used, amount, ...r }) => ({
+            ...r,
+            remaining: toDecimal(amount).abs().minus(used).toFixed(2),
+          }))
+          .filter((r) => toDecimal(r.remaining).gt(0)),
+      );
     }),
 });

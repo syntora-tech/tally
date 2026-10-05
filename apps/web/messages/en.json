@@ -367,7 +367,10 @@
       "overrideOwnerOnly": "Only the owner can release a payout early",
       "alreadyPayable": "The line is already payable",
       "unsupportedCurrency": "Unsupported currency {currency}",
-      "noCategory": "No category {category}"
+      "noCategory": "No category {category}",
+      "transactionMismatch": "This transaction is not a payout expense in the payout currency",
+      "chooseUahExpense": "Choose an expense from a UAH account",
+      "chooseUsdExpense": "Choose an expense from a USD/USDT/USDC account"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1222,7 +1225,8 @@
     "until": " until {date}",
     "released": "released: {reason}",
     "fundingClient": "client",
-    "fundingCompany": "company"
+    "fundingCompany": "company",
+    "left": "left {amount}"
   },
   "payDialog": {
     "paid": "Payout recorded",
@@ -1239,7 +1243,13 @@
     "released": "Line released",
     "reason": "Reason",
     "releaseReason": "Release reason",
-    "release": "Release"
+    "release": "Release",
+    "source": "Payment",
+    "sourceNew": "New payment from an account",
+    "sourceExisting": "Existing Ledger transaction",
+    "transaction": "Transaction",
+    "chooseTransaction": "Choose a transaction",
+    "noCandidates": "No unallocated Contractors / Payroll expenses in this currency since the start of the month"
   },
   "acts": {
     "back": "← Payroll",

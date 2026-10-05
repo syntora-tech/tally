@@ -269,6 +269,28 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.goto('/payroll');
   await expect(itemCard(page, people.p2)).toContainText('company');
 
+  // A payout already in the Ledger (a statement row) is linked to the item, not booked twice.
+  await page.goto('/ledger/new');
+  await page.getByLabel('Type').selectOption('expense');
+  await page.getByLabel('Category').selectOption({ label: 'Contractors' });
+  await page.locator('#from-account').selectOption({ label: `${accounts.uah} (UAH)` });
+  await page.locator('#from-amount').fill('10000');
+  await page.getByRole('button', { name: 'Save transaction' }).click();
+  await expect(page).toHaveURL(/\/ledger$/);
+  await page.goto('/payroll');
+  const p2 = itemCard(page, people.p2);
+  await p2.getByRole('button', { name: 'Pay' }).click();
+  await p2.getByLabel('Payment', { exact: true }).selectOption('existing');
+  await expect(p2.getByLabel('Paying account')).toHaveCount(0);
+  const statementRow = await p2
+    .locator('select[name=transactionId] option', { hasText: accounts.uah })
+    .first()
+    .getAttribute('value');
+  await p2.locator('select[name=transactionId]').selectOption(statementRow ?? '');
+  await expect(p2.getByLabel('Amount, UAH')).not.toHaveValue('10000.00');
+  await p2.getByRole('button', { name: 'Record payout' }).click();
+  await expect(page.getByText('Payout recorded')).toBeVisible();
+
   // 5. A paid invoice cannot be edited; void + reissue gives a new number and rebinds the funding.
   await openInvoice(page, clients.k1);
   await expect(page.getByText('The invoice has payments, so it cannot be changed')).toBeVisible();
