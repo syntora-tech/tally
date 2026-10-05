@@ -18,6 +18,8 @@ import { getPerson, searchPeople, type PersonRow } from '../services/people';
 import { listPayees } from '../services/payees';
 import { upsertPayees } from '../services/payees/batch';
 import { upsertPeople } from '../services/people/batch';
+import { getTrip, listTrips } from '../services/trips';
+import { addTripExpenses, upsertTrips } from '../services/trips/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
 
 export type ToolKind = 'read' | 'write';
@@ -271,6 +273,80 @@ export const TOOLS: readonly ToolDef[] = [
     kind: 'write',
     destructive: true,
     service: deleteTransactions,
+  }),
+  tool({
+    name: 'list_trips',
+    title: 'Business trips',
+    description:
+      'Trips with dates, participants, the derived status (planned, in_progress, awaiting_reimbursement, settled) and, per participant, what is left to reimburse in UAH.',
+    kind: 'read',
+    service: listTrips,
+    present: (rows) =>
+      rows.map((r) => ({
+        id: r.trip.id,
+        title: r.trip.title,
+        location: r.trip.location,
+        startsOn: r.trip.startsOn,
+        endsOn: r.trip.endsOn,
+        status: r.status,
+        participants: r.participants.map((p) => {
+          const s = r.summary.find((x) => x.personId === p.personId);
+          return { personId: p.personId, name: p.name, remainingUah: s?.remainingUah ?? '0.00' };
+        }),
+      })),
+  }),
+  tool({
+    name: 'get_trip',
+    title: 'Trip with expenses',
+    description:
+      'One trip: participants, expenses (date, amount, currency, UAH rate, UAH and USD values, who paid, reimbursable, Ledger transactionId), reimbursements with what is paid, and the per-participant summary.',
+    kind: 'read',
+    service: getTrip,
+    present: (card) => ({
+      trip: card.trip,
+      status: card.status,
+      participants: card.participants.map((p) => ({ personId: p.personId, name: p.name })),
+      expenses: card.expenses.map(({ expense: e }) => ({
+        id: e.id,
+        personId: e.personId,
+        spentOn: e.spentOn,
+        description: e.description,
+        amount: e.amount,
+        currency: e.currency,
+        fxRate: e.fxRate,
+        amountUah: e.amountUah,
+        amountUsd: e.amountUsd,
+        paidBy: e.paidBy,
+        reimbursable: e.reimbursable,
+        transactionId: e.transactionId,
+        hasReceipt: e.receiptDocumentId !== null,
+      })),
+      reimbursements: card.reimbursements.map((r) => ({
+        id: r.id,
+        personId: r.personId,
+        amount: r.amount,
+        method: r.method,
+        paidUah: r.paidUah,
+        paid: r.paid,
+      })),
+      summary: card.summary,
+    }),
+  }),
+  tool({
+    name: 'upsert_trips',
+    title: 'Create or update trips',
+    description:
+      'Trips in bulk (max 20): without id a trip is created, with id it is updated. Dates YYYY-MM-DD are required. participantIds (from search_people) are added to the trip and never removed here. All-or-nothing; errors keyed "trips.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertTrips,
+  }),
+  tool({
+    name: 'add_trip_expenses',
+    title: 'Add trip expenses',
+    description:
+      'Adds up to 200 expenses to one trip. Amount is a positive decimal string in the expense currency; fxRate (UAH per unit) defaults to the NBU rate on spentOn. paidBy person + reimbursable true = the company owes it back; paidBy company needs transactionId of the Ledger expense that paid it and is never reimbursed. The same date + amount + description already in another trip is refused unless allowDuplicate. Receipts are attached in the UI. All-or-nothing; errors keyed "expenses.<index>"; use dryRun first.',
+    kind: 'write',
+    service: addTripExpenses,
   }),
 ];
 

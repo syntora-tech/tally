@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { LocalStorage } from '../../storage/local-storage';
 import { deleteTripExpense, getTrip, listTrips, saveTrip, tripExpenseServices } from '.';
+import { addTripExpenses, upsertTrips } from './batch';
 import { createReimbursement, payReimbursement } from './reimbursements';
 
 const h = intHarness('2048-06-01');
@@ -308,5 +309,82 @@ describe('trips (6.8, A-070)', () => {
       currency: 'UAH',
       reason: 'Trip reimbursement: Int Conf B',
     });
+  });
+
+  it('agents add trips and expenses in batches with dryRun and duplicate checks (13.3)', async () => {
+    const preview = (
+      await upsertTrips.run(h.ctxFor(finance), {
+        trips: [
+          {
+            title: 'Int Agent Trip',
+            startsOn: '2048-05-10',
+            endsOn: '2048-05-11',
+            participantIds: [ids.people[0]],
+          },
+        ],
+        dryRun: true,
+      })
+    )._unsafeUnwrap();
+    expect(
+      await h.db
+        .select()
+        .from(trip)
+        .where(eq(trip.id, preview.results[0]?.id ?? '')),
+    ).toHaveLength(0);
+    const created = (
+      await upsertTrips.run(h.ctxFor(finance), {
+        trips: [
+          {
+            title: 'Int Agent Trip',
+            startsOn: '2048-05-10',
+            endsOn: '2048-05-11',
+            participantIds: [ids.people[0]],
+          },
+        ],
+      })
+    )._unsafeUnwrap();
+    const tripId = created.results[0]?.id ?? '';
+    ids.trips.push(tripId);
+    const failed = await addTripExpenses.run(h.ctxFor(finance), {
+      tripId,
+      expenses: [
+        {
+          personId: ids.people[0],
+          spentOn: '2048-05-10',
+          description: 'Hotel',
+          amount: '100',
+          currency: 'EUR',
+        },
+        {
+          personId: ids.people[0],
+          spentOn: '2048-05-10',
+          description: 'Ticket',
+          amount: '5',
+          currency: 'USD',
+          paidBy: 'company',
+        },
+      ],
+    });
+    expect(Object.keys(failed._unsafeUnwrapErr().fieldErrors ?? {}).sort()).toEqual([
+      'expenses.0',
+      'expenses.1',
+    ]);
+    const added = (
+      await addTripExpenses.run(h.ctxFor(finance), {
+        tripId,
+        expenses: [
+          {
+            personId: ids.people[0],
+            spentOn: '2048-05-10',
+            description: 'Taxi',
+            amount: '20',
+            currency: 'EUR',
+          },
+        ],
+      })
+    )._unsafeUnwrap();
+    expect(added.results).toHaveLength(1);
+    const card = (await getTrip.run(h.ctxFor(finance), { id: tripId }))._unsafeUnwrap();
+    expect(card.expenses[0]?.expense.amountUah).toBe('1000.00');
   });
 });

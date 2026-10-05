@@ -258,6 +258,32 @@ export const saveTrip = defineService({
     }),
 });
 
+/** Title of another trip that already holds the same receipt (6.8 AC), or null. */
+export async function receiptElsewhere(
+  tx: DbTransaction,
+  e: { tripId: string; spentOn: string; amount: string; currency: string; description: string },
+): Promise<string | null> {
+  const candidates = await tx
+    .select({
+      tripTitle: trip.title,
+      spentOn: tripExpense.spentOn,
+      amount: tripExpense.amount,
+      currency: tripExpense.currency,
+      description: tripExpense.description,
+    })
+    .from(tripExpense)
+    .innerJoin(trip, eq(trip.id, tripExpense.tripId))
+    .where(
+      and(
+        ne(tripExpense.tripId, e.tripId),
+        eq(tripExpense.spentOn, e.spentOn),
+        eq(tripExpense.currency, e.currency),
+      ),
+    );
+  const key = receiptKey(e);
+  return candidates.find((c) => receiptKey(c) === key)?.tripTitle ?? null;
+}
+
 export const tripExpenseInput = z
   .object({
     tripId: z.uuid(),
@@ -304,31 +330,11 @@ export function tripExpenseServices(getStorage: () => DocumentStorage) {
       const values = tripExpenseAmounts(input.amount, input.currency, rate, usdRate);
       const duplicate = input.allowDuplicate
         ? null
-        : await inActorScope(ctx, async (tx) => {
-            const candidates = await tx
-              .select({
-                tripTitle: trip.title,
-                spentOn: tripExpense.spentOn,
-                amount: tripExpense.amount,
-                currency: tripExpense.currency,
-                description: tripExpense.description,
-              })
-              .from(tripExpense)
-              .innerJoin(trip, eq(trip.id, tripExpense.tripId))
-              .where(
-                and(
-                  ne(tripExpense.tripId, input.tripId),
-                  eq(tripExpense.spentOn, input.spentOn),
-                  eq(tripExpense.currency, input.currency),
-                ),
-              );
-            const key = receiptKey(input);
-            return candidates.find((c) => receiptKey(c) === key) ?? null;
-          });
+        : await inActorScope(ctx, (tx) => receiptElsewhere(tx, input));
       if (duplicate) {
         return err(
           serviceError('conflict', 'trips.duplicate', {
-            allowDuplicate: [msg('trips.duplicateIn', { trip: duplicate.tripTitle })],
+            allowDuplicate: [msg('trips.duplicateIn', { trip: duplicate })],
           }),
         );
       }

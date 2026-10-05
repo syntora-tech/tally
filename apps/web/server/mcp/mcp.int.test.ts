@@ -119,13 +119,15 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'list_clients',
       'find_wallets',
       'list_payees',
+      'list_trips',
+      'get_trip',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(19);
+    expect(tools).toHaveLength(23);
     const del = tools.find((t) => t.name === 'delete_transactions');
     expect(del?.annotations).toMatchObject({ destructiveHint: true });
     const add = tools.find((t) => t.name === 'add_transactions');
