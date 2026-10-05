@@ -9,6 +9,7 @@ import type { Db } from '@tally/db';
 import type { LocalDate } from '@tally/domain';
 import { z } from 'zod';
 import type { ServiceConfig, ServiceContext } from '../services/context';
+import type { DocumentStorage } from '../storage/types';
 import type { ServiceError } from '../services/errors';
 import { localizeForAgent } from './localize';
 import type { McpClient } from './store';
@@ -36,6 +37,8 @@ export type McpStore = {
 
 export type McpSession = {
   client: McpClient;
+  /** Document storage for the document tools (A-071). */
+  storage: () => DocumentStorage;
   db: Db;
   today: LocalDate;
   config: ServiceConfig;
@@ -161,7 +164,7 @@ export function createMcpServer(session: McpSession): McpServer {
       config: session.config,
     };
 
-    const outcome = await tool.run(ctx, args);
+    const outcome = await tool.run(ctx, args, { storage: session.storage });
     await store.logCall({
       clientId: client.clientId,
       userId: client.user.id,

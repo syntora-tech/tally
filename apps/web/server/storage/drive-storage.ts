@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { drive_v3 } from '@googleapis/drive';
 import { safeFileName } from './folders';
-import type { DocumentStorage, StoredFile, UploadInput } from './types';
+import type { DocumentStorage, DownloadedFile, StoredFile, UploadInput } from './types';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
@@ -11,7 +11,7 @@ export interface FolderCache {
   set(path: string, folderId: string): Promise<void>;
 }
 
-type DriveFiles = Pick<drive_v3.Resource$Files, 'list' | 'create'>;
+type DriveFiles = Pick<drive_v3.Resource$Files, 'list' | 'create' | 'get'>;
 
 function escapeQuery(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -42,8 +42,16 @@ export class DriveStorage implements DocumentStorage {
     return { key: res.data.id };
   }
 
-  download(): Promise<null> {
-    return Promise.resolve(null);
+  /** Bytes of an uploaded file; native Google Docs have no bytes of their own and return null. */
+  async download(key: string): Promise<DownloadedFile | null> {
+    const meta = await this.files.get({ fileId: key, fields: 'mimeType', supportsAllDrives: true });
+    const mimeType = meta.data.mimeType ?? 'application/octet-stream';
+    if (mimeType.startsWith('application/vnd.google-apps.')) return null;
+    const res = await this.files.get(
+      { fileId: key, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' },
+    );
+    return { data: new Uint8Array(res.data as unknown as ArrayBuffer), mimeType };
   }
 
   viewUrl(key: string): string {

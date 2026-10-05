@@ -1,5 +1,6 @@
 import type { McpProfile } from '@tally/db/schema';
 import type { z } from 'zod';
+import type { DocumentStorage } from '../storage/types';
 import { listClients } from '../services/clients';
 import { upsertClients } from '../services/clients/batch';
 import type { ServiceContext } from '../services/context';
@@ -18,11 +19,22 @@ import { getPerson, searchPeople, type PersonRow } from '../services/people';
 import { listPayees } from '../services/payees';
 import { upsertPayees } from '../services/payees/batch';
 import { upsertPeople } from '../services/people/batch';
+import {
+  documentAgentServices,
+  findLinkTargets,
+  linkDocuments,
+  unlinkDocuments,
+  updateDocuments,
+} from '../services/documents/agent';
+import { searchDocuments } from '../services/documents/registry';
 import { getTrip, listTrips } from '../services/trips';
 import { addTripExpenses, upsertTrips } from '../services/trips/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
 
 export type ToolKind = 'read' | 'write';
+
+/** What a tool may need beyond the service context; document tools take the file storage. */
+export type ToolDeps = { storage: () => DocumentStorage };
 
 export type ToolDef = {
   name: string;
@@ -32,23 +44,30 @@ export type ToolDef = {
   /** Write tools that remove data are announced as destructive to MCP clients. */
   destructive?: boolean;
   input: z.ZodType;
-  run: (ctx: ServiceContext, rawInput: unknown) => Promise<ServiceResult<unknown>>;
+  run: (ctx: ServiceContext, rawInput: unknown, deps: ToolDeps) => Promise<ServiceResult<unknown>>;
   /** Shapes the service result for agents; defaults to the raw value. */
   present: (value: unknown) => unknown;
+};
+
+const NO_DEPS: ToolDeps = {
+  storage: () => {
+    throw new Error('No document storage in this context');
+  },
 };
 
 /** Keeps each tool's `present` typed against its own service result. */
 function tool<S extends z.ZodType, T>(
   def: Pick<ToolDef, 'name' | 'title' | 'description' | 'kind' | 'destructive'> & {
-    service: Service<S, T>;
+    service: Service<S, T> | ((deps: ToolDeps) => Service<S, T>);
     present?: (value: T) => unknown;
   },
 ): ToolDef {
   const { service, present, ...meta } = def;
+  const build = typeof service === 'function' ? service : () => service;
   return {
     ...meta,
-    input: service.input,
-    run: (ctx, raw) => service.run(ctx, raw),
+    input: build(NO_DEPS).input,
+    run: (ctx, raw, deps) => build(deps).run(ctx, raw),
     present: (value) => (present ? present(value as T) : value),
   };
 }
@@ -78,9 +97,10 @@ function benchProfile(p: PersonRow) {
 
 /**
  * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
- * A-054, A-056). Contracts, terms, payouts, allocations, document actions and deletions other
+ * A-054, A-056). Contracts, terms, payouts, allocations, issuing documents and deletions other
  * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
- * payees are allowed since A-062, deleting transactions since A-063.
+ * payees are allowed since A-062, deleting transactions since A-063, the document registry and
+ * its links since A-071.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -347,6 +367,68 @@ export const TOOLS: readonly ToolDef[] = [
       'Adds up to 200 expenses to one trip. Amount is a positive decimal string in the expense currency; fxRate (UAH per unit) defaults to the NBU rate on spentOn. paidBy person + reimbursable true = the company owes it back; paidBy company needs transactionId of the Ledger expense that paid it and is never reimbursed. The same date + amount + description already in another trip is refused unless allowDuplicate. Receipts are attached in the UI. All-or-nothing; errors keyed "expenses.<index>"; use dryRun first.',
     kind: 'write',
     service: addTripExpenses,
+  }),
+  tool({
+    name: 'search_documents',
+    title: 'Document registry',
+    description:
+      'Documents (contracts, SOWs, annexes, invoices, acts, CVs, NDAs, statements, receipts, other), newest first, each with the records it is linked to. Filters: q (number or title), type, status (draft|issued|void; issued = active), unlinked true for documents attached to nothing, linkedTo {entityType, entityId} for the documents of one record, limit (max 500).',
+    kind: 'read',
+    service: searchDocuments,
+    present: (rows) =>
+      rows.map(({ links, ...d }) => ({
+        ...d,
+        links: links.map(({ entityType, entityId, label }) => ({ entityType, entityId, label })),
+      })),
+  }),
+  tool({
+    name: 'get_document',
+    title: 'Document card',
+    description:
+      'One document: metadata, file name/type/size, viewUrl (Drive), linked records, and its version chain (isLatestVersion). includeContent true also returns the file as content {contentBase64, mimeType} for files up to 3 MB; otherwise contentOmitted says why (no_file, too_large, unavailable).',
+    kind: 'read',
+    service: (deps: ToolDeps) => documentAgentServices(deps.storage).getDocumentForAgent,
+  }),
+  tool({
+    name: 'find_link_targets',
+    title: 'Find records to link',
+    description:
+      'Records a document can be attached to, by entityType (person, payee, client, contract, assignment, invoice, supplier_act, trip, transaction) and optional text q (name, number, title, description); returns {id, label}. Use the id in add_documents.links or link_documents.',
+    kind: 'read',
+    service: findLinkTargets,
+  }),
+  tool({
+    name: 'add_documents',
+    title: 'Add documents',
+    description:
+      'Adds up to 10 documents to the registry. Each has a type, title, optional number/docDate/notes, and a file {fileName, mimeType, contentBase64} (max 3 MB decoded, also for all files of one call together) or a url (stored as a link, never fetched), plus links [{entityType, entityId}]; the first link picks the Drive folder. supersedesId makes it the next version of a document of the same type. Links to missing records are errors. All-or-nothing; errors keyed "documents.<index>"; dryRun previews the folder and links without uploading.',
+    kind: 'write',
+    service: (deps: ToolDeps) => documentAgentServices(deps.storage).addDocuments,
+  }),
+  tool({
+    name: 'update_documents',
+    title: 'Correct documents',
+    description:
+      'Edits up to 100 documents by id; only the fields sent change (title, number, docDate, url, notes, status; null clears an optional field). To cancel a document set status void — documents are never deleted. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
+    kind: 'write',
+    service: updateDocuments,
+  }),
+  tool({
+    name: 'link_documents',
+    title: 'Link documents to records',
+    description:
+      'Attaches documents to records, up to 200 {documentId, entityType, entityId}; an existing link is reported as "existing". The record must exist (find it with find_link_targets). All-or-nothing; errors keyed "links.<index>"; use dryRun first.',
+    kind: 'write',
+    service: linkDocuments,
+  }),
+  tool({
+    name: 'unlink_documents',
+    title: 'Unlink documents from records',
+    description:
+      'Removes up to 200 links {documentId, entityType, entityId}; the documents themselves stay. A link that is not there is reported as "missing". The invoice/act link of a file Tally generated or a signed copy cannot be removed. Only on the owner\'s request; run dryRun first. All-or-nothing; errors keyed "links.<index>".',
+    kind: 'write',
+    destructive: true,
+    service: unlinkDocuments,
   }),
 ];
 

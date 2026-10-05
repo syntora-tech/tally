@@ -58,7 +58,7 @@ export const createDocumentInput = z
 type LinkInput = z.output<typeof documentLinkInput>;
 
 /** Folder owner for a document: its first link resolved to a person, client or payee (7.3). */
-async function resolveAnchor(
+export async function resolveAnchor(
   tx: DbTransaction,
   link: LinkInput | undefined,
   today: string,
@@ -121,12 +121,72 @@ async function resolveAnchor(
   return { kind: 'none' };
 }
 
-type NewDocument = z.output<typeof createDocumentInput> & {
+export type NewDocument = z.output<typeof createDocumentInput> & {
   supersedes?: { id: string; version: number };
   /** Invoice/act revision the file shows; `signedAt` marks an uploaded signed copy. */
   sourceRevision?: number;
   signedAt?: Date;
 };
+
+export type StoredDocumentFile = {
+  key: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+/** Uploads a document's file into its folder (7.3), anchored on the first link. */
+export async function storeDocumentFile(
+  ctx: ServiceContext,
+  storage: DocumentStorage,
+  input: Pick<NewDocument, 'type' | 'docDate' | 'links'> & { file: File },
+): Promise<StoredDocumentFile> {
+  const anchor = await inActorScope(ctx, (tx) => resolveAnchor(tx, input.links[0], ctx.today));
+  const year = (input.docDate ?? ctx.today).slice(0, 4);
+  const mimeType = input.file.type || 'application/octet-stream';
+  const { key } = await storage.upload({
+    folderPath: folderPathFor(input.type, anchor, year),
+    fileName: input.file.name,
+    mimeType,
+    data: new Uint8Array(await input.file.arrayBuffer()),
+  });
+  return { key, fileName: input.file.name, mimeType, sizeBytes: input.file.size };
+}
+
+/** Inserts the document row (pointing at an already stored file) with its links. */
+export async function insertDocumentRow(
+  tx: DbTransaction,
+  input: Omit<NewDocument, 'file'>,
+  stored: StoredDocumentFile | null,
+): Promise<{ id: string }> {
+  const [row] = await tx
+    .insert(document)
+    .values({
+      type: input.type,
+      title: input.title,
+      number: input.number,
+      docDate: input.docDate,
+      url: input.url,
+      notes: input.notes,
+      driveFileId: stored?.key ?? null,
+      fileName: stored?.fileName ?? null,
+      mimeType: stored?.mimeType ?? null,
+      sizeBytes: stored?.sizeBytes ?? null,
+      version: input.supersedes ? input.supersedes.version + 1 : 1,
+      supersedesId: input.supersedes?.id ?? null,
+      signedAt: input.signedAt ?? null,
+      sourceRevision: input.sourceRevision ?? null,
+    })
+    .returning({ id: document.id });
+  if (!row) throw new Error('Document insert returned no row');
+  if (input.links.length) {
+    await tx
+      .insert(documentLink)
+      .values(input.links.map((l) => ({ documentId: row.id, ...l })))
+      .onConflictDoNothing();
+  }
+  return row;
+}
 
 /**
  * Stores the file (if any) and inserts the document with its links. The upload runs before the
@@ -137,53 +197,9 @@ export async function insertDocument(
   storage: DocumentStorage,
   input: NewDocument,
 ): Promise<{ id: string }> {
-  let stored: { key: string; fileName: string; mimeType: string; sizeBytes: number } | null = null;
-  if (input.file) {
-    const anchor = await inActorScope(ctx, (tx) => resolveAnchor(tx, input.links[0], ctx.today));
-    const year = (input.docDate ?? ctx.today).slice(0, 4);
-    const { key } = await storage.upload({
-      folderPath: folderPathFor(input.type, anchor, year),
-      fileName: input.file.name,
-      mimeType: input.file.type || 'application/octet-stream',
-      data: new Uint8Array(await input.file.arrayBuffer()),
-    });
-    stored = {
-      key,
-      fileName: input.file.name,
-      mimeType: input.file.type || 'application/octet-stream',
-      sizeBytes: input.file.size,
-    };
-  }
-
-  return inActorScope(ctx, async (tx) => {
-    const [row] = await tx
-      .insert(document)
-      .values({
-        type: input.type,
-        title: input.title,
-        number: input.number,
-        docDate: input.docDate,
-        url: input.url,
-        notes: input.notes,
-        driveFileId: stored?.key ?? null,
-        fileName: stored?.fileName ?? null,
-        mimeType: stored?.mimeType ?? null,
-        sizeBytes: stored?.sizeBytes ?? null,
-        version: input.supersedes ? input.supersedes.version + 1 : 1,
-        supersedesId: input.supersedes?.id ?? null,
-        signedAt: input.signedAt ?? null,
-        sourceRevision: input.sourceRevision ?? null,
-      })
-      .returning({ id: document.id });
-    if (!row) throw new Error('Document insert returned no row');
-    if (input.links.length) {
-      await tx
-        .insert(documentLink)
-        .values(input.links.map((l) => ({ documentId: row.id, ...l })))
-        .onConflictDoNothing();
-    }
-    return row;
-  });
+  const { file, ...row } = input;
+  const stored = file ? await storeDocumentFile(ctx, storage, { ...input, file }) : null;
+  return inActorScope(ctx, (tx) => insertDocumentRow(tx, row, stored));
 }
 
 /** Service factory: storage is injected so tests can use a temp-dir LocalStorage. */

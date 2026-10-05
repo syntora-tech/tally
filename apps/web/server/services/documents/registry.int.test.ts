@@ -94,7 +94,7 @@ describe('document registry (spec 6.9)', () => {
     expect(card.links.map((l) => [l.entityType, l.label])).toEqual([
       ['person', 'Доліна Максим'],
       ['client', 'Creditor'],
-      ['contract', 'MSA №20-08/25'],
+      ['contract', 'MSA №20-08/25 · Creditor'],
     ]);
 
     const [row] = (await searchDocuments.run(h.ctxFor(owner), { q: `${tag} NDA` }))._unsafeUnwrap();

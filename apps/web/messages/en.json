@@ -357,7 +357,16 @@
       "tooLarge": "The file is larger than 4 MB",
       "fileOrUrl": "Add a file or a link",
       "cvPdf": "The CV must be a PDF",
-      "issuedInvoiceNotFound": "Issued invoice not found"
+      "issuedInvoiceNotFound": "Issued invoice not found",
+      "base64": "The file content is not valid base64",
+      "agentTooLarge": "Files sent by an agent may be up to 3 MB in total; upload larger ones in the app",
+      "mimeType": "Unknown file type",
+      "targetMissing": "{type} {id} not found",
+      "alreadySuperseded": "This document already has a newer version",
+      "versionType": "A new version must have the same document type",
+      "systemOwned": "Tally generated this document or it is a signed copy; it cannot be changed here",
+      "systemLink": "The link of a generated or signed invoice/act file cannot be removed",
+      "nothingToChange": "Nothing to change: send at least one field"
     },
     "payroll": {
       "notFound": "Payout not found",
@@ -405,7 +414,8 @@
       "duplicate": "Such a record already exists",
       "referenced": "The record is linked to other data",
       "invalid": "The data did not pass validation",
-      "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})"
+      "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})",
+      "linkTargetMissing": "The linked record does not exist ({detail})"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",

@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { Db } from '@tally/db';
 import type { LocalDate } from '@tally/domain';
 import type { ServiceConfig } from '../services/context';
+import type { DocumentStorage } from '../storage/types';
 import { looksLikeToken } from '../services/mcp/token';
 import { createMcpServer, type McpStore } from './server';
 import type { McpClient } from './store';
@@ -11,6 +12,7 @@ export type McpHttpDeps = {
   today: LocalDate;
   config: ServiceConfig;
   store: McpStore;
+  storage: () => DocumentStorage;
   findClient: (token: string) => Promise<McpClient | null>;
   tokenExists: (token: string) => Promise<boolean>;
 };
@@ -55,6 +57,7 @@ export async function handleMcpRequest(request: Request, deps: McpHttpDeps): Pro
     today: deps.today,
     config: deps.config,
     store: deps.store,
+    storage: deps.storage,
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

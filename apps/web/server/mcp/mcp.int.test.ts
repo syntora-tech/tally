@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
   account,
   auditLog,
   client,
+  document,
   mcpCallLog,
   mcpClientPolicy,
   payee,
@@ -15,6 +19,7 @@ import { and, eq, inArray, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../test/int-helpers';
 import { createMcpClient, revokeMcpClient } from '../services/mcp';
+import { LocalStorage } from '../storage/local-storage';
 import { handleMcpRequest, type McpHttpDeps } from './http';
 import { createMcpServer, type McpStore } from './server';
 import * as store from './store';
@@ -26,6 +31,8 @@ let owner: Awaited<ReturnType<typeof h.user>>;
 let assistantToken = '';
 let readOnlyToken = '';
 const clientIds: string[] = [];
+let storageRoot = '';
+let storage: LocalStorage;
 
 const mcpStore: McpStore = {
   recentCalls: (clientId, tools) => store.recentCalls(h.db, clientId, tools),
@@ -39,6 +46,7 @@ const deps: McpHttpDeps = {
   today: h.today,
   config: { allowedEmails: [] },
   store: mcpStore,
+  storage: () => storage,
   findClient: (token) => store.findClientByToken(h.db, token),
   tokenExists: (token) => store.tokenExists(h.db, token),
 };
@@ -57,6 +65,8 @@ async function connect(token: string) {
 type ToolResult = { isError?: boolean; structuredContent?: Record<string, unknown> };
 
 beforeAll(async () => {
+  storageRoot = await mkdtemp(join(tmpdir(), 'tally-mcp-'));
+  storage = new LocalStorage(storageRoot);
   owner = await h.user('owner');
   const ctx = h.ctxFor(owner);
   const assistant = (
@@ -72,6 +82,12 @@ beforeAll(async () => {
 
 afterAll(() =>
   h.cleanup(async (db) => {
+    await rm(storageRoot, { recursive: true, force: true });
+    await db
+      .update(document)
+      .set({ supersedesId: null })
+      .where(like(document.title, `M ${tag}%`));
+    await db.delete(document).where(like(document.title, `M ${tag}%`));
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
     await db.delete(account).where(like(account.name, `M ${tag}%`));
     await db.delete(payee).where(like(payee.legalNameUa, `ФОП M ${tag}%`));
@@ -121,15 +137,20 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'list_payees',
       'list_trips',
       'get_trip',
+      'search_documents',
+      'get_document',
+      'find_link_targets',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(23);
-    const del = tools.find((t) => t.name === 'delete_transactions');
-    expect(del?.annotations).toMatchObject({ destructiveHint: true });
+    expect(tools).toHaveLength(30);
+    for (const name of ['delete_transactions', 'unlink_documents']) {
+      const del = tools.find((t) => t.name === name);
+      expect(del?.annotations).toMatchObject({ destructiveHint: true });
+    }
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -354,6 +375,131 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       arguments: { idempotencyKey: `clients-${tag}`, clients: [{ legalName, country: 'UK' }] },
     })) as ToolResult;
     expect(saved.structuredContent).toMatchObject({ clients: [{ legalName, status: 'created' }] });
+  });
+
+  it('documents: add with a file, read it back, version it, link and unlink (A-071)', async () => {
+    const mcp = await connect(assistantToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const [p] = await h.db
+      .insert(person)
+      .values({ fullName: `M ${tag} Docs` })
+      .returning();
+    const [c] = await h.db
+      .insert(client)
+      .values({ legalName: `M ${tag} Docs Ltd` })
+      .returning();
+    const personId = p?.id ?? '';
+    const pdf = Buffer.from('%PDF-1.7 nda').toString('base64');
+    const item = {
+      type: 'nda',
+      title: `M ${tag} NDA`,
+      docDate: '2046-02-01',
+      file: { fileName: 'nda.pdf', mimeType: 'application/pdf', contentBase64: pdf },
+      links: [{ entityType: 'person', entityId: personId }],
+    };
+
+    const preview = await call('add_documents', {
+      idempotencyKey: `docs-dry-${tag}`,
+      dryRun: true,
+      documents: [item],
+    });
+    expect(preview.structuredContent).toMatchObject({
+      results: [{ status: 'preview', id: null, version: 1, links: [{ label: `M ${tag} Docs` }] }],
+    });
+    expect((preview.structuredContent?.results as { folderPath: string }[])[0]?.folderPath).toMatch(
+      /^people\//,
+    );
+    expect(await readdir(storageRoot)).toEqual([]);
+
+    const missing = await call('add_documents', {
+      idempotencyKey: `docs-missing-${tag}`,
+      documents: [{ ...item, links: [{ entityType: 'client', entityId: randomUUID() }] }],
+    });
+    expect(missing.isError).toBe(true);
+    expect(JSON.stringify(missing.structuredContent)).toContain('documents.0');
+
+    const tooBig = await call('add_documents', {
+      idempotencyKey: `docs-big-${tag}`,
+      documents: [
+        {
+          ...item,
+          file: {
+            ...item.file,
+            contentBase64: Buffer.alloc(3 * 1024 * 1024 + 1).toString('base64'),
+          },
+        },
+      ],
+    });
+    expect(tooBig.isError).toBe(true);
+
+    const added = await call('add_documents', { idempotencyKey: `docs-${tag}`, documents: [item] });
+    const docId = (added.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+    expect(docId).toMatch(/[0-9a-f-]{36}/);
+
+    const found = await call('search_documents', {
+      linkedTo: { entityType: 'person', entityId: personId },
+    });
+    expect(found.structuredContent?.items).toEqual([
+      expect.objectContaining({
+        id: docId,
+        hasFile: true,
+        links: [expect.objectContaining({ label: `M ${tag} Docs` })],
+      }),
+    ]);
+    const card = await call('get_document', { id: docId, includeContent: true });
+    expect(card.structuredContent).toMatchObject({
+      fileName: 'nda.pdf',
+      isLatestVersion: true,
+      content: { contentBase64: pdf, mimeType: 'application/pdf' },
+    });
+
+    const v2 = await call('add_documents', {
+      idempotencyKey: `docs-v2-${tag}`,
+      documents: [{ ...item, title: `M ${tag} NDA v2`, supersedesId: docId }],
+    });
+    expect(v2.structuredContent).toMatchObject({ results: [{ version: 2 }] });
+    const old = await call('get_document', { id: docId });
+    expect(old.structuredContent).toMatchObject({ isLatestVersion: false });
+    expect(old.structuredContent?.versions).toHaveLength(2);
+
+    const targets = await call('find_link_targets', { entityType: 'client', q: `M ${tag} Docs` });
+    expect(targets.structuredContent?.items).toEqual([{ id: c?.id, label: `M ${tag} Docs Ltd` }]);
+    const link = { documentId: docId, entityType: 'client', entityId: c?.id };
+    const linked = await call('link_documents', {
+      idempotencyKey: `link-${tag}`,
+      links: [link, link],
+    });
+    expect(linked.structuredContent).toMatchObject({
+      results: [{ status: 'linked', label: `M ${tag} Docs Ltd` }, { status: 'existing' }],
+    });
+    const unlinked = await call('unlink_documents', {
+      idempotencyKey: `unlink-${tag}`,
+      links: [link, link],
+    });
+    expect(unlinked.structuredContent).toMatchObject({
+      results: [{ status: 'unlinked' }, { status: 'missing' }],
+    });
+
+    const renamed = await call('update_documents', {
+      idempotencyKey: `docs-upd-${tag}`,
+      documents: [{ id: docId, title: `M ${tag} NDA (old)`, status: 'void' }],
+    });
+    expect(renamed.isError).toBeFalsy();
+    const [generated] = await h.db
+      .insert(document)
+      .values({
+        type: 'invoice',
+        title: `M ${tag} generated`,
+        url: 'https://x.test/a',
+        sourceRevision: 1,
+      })
+      .returning();
+    const locked = await call('update_documents', {
+      idempotencyKey: `docs-locked-${tag}`,
+      documents: [{ id: generated?.id, title: 'x' }],
+    });
+    expect(JSON.stringify(locked.structuredContent)).toContain('generated this document');
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

@@ -104,6 +104,14 @@ describe('DriveStorage', () => {
         seq += 1;
         return Promise.resolve({ data: { id: `id-${seq}` } });
       },
+      get: (params: drive_v3.Params$Resource$Files$Get) => {
+        expect(params.supportsAllDrives).toBe(true);
+        const mimeType =
+          params.fileId === 'doc' ? 'application/vnd.google-apps.document' : 'application/pdf';
+        return Promise.resolve({
+          data: params.alt === 'media' ? new Uint8Array([7, 8]).buffer : { mimeType },
+        });
+      },
     };
     return { files: files as unknown as drive_v3.Resource$Files, created };
   }
@@ -153,5 +161,14 @@ describe('DriveStorage', () => {
     expect(await storage.ensureFolder('documents')).toBe('docs-id');
     expect(created).toHaveLength(0);
     expect(storage.viewUrl('abc')).toBe('https://drive.google.com/file/d/abc/view');
+  });
+
+  it('downloads uploaded files but not native Google Docs', async () => {
+    const storage = new DriveStorage(fakeDrive().files, 'root', memoryCache());
+    expect(await storage.download('pdf')).toEqual({
+      data: new Uint8Array([7, 8]),
+      mimeType: 'application/pdf',
+    });
+    expect(await storage.download('doc')).toBeNull();
   });
 });

@@ -1,6 +1,5 @@
 import type { DbTransaction } from '@tally/db';
 import {
-  assignment,
   client,
   contract,
   document,
@@ -20,6 +19,7 @@ import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import { optionalHttpUrl, optionalLocalDate, optionalText, requiredText } from '../fields';
 import { documentLinkInput } from '.';
+import { lookupLinkTargets } from './targets';
 
 export type LinkChip = {
   entityType: LinkEntityType;
@@ -28,76 +28,28 @@ export type LinkChip = {
   href: string | null;
 };
 
-const HREF: Partial<Record<LinkEntityType, (id: string) => string>> = {
+const HREF: Record<LinkEntityType, (id: string) => string> = {
   person: (id) => `/people/${id}`,
   client: (id) => `/clients/${id}`,
   payee: (id) => `/people/payees/${id}`,
   contract: (id) => `/clients/contracts/${id}`,
   assignment: (id) => `/people/assignments/${id}`,
+  invoice: (id) => `/invoices/${id}`,
+  supplier_act: (id) => `/payroll/acts/${id}`,
+  trip: (id) => `/trips/${id}`,
+  transaction: (id) => `/ledger/${id}/edit`,
 };
 
 /** Human labels for polymorphic links; entities hidden by RLS fall back to a generic label. */
-async function labelLinks(
+export async function labelLinks(
   tx: DbTransaction,
   links: { entityType: string; entityId: string }[],
 ): Promise<LinkChip[]> {
-  const idsOf = (type: string) => links.filter((l) => l.entityType === type).map((l) => l.entityId);
   const labels = new Map<string, string>();
-  const put = (rows: { id: string; label: string | null }[]) => {
-    for (const r of rows) labels.set(r.id, r.label ?? '');
-  };
-
-  const personIds = idsOf('person');
-  if (personIds.length)
-    put(
-      await tx
-        .select({ id: person.id, label: person.fullName })
-        .from(person)
-        .where(inArray(person.id, personIds)),
-    );
-  const clientIds = idsOf('client');
-  if (clientIds.length)
-    put(
-      await tx
-        .select({
-          id: client.id,
-          label: sql<string>`coalesce(${client.shortName}, ${client.legalName})`,
-        })
-        .from(client)
-        .where(inArray(client.id, clientIds)),
-    );
-  const payeeIds = idsOf('payee');
-  if (payeeIds.length)
-    put(
-      await tx
-        .select({
-          id: payee.id,
-          label: sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`,
-        })
-        .from(payee)
-        .where(inArray(payee.id, payeeIds)),
-    );
-  const contractIds = idsOf('contract');
-  if (contractIds.length)
-    put(
-      await tx
-        .select({ id: contract.id, label: contract.number })
-        .from(contract)
-        .where(inArray(contract.id, contractIds)),
-    );
-  const assignmentIds = idsOf('assignment');
-  if (assignmentIds.length)
-    put(
-      await tx
-        .select({
-          id: assignment.id,
-          label: sql<string>`${person.fullName} || coalesce(' · ' || ${assignment.roleTitle}, '')`,
-        })
-        .from(assignment)
-        .innerJoin(person, eq(person.id, assignment.personId))
-        .where(inArray(assignment.id, assignmentIds)),
-    );
-
+  for (const type of LINK_ENTITY_TYPES) {
+    const ids = [...new Set(links.filter((l) => l.entityType === type).map((l) => l.entityId))];
+    for (const t of await lookupLinkTargets(tx, type, { ids })) labels.set(t.id, t.label);
+  }
   return links.map((l) => {
     const type = l.entityType as LinkEntityType;
     const known = labels.get(l.entityId);
@@ -105,7 +57,7 @@ async function labelLinks(
       entityType: type,
       entityId: l.entityId,
       label: known ?? 'documents.recordUnavailable',
-      href: known !== undefined ? (HREF[type]?.(l.entityId) ?? null) : null,
+      href: known !== undefined ? HREF[type](l.entityId) : null,
     };
   });
 }
@@ -120,6 +72,8 @@ export const documentFilters = z.object({
   unlinked: z
     .preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean())
     .default(false),
+  linkedTo: documentLinkInput.optional().describe('Only documents linked to this record'),
+  limit: z.coerce.number().int().min(1).max(500).default(500),
 });
 
 /** Registry (6.9): search by number (number_key) or title, filters by type/status. */
@@ -138,6 +92,10 @@ export const searchDocuments = defineService({
       }
       if (f.type) conditions.push(eq(document.type, f.type));
       if (f.status) conditions.push(eq(document.status, f.status));
+      if (f.linkedTo)
+        conditions.push(
+          sql`exists (select 1 from ${documentLink} dl where dl.document_id = ${document.id} and dl.entity_type = ${f.linkedTo.entityType} and dl.entity_id = ${f.linkedTo.entityId})`,
+        );
       if (f.unlinked)
         conditions.push(
           sql`not exists (select 1 from ${documentLink} dl where dl.document_id = ${document.id})`,
@@ -157,7 +115,7 @@ export const searchDocuments = defineService({
         .from(document)
         .where(and(...conditions))
         .orderBy(desc(document.docDate), desc(document.createdAt))
-        .limit(500);
+        .limit(f.limit);
       const links = docs.length
         ? await tx
             .select({

@@ -19,7 +19,7 @@ export type StorageDriver = 'drive' | 'local';
 export interface DocumentStorage {
   readonly driver: StorageDriver;
   upload(input: UploadInput): Promise<StoredFile>;
-  /** Local driver streams bytes; Drive files are opened in Drive instead. */
+  /** The file's bytes (for agents); the UI opens Drive files through `viewUrl` instead. */
   download(key: string): Promise<DownloadedFile | null>;
   /** Where the browser should go to view the file, or null to stream it from `/api/files`. */
   viewUrl(key: string): string | null;

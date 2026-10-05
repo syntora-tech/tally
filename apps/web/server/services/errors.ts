@@ -109,6 +109,8 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('validation_error', 'payroll.rateFirst');
     case 'TL060':
       return serviceError('validation_error', 'db.actContract');
+    case 'TL061':
+      return serviceError('not_found', msg('db.linkTargetMissing', { detail: pg.detail ?? '' }));
     case 'TL020':
       return serviceError('validation_error', 'db.sequenceDown');
     case 'TL021':
