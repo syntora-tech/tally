@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(12);
+select plan(15);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000019c1', 'viewer19@t.local');
 insert into public.app_user (id, email, role) values ('00000000-0000-0000-0000-0000000019c1', 'viewer19@t.local', 'viewer');
@@ -62,6 +62,20 @@ select lives_ok($$ insert into public.allocation (transaction_id, reimbursement_
 select throws_ok($$ insert into public.allocation (transaction_id, amount, currency)
   values ('a2000000-0000-0000-0000-000000000019', 1, 'UAH') $$,
   '23514', null, 'an allocation has exactly one target');
+
+-- A legacy act may be reclassified as the reimbursement it was; its link is set once.
+insert into public.company (id, name_en, name_ua) values ('10000000-0000-0000-0000-000000000019', 'S', 'С');
+insert into public.contract (id, kind, number, company_id, payee_id)
+  values ('50000000-0000-0000-0000-000000000019', 'fop', 'OD-19', '10000000-0000-0000-0000-000000000019', '30000000-0000-0000-0000-000000000019');
+insert into public.supplier_act (id, contract_id, payee_id, type, number, act_date, amount_uah, status, is_legacy, snapshot) values
+  ('b1000000-0000-0000-0000-000000000019', '50000000-0000-0000-0000-000000000019', '30000000-0000-0000-0000-000000000019', 'monthly', '19 - А1', '2036-05-29', 5000, 'issued', true, null),
+  ('b2000000-0000-0000-0000-000000000019', '50000000-0000-0000-0000-000000000019', '30000000-0000-0000-0000-000000000019', 'monthly', '19 - А2', '2036-05-29', 5000, 'issued', false, '{"doc":{}}');
+select lives_ok($$ update public.supplier_act set type = 'reimbursement', reimbursement_id = '71000000-0000-0000-0000-000000000019'
+  where id = 'b1000000-0000-0000-0000-000000000019' $$, 'a legacy act becomes the reimbursement it paid');
+select throws_ok($$ update public.supplier_act set reimbursement_id = null where id = 'b1000000-0000-0000-0000-000000000019' $$,
+  'TL001', null, 'the reimbursement of an issued act is set once');
+select throws_ok($$ update public.supplier_act set type = 'reimbursement' where id = 'b2000000-0000-0000-0000-000000000019' $$,
+  'TL001', null, 'a non-legacy issued act keeps its type');
 
 -- Viewers see trips and participants but not the money.
 select pg_temp.act_as('00000000-0000-0000-0000-0000000019c1');
