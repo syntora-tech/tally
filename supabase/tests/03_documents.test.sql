@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(14);
+select plan(16);
 
 -- Count only audit rows written by this test; the shared DB may hold older ones.
 create temp table audit_start on commit drop as select coalesce(max(id), 0) as id from public.audit_log;
@@ -47,12 +47,21 @@ select throws_ok($$ insert into public.document (type, title, version, supersede
   values ('cv', 'CV v2 bis', 2, '70000000-0000-0000-0000-000000000020') $$,
   '23505', null, 'a version is superseded at most once');
 
--- Links: one document tied to person, client and contract at once (6.9 AC).
+-- Links: one document tied to person, client and trip at once (6.9 AC).
+insert into public.person (id, full_name) values ('70000000-0000-0000-0000-0000000000a1', 'Doc Person');
+insert into public.client (id, legal_name) values ('70000000-0000-0000-0000-0000000000a2', 'Doc Client');
+insert into public.trip (id, title, starts_on, ends_on) values ('70000000-0000-0000-0000-0000000000a3', 'Doc Trip', '2026-06-01', '2026-06-03');
 select lives_ok($$ insert into public.document_link (document_id, entity_type, entity_id) values
-  ('70000000-0000-0000-0000-000000000010', 'person', gen_random_uuid()),
-  ('70000000-0000-0000-0000-000000000010', 'client', gen_random_uuid()),
-  ('70000000-0000-0000-0000-000000000010', 'contract', gen_random_uuid()) $$,
+  ('70000000-0000-0000-0000-000000000010', 'person', '70000000-0000-0000-0000-0000000000a1'),
+  ('70000000-0000-0000-0000-000000000010', 'client', '70000000-0000-0000-0000-0000000000a2'),
+  ('70000000-0000-0000-0000-000000000010', 'trip', '70000000-0000-0000-0000-0000000000a3') $$,
   'one document linked to three entities');
+select throws_ok($$ insert into public.document_link (document_id, entity_type, entity_id)
+  values ('70000000-0000-0000-0000-000000000010', 'contract', gen_random_uuid()) $$,
+  'TL061', null, 'a link to a missing record is rejected (A-071)');
+delete from public.trip where id = '70000000-0000-0000-0000-0000000000a3';
+select is((select count(*)::int from public.document_link where entity_id = '70000000-0000-0000-0000-0000000000a3'), 0,
+  'deleting the record drops its links');
 select throws_ok($$ insert into public.document_link (document_id, entity_type, entity_id)
   values ('70000000-0000-0000-0000-000000000010', 'planet', gen_random_uuid()) $$,
   '23514', null, 'unknown entity type rejected');
@@ -70,7 +79,7 @@ select lives_ok($$ insert into public.document (type, title, url) values ('other
   'finance adds a link-only document');
 select pg_temp.reset_actor();
 
-select is((select count(*)::int from public.audit_log where table_name = 'document_link' and id > (select id from audit_start)), 3, 'links are audited');
+select is((select count(*)::int from public.audit_log where table_name = 'document_link' and id > (select id from audit_start)), 4, 'links are audited');
 
 select * from finish();
 rollback;
