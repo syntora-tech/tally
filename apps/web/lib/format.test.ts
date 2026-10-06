@@ -33,6 +33,12 @@ describe('formatterFor (A-058)', () => {
       'через 15 дн. після інвойсу',
     ],
     [
+      'payment',
+      { type: 'net_working_days', days: 15 },
+      '15 working days after the invoice',
+      'через 15 роб. дн. після інвойсу',
+    ],
+    [
       'invoice',
       { type: 'first_working_day_after_period' },
       'first working day after the period',

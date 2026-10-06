@@ -35,6 +35,10 @@ export const clientInput = z.object({
 export const paymentDueRule = z.discriminatedUnion('type', [
   z.object({ type: z.literal('day_of_month'), day: z.coerce.number().int().min(1).max(31) }),
   z.object({ type: z.literal('net_days'), days: z.coerce.number().int().min(1).max(365) }),
+  z.object({
+    type: z.literal('net_working_days'),
+    days: z.coerce.number().int().min(1).max(260),
+  }),
 ]);
 
 export const invoiceDateRule = z.discriminatedUnion('type', [

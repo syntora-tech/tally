@@ -251,7 +251,11 @@ export const saveInvoice = defineService({
       }
       if (revising) await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
 
-      const due = dueDate(row.contract.paymentDueRule as PaymentDueRule, input.issueDate);
+      const due = dueDate(
+        row.contract.paymentDueRule as PaymentDueRule,
+        input.issueDate,
+        await loadCalendar(tx),
+      );
       const { rows, total } = await replaceLines(tx, inv.id, input.lines);
       const base = {
         issueDate: input.issueDate,
@@ -320,7 +324,7 @@ export const issuePreview = defineService({
       return ok({
         suggestedDate: suggested,
         issueDate: date,
-        dueDate: dueDate(row.contract.paymentDueRule as PaymentDueRule, date),
+        dueDate: dueDate(row.contract.paymentDueRule as PaymentDueRule, date, cal),
         isWorkingDay: cal.isWorkingDay(date),
         sequenceKey,
         previous: previous ?? null,
@@ -351,7 +355,11 @@ export const issueInvoice = defineService({
       const co = await companyRow(tx);
       if (!co) return err(serviceError('conflict', 'company.missing'));
 
-      const due = dueDate(row.contract.paymentDueRule as PaymentDueRule, issueDate);
+      const due = dueDate(
+        row.contract.paymentDueRule as PaymentDueRule,
+        issueDate,
+        await loadCalendar(tx),
+      );
       const total = sum(lines.map((l) => l.amount)).toFixed(2);
       const [numbered] = await tx.execute<{ n: string }>(
         sql`select public.issue_number(${row.contract.numberSequenceKey ?? DEFAULT_SEQUENCE}, ${issueDate}::date, ${row.contract.number}) as n`,

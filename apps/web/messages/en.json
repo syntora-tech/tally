@@ -57,6 +57,7 @@
   "rules": {
     "day_of_month": "by day {day} of the month",
     "net_days": "{days} days after the invoice",
+    "net_working_days": "{days} working days after the invoice",
     "first_working_day_after_period": "first working day after the period",
     "last_working_day_of_period": "last working day of the period",
     "nth_working_day_after_period": "working day {n} after the period",
@@ -115,7 +116,8 @@
     },
     "paymentDueType": {
       "day_of_month": "By a day of the month",
-      "net_days": "N days after the invoice"
+      "net_days": "N days after the invoice",
+      "net_working_days": "N working days after the invoice"
     },
     "invoiceDateType": {
       "first_working_day_after_period": "First working day after the period",

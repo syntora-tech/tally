@@ -39,6 +39,8 @@ export function formatterFor(locale: Locale, months: MonthTranslator, rules: Rul
           return rules('day_of_month', { day: v(rule.day) });
         case 'net_days':
           return rules('net_days', { days: v(rule.days) });
+        case 'net_working_days':
+          return rules('net_working_days', { days: v(rule.days) });
         case 'nth_working_day_after_period':
           return rules('nth_working_day_after_period', { n: v(rule.n) });
         case 'first_working_day_after_period':

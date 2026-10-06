@@ -57,6 +57,7 @@
   "rules": {
     "day_of_month": "до {day} числа",
     "net_days": "через {days} дн. після інвойсу",
+    "net_working_days": "через {days} роб. дн. після інвойсу",
     "first_working_day_after_period": "перший робочий день після періоду",
     "last_working_day_of_period": "останній робочий день періоду",
     "nth_working_day_after_period": "{n}-й робочий день після періоду",
@@ -115,7 +116,8 @@
     },
     "paymentDueType": {
       "day_of_month": "До числа місяця",
-      "net_days": "Через N днів після інвойсу"
+      "net_days": "Через N днів після інвойсу",
+      "net_working_days": "Через N робочих днів після інвойсу"
     },
     "invoiceDateType": {
       "first_working_day_after_period": "Перший робочий день після періоду",

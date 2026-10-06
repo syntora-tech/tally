@@ -19,7 +19,7 @@ export function contractFormToInput(form: Record<string, unknown>): Record<strin
     ...rest,
     paymentDueRule: {
       type: paymentDueType,
-      ...param(paymentDueType === 'net_days' ? 'days' : 'day', paymentDueValue),
+      ...param(paymentDueType === 'day_of_month' ? 'day' : 'days', paymentDueValue),
     },
     invoiceDateRule: {
       type: invoiceDateType,

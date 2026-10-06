@@ -67,7 +67,7 @@ export const contract = pgTable(
     check('contract_status_check', sql`${t.status} in ('active', 'ended')`),
     check(
       'contract_payment_due_rule_check',
-      sql`${t.paymentDueRule} ->> 'type' in ('day_of_month', 'net_days')`,
+      sql`${t.paymentDueRule} ->> 'type' in ('day_of_month', 'net_days', 'net_working_days')`,
     ),
     check(
       'contract_invoice_date_rule_check',

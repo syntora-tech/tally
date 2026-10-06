@@ -20,7 +20,9 @@ export type InvoiceDateRule =
   { type: 'first_working_day_after_period' } | { type: 'nth_working_day_after_period'; n: number };
 
 export type PaymentDueRule =
-  { type: 'day_of_month'; day: number } | { type: 'net_days'; days: number };
+  | { type: 'day_of_month'; day: number }
+  | { type: 'net_days'; days: number }
+  | { type: 'net_working_days'; days: number };
 
 /** Default act date for a period, or null when the contract requires a manual date. */
 export function defaultActDate(
@@ -52,10 +54,17 @@ export function defaultInvoiceDate(
 /**
  * Due date from the invoice date. `day_of_month`: that day of the invoice month, or of the next
  * month if the invoice is issued after it (assumptions); short months clamp to their last day.
- * Due dates are calendar dates; only the payout deadline moves to a working day (5.3).
+ * `net_working_days` counts working days after the invoice date, which stands for the day the
+ * client received it (A-072). Other due dates are calendar dates; the payout deadline moves to a
+ * working day on its own (5.3).
  */
-export function dueDate(rule: PaymentDueRule, invoiceDate: LocalDate): LocalDate {
+export function dueDate(
+  rule: PaymentDueRule,
+  invoiceDate: LocalDate,
+  cal: WorkCalendar,
+): LocalDate {
   if (rule.type === 'net_days') return addDays(invoiceDate, rule.days);
+  if (rule.type === 'net_working_days') return cal.addWorkingDays(invoiceDate, rule.days);
   const inMonth = (month: LocalDate) => {
     const { year, month: m } = toParts(month);
     return localDate(year, m, Math.min(rule.day, daysInMonth(year, m)));

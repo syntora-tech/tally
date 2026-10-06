@@ -371,7 +371,7 @@ export const closePeriod = defineService({
             contractId,
             periodId,
             issueDate,
-            dueDate: dueDate(c.paymentDueRule as PaymentDueRule, issueDate),
+            dueDate: dueDate(c.paymentDueRule as PaymentDueRule, issueDate, cal),
             currency: c.currency,
             total: sum(lines.map((l) => l.line.amount)).toFixed(2),
           })

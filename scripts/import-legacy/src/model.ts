@@ -4,6 +4,7 @@ import {
   slugify,
   toDecimal,
   weekdayHoursInMonth,
+  WorkCalendar,
   type LocalDate,
 } from '@tally/domain';
 import { lookup, type Aliases } from './aliases';
@@ -769,7 +770,8 @@ function legacyInvoice(
     clientKey,
     contractRef,
     issueDate: date,
-    dueDate: dueDate({ type: 'day_of_month', day: 20 }, date),
+    // day_of_month never reads the calendar.
+    dueDate: dueDate({ type: 'day_of_month', day: 20 }, date, new WorkCalendar()),
     currency: 'USD',
     total,
     lines,

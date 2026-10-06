@@ -1,0 +1,2 @@
+ALTER TABLE "contract" DROP CONSTRAINT "contract_payment_due_rule_check";--> statement-breakpoint
+ALTER TABLE "contract" ADD CONSTRAINT "contract_payment_due_rule_check" CHECK ("contract"."payment_due_rule" ->> 'type' in ('day_of_month', 'net_days', 'net_working_days'));

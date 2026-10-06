@@ -109,7 +109,7 @@ export function ContractForm({ contract, counterpartyName }: Props) {
               />
               <Input
                 name="paymentDueValue"
-                aria-label={paymentType === 'net_days' ? t('form.days') : t('form.dayOfMonth')}
+                aria-label={paymentType === 'day_of_month' ? t('form.dayOfMonth') : t('form.days')}
                 inputMode="numeric"
                 className="w-20"
                 defaultValue={contract.paymentDueRule.day ?? contract.paymentDueRule.days ?? 20}

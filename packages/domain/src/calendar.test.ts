@@ -61,19 +61,34 @@ describe('default document dates (spec 5.5 table)', () => {
 
 describe('due date and payout deadline (spec 5.3)', () => {
   it('invoice 01.09.2026, due the 20th → 20.09 (Sunday) → deadline Monday 21.09', () => {
-    const due = dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-01'));
+    const due = dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-01'), plain);
     expect(due).toBe('2026-09-20');
     expect(payoutDeadline(due, 0, plain)).toBe('2026-09-21');
     expect(payoutDeadline(due, 2, plain)).toBe('2026-09-23');
   });
 
   it('rolls day_of_month to the next month when the invoice is later, clamping short months', () => {
-    expect(dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-25'))).toBe('2026-10-20');
-    expect(dueDate({ type: 'day_of_month', day: 31 }, d('2026-02-03'))).toBe('2026-02-28');
-    expect(dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-20'))).toBe('2026-09-20');
+    expect(dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-25'), plain)).toBe('2026-10-20');
+    expect(dueDate({ type: 'day_of_month', day: 31 }, d('2026-02-03'), plain)).toBe('2026-02-28');
+    expect(dueDate({ type: 'day_of_month', day: 20 }, d('2026-09-20'), plain)).toBe('2026-09-20');
   });
 
   it('net_days counts calendar days', () => {
-    expect(dueDate({ type: 'net_days', days: 15 }, d('2026-09-01'))).toBe('2026-09-16');
+    expect(dueDate({ type: 'net_days', days: 15 }, d('2026-09-01'), plain)).toBe('2026-09-16');
+  });
+
+  it('net_working_days skips weekends and calendar exceptions (IdeaSoft, A-072)', () => {
+    // Tue 01.09.2026 + 15 working days → Tue 22.09.2026.
+    expect(dueDate({ type: 'net_working_days', days: 15 }, d('2026-09-01'), plain)).toBe(
+      '2026-09-22',
+    );
+    // An invoice issued on Friday starts counting on Monday.
+    expect(dueDate({ type: 'net_working_days', days: 1 }, d('2026-09-04'), plain)).toBe(
+      '2026-09-07',
+    );
+    const holiday = new WorkCalendar([{ date: d('2026-09-10'), isWorking: false }]);
+    expect(dueDate({ type: 'net_working_days', days: 15 }, d('2026-09-01'), holiday)).toBe(
+      '2026-09-23',
+    );
   });
 });
