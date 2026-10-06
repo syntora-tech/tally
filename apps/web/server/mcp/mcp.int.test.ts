@@ -746,13 +746,13 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     const created = (split.structuredContent?.parts as { id: string }[]).map((p) => p.id);
 
     const pkg = await call('get_document', { id: packageId });
-    expect(pkg.structuredContent).toMatchObject({
-      type: 'package',
-      parts: expect.arrayContaining([
+    expect(pkg.structuredContent).toMatchObject({ type: 'package' });
+    expect(pkg.structuredContent?.parts).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ id: created[0], pages: '1-3' }),
         expect.objectContaining({ id: created[1], type: 'sow', pages: '4-5' }),
       ]),
-    });
+    );
     expect(pkg.structuredContent?.parts).toHaveLength(2);
     const sow = await call('get_document', { id: created[1], includeContent: true });
     expect(sow.structuredContent).toMatchObject({
