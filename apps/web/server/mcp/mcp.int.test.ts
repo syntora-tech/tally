@@ -204,6 +204,8 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { result: { tools: { name: string }[] } };
     expect(body.result.tools.map((t) => t.name)).toEqual([
+      'list_invoices',
+      'get_invoice',
       'get_balances',
       'list_categories',
       'list_transactions',
@@ -232,11 +234,14 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(47);
+    expect(tools).toHaveLength(50);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
     }
+    const reconcile = tools.find((t) => t.name === 'reconcile_invoice_numbers');
+    expect(reconcile?.inputSchema.required).toContain('idempotencyKey');
+    expect(reconcile?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
     const add = tools.find((t) => t.name === 'add_transactions');
     expect(add?.inputSchema.required).toContain('idempotencyKey');
     expect(add?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
@@ -743,11 +748,12 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     const pkg = await call('get_document', { id: packageId });
     expect(pkg.structuredContent).toMatchObject({
       type: 'package',
-      parts: [
-        { id: created[0], pages: '1-3' },
-        { id: created[1], type: 'sow', pages: '4-5' },
-      ],
+      parts: expect.arrayContaining([
+        expect.objectContaining({ id: created[0], pages: '1-3' }),
+        expect.objectContaining({ id: created[1], type: 'sow', pages: '4-5' }),
+      ]),
     });
+    expect(pkg.structuredContent?.parts).toHaveLength(2);
     const sow = await call('get_document', { id: created[1], includeContent: true });
     expect(sow.structuredContent).toMatchObject({
       docDate: '2046-01-15',

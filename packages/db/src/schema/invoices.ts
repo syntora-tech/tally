@@ -12,7 +12,6 @@ import {
   text,
   timestamp,
   unique,
-  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { authenticatedRole } from 'drizzle-orm/supabase';
@@ -20,6 +19,7 @@ import { baseColumns, currencyCheck, isOwnerOrFinance, rolePolicies } from './_c
 import { contract, contractAnnex, period, timesheet } from './engagements';
 import { invoiceStatus } from './enums';
 import { client } from './parties';
+import { document } from './documents';
 
 /**
  * Client invoice (spec 4.2, 6.5). One invoice = one contract × period. Once issued it is an
@@ -62,9 +62,8 @@ export const invoice = pgTable(
   (t) => [
     unique('invoice_legacy_ref_key').on(t.legacyRef),
     // I2: issued numbers are unique; drafts have none.
-    uniqueIndex('invoice_number_key')
-      .on(t.number)
-      .where(sql`${t.status} <> 'draft'`),
+    // Deferrable in SQL so signed-number reconciliations can atomically swap numbers.
+    unique('invoice_number_key').on(t.number),
     check('invoice_draft_number_check', sql`${t.status} <> 'draft' or ${t.number} is null`),
     check('invoice_issued_number_check', sql`${t.status} = 'draft' or ${t.number} is not null`),
     check(
@@ -142,3 +141,30 @@ export const invoiceRevision = pgTable(
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceRevision = typeof invoiceRevision.$inferSelect;
 export type InvoiceLine = typeof invoiceLine.$inferSelect;
+
+/** Append-only proof of owner-authorized corrections; inserts are restricted to the DB function. */
+export const invoiceNumberCorrection = pgTable(
+  'invoice_number_correction',
+  {
+    ...baseColumns,
+    invoiceId: uuid()
+      .notNull()
+      .references(() => invoice.id),
+    signedDocumentId: uuid()
+      .notNull()
+      .references(() => document.id),
+    oldNumber: text().notNull(),
+    newNumber: text().notNull(),
+    reason: text().notNull(),
+    transactionId: text()
+      .notNull()
+      .default(sql`pg_current_xact_id()::text`),
+  },
+  () => [
+    pgPolicy('invoice_number_correction_select', {
+      for: 'select',
+      to: authenticatedRole,
+      using: isOwnerOrFinance,
+    }),
+  ],
+).enableRLS();
