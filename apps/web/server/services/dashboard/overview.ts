@@ -1,5 +1,5 @@
 import type { DbTransaction } from '@tally/db';
-import { client, contract, fxRate, invoice, plannedExpense } from '@tally/db/schema';
+import { client, contract, contractAnnex, fxRate, invoice, plannedExpense } from '@tally/db/schema';
 import {
   addDays,
   addMonths,
@@ -16,7 +16,7 @@ import {
   type InvoiceDateRule,
   type LocalDate,
 } from '@tally/domain';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -89,7 +89,18 @@ export const dashboardOverview = defineService({
         })
         .from(contract)
         .where(eq(contract.status, 'active'));
-      return { toUsd, cal, invoices, planned, contracts };
+      const annexInvoiceRules = await tx
+        .select({ invoiceDateRule: contractAnnex.invoiceDateRule })
+        .from(contractAnnex)
+        .innerJoin(contract, eq(contract.id, contractAnnex.contractId))
+        .where(
+          and(
+            eq(contract.status, 'active'),
+            eq(contractAnnex.status, 'active'),
+            isNotNull(contractAnnex.invoiceDateRule),
+          ),
+        );
+      return { toUsd, cal, invoices, planned, contracts, annexInvoiceRules };
     });
     const { toUsd, cal } = data;
     const unconverted = new Set<string>();
@@ -204,6 +215,9 @@ export const dashboardOverview = defineService({
           const on = defaultActDate(c.actDateRule as ActDateRule, month, cal);
           if (on) actDates.add(on);
         }
+      }
+      for (const a of data.annexInvoiceRules) {
+        invoiceDates.add(defaultInvoiceDate(a.invoiceDateRule as InvoiceDateRule, month, cal));
       }
       for (const [kind, dates, href] of [
         ['invoice_date', invoiceDates, '/periods'],

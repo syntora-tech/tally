@@ -3,6 +3,7 @@ import {
   assignment,
   client,
   contract,
+  contractAnnex,
   document,
   documentLink,
   DOCUMENT_TYPES,
@@ -95,16 +96,23 @@ export async function resolveAnchor(
       ? { kind: 'trip', name: t.title, year: (t.startsOn ?? today).slice(0, 4) }
       : { kind: 'none' };
   }
-  if (entityType === 'contract' || entityType === 'assignment') {
+  if (entityType === 'contract' || entityType === 'contract_annex' || entityType === 'assignment') {
     const contractId =
       entityType === 'contract'
         ? entityId
-        : (
-            await tx
-              .select({ contractId: assignment.contractId, personId: assignment.personId })
-              .from(assignment)
-              .where(eq(assignment.id, entityId))
-          )[0]?.contractId;
+        : entityType === 'contract_annex'
+          ? (
+              await tx
+                .select({ contractId: contractAnnex.contractId })
+                .from(contractAnnex)
+                .where(eq(contractAnnex.id, entityId))
+            )[0]?.contractId
+          : (
+              await tx
+                .select({ contractId: assignment.contractId })
+                .from(assignment)
+                .where(eq(assignment.id, entityId))
+            )[0]?.contractId;
     if (!contractId) return { kind: 'none' };
     const [c] = await tx
       .select({

@@ -3,6 +3,7 @@ import {
   assignment,
   client,
   contract,
+  contractAnnex,
   invoice,
   payee,
   person,
@@ -96,6 +97,28 @@ export async function lookupLinkTargets(
         .leftJoin(client, eq(client.id, contract.clientId))
         .where(where)
         .orderBy(contract.number)
+        .limit(limit);
+    }
+    case 'contract_annex': {
+      const label = sql<string>`upper(${contractAnnex.kind}) || ' ' || ${contractAnnex.number} || coalesce(' · ' || ${contractAnnex.title}, '') || ' · ' || ${contract.number} || coalesce(' · ' || coalesce(${client.shortName}, ${client.legalName}), '')`;
+      const where = byIds
+        ? inArray(contractAnnex.id, lookup.ids)
+        : text
+          ? or(
+              ilike(contractAnnex.number, like(text)),
+              ilike(contractAnnex.title, like(text)),
+              ilike(contract.number, like(text)),
+              ilike(client.legalName, like(text)),
+              ilike(client.shortName, like(text)),
+            )
+          : undefined;
+      return tx
+        .select({ id: contractAnnex.id, label })
+        .from(contractAnnex)
+        .innerJoin(contract, eq(contract.id, contractAnnex.contractId))
+        .leftJoin(client, eq(client.id, contract.clientId))
+        .where(where)
+        .orderBy(contract.number, contractAnnex.number)
         .limit(limit);
     }
     case 'assignment': {

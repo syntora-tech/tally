@@ -230,7 +230,8 @@
     "contracts": {
       "number": "Вкажіть номер договору",
       "counterparty": "Договір має бути або з клієнтом, або з одержувачем (ФОП)",
-      "notFound": "Договір не знайдено"
+      "notFound": "Договір не знайдено",
+      "annexNotFound": "SOW/додаток не знайдено"
     },
     "batch": {
       "failed": "Пакет не записано: є помилки",
@@ -417,7 +418,8 @@
       "referenced": "Запис пов’язаний з іншими даними",
       "invalid": "Дані не пройшли перевірку",
       "overReimbursement": "Сума більша за залишок компенсації ({detail})",
-      "linkTargetMissing": "Запис для прив’язки не існує ({detail})"
+      "linkTargetMissing": "Запис для прив’язки не існує ({detail})",
+      "annexContract": "SOW/додаток належить іншому контракту"
     },
     "wallets": {
       "owner": "Гаманець належить рівно одній людині або клієнту",
@@ -786,6 +788,17 @@
     "invoiceTemplate": "Шаблон інвойсу",
     "actTemplate": "Шаблон акту",
     "sequence": "Послідовність номерів",
+    "annexes": "SOW / Додатки",
+    "noAnnexes": "SOW і додатків ще немає; агенти додають їх через MCP",
+    "annexTitle": "{kind} {number}",
+    "annexSigned": "підписано {date}",
+    "annexValid": "діє {from} – {to}",
+    "annexAssignments": "{count, plural, one {# призначення} few {# призначення} many {# призначень} other {# призначення}}",
+    "annexStatus": {
+      "draft": "чернетка",
+      "active": "діє",
+      "ended": "завершено"
+    },
     "form": {
       "client": "Клієнт",
       "payee": "Одержувач (ФОП)",

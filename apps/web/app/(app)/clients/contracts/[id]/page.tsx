@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getContract } from '@/server/services/clients';
+import { listContractAnnexes } from '@/server/services/contracts/annexes';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
@@ -28,12 +29,15 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (result.isErr()) notFound();
   const { contract: c, clientName, payeeName, companyName } = result.value;
   const isClient = c.kind === 'client';
-  const [t, tc, fmt, { CONTRACT_KIND_LABELS, CONTRACT_STATUS_LABELS }] = await Promise.all([
-    getTranslations('contracts'),
-    getTranslations('common'),
-    getFormat(),
-    getLabels(),
-  ]);
+  const [t, tc, fmt, { CONTRACT_KIND_LABELS, CONTRACT_STATUS_LABELS }, annexes] = await Promise.all(
+    [
+      getTranslations('contracts'),
+      getTranslations('common'),
+      getFormat(),
+      getLabels(),
+      listContractAnnexes.run(ctx, { contractId: id }),
+    ],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,6 +86,55 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
         <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('annexes')}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              {annexes.isOk() && annexes.value.length === 0 && (
+                <p className="text-muted-foreground">{t('noAnnexes')}</p>
+              )}
+              {annexes.isOk() &&
+                annexes.value.map(({ annex: a, assignments, documents }) => (
+                  <div key={a.id} id={`annex-${a.id}`} className="flex flex-col gap-0.5">
+                    <div className="font-medium">
+                      {t('annexTitle', { kind: a.kind.toUpperCase(), number: a.number })}
+                      {a.title ? ` · ${a.title}` : ''}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {[
+                        a.signedOn ? t('annexSigned', { date: fmt.date(a.signedOn) }) : null,
+                        a.validFrom || a.validTo
+                          ? t('annexValid', {
+                              from: a.validFrom ? fmt.date(a.validFrom) : '…',
+                              to: a.validTo ? fmt.date(a.validTo) : '…',
+                            })
+                          : null,
+                        t(`annexStatus.${a.status as 'draft' | 'active' | 'ended'}`),
+                        t('annexAssignments', { count: assignments }),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </div>
+                    {(a.paymentDueRule ?? a.invoiceDateRule) !== null && (
+                      <div className="text-muted-foreground">
+                        {[
+                          a.paymentDueRule ? fmt.rule('payment', a.paymentDueRule) : null,
+                          a.invoiceDateRule ? fmt.rule('invoice', a.invoiceDateRule) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    )}
+                    {documents.map((d) => (
+                      <Link key={d.id} className="hover:underline" href={`/documents/${d.id}`}>
+                        {d.number ? `${d.number} · ${d.title}` : d.title}
+                      </Link>
+                    ))}
+                  </div>
+                ))}
+            </CardContent>
+          </Card>
           <LinkedDocuments ctx={ctx} entityType="contract" entityId={c.id} canAdd />
           <AuditHistory ctx={ctx} tableName="contract" rowId={c.id} />
         </div>

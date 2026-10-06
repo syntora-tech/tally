@@ -17,7 +17,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { authenticatedRole } from 'drizzle-orm/supabase';
 import { baseColumns, currencyCheck, isOwnerOrFinance, rolePolicies } from './_common';
-import { contract, period, timesheet } from './engagements';
+import { contract, contractAnnex, period, timesheet } from './engagements';
 import { invoiceStatus } from './enums';
 import { client } from './parties';
 
@@ -38,6 +38,8 @@ export const invoice = pgTable(
     contractId: uuid()
       .notNull()
       .references(() => contract.id),
+    /** Set when the date rules of this SOW/annex replace the contract's (A-072). */
+    annexId: uuid().references(() => contractAnnex.id),
     periodId: uuid().references(() => period.id),
     number: text(),
     status: invoiceStatus().notNull().default('draft'),

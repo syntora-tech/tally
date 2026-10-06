@@ -230,7 +230,8 @@
     "contracts": {
       "number": "Enter the contract number",
       "counterparty": "A contract is either with a client or with a payee (FOP)",
-      "notFound": "Contract not found"
+      "notFound": "Contract not found",
+      "annexNotFound": "SOW/annex not found"
     },
     "batch": {
       "failed": "The batch was not saved: there are errors",
@@ -417,7 +418,8 @@
       "referenced": "The record is linked to other data",
       "invalid": "The data did not pass validation",
       "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})",
-      "linkTargetMissing": "The linked record does not exist ({detail})"
+      "linkTargetMissing": "The linked record does not exist ({detail})",
+      "annexContract": "The SOW/annex belongs to another contract"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -786,6 +788,17 @@
     "invoiceTemplate": "Invoice template",
     "actTemplate": "Act template",
     "sequence": "Number sequence",
+    "annexes": "SOW / Annexes",
+    "noAnnexes": "No SOWs or annexes yet; agents add them over MCP",
+    "annexTitle": "{kind} {number}",
+    "annexSigned": "signed {date}",
+    "annexValid": "valid {from} – {to}",
+    "annexAssignments": "{count, plural, one {# assignment} other {# assignments}}",
+    "annexStatus": {
+      "draft": "draft",
+      "active": "active",
+      "ended": "ended"
+    },
     "form": {
       "client": "Client",
       "payee": "Payee (FOP)",

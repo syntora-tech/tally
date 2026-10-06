@@ -84,6 +84,49 @@ export const contract = pgTable(
   ],
 );
 
+/**
+ * SOW or annex inside a contract (A-072). Its date rules, when set, replace the contract's for
+ * the assignments under it, so those get an invoice of their own at period close.
+ */
+export const contractAnnex = pgTable(
+  'contract_annex',
+  {
+    ...baseColumns,
+    contractId: uuid()
+      .notNull()
+      .references(() => contract.id),
+    kind: text().notNull(),
+    number: text().notNull(),
+    title: text(),
+    signedOn: date({ mode: 'string' }),
+    validFrom: date({ mode: 'string' }),
+    validTo: date({ mode: 'string' }),
+    status: text().notNull().default('active'),
+    paymentDueRule: jsonb(),
+    invoiceDateRule: jsonb(),
+    notes: text(),
+  },
+  (t) => [
+    unique('contract_annex_number_key').on(t.contractId, t.kind, t.number),
+    check('contract_annex_kind_check', sql`${t.kind} in ('sow', 'annex')`),
+    check('contract_annex_status_check', sql`${t.status} in ('draft', 'active', 'ended')`),
+    check(
+      'contract_annex_dates_check',
+      sql`${t.validTo} is null or ${t.validFrom} is null or ${t.validTo} >= ${t.validFrom}`,
+    ),
+    check(
+      'contract_annex_payment_due_rule_check',
+      sql`${t.paymentDueRule} is null or ${t.paymentDueRule} ->> 'type' in ('day_of_month', 'net_days', 'net_working_days')`,
+    ),
+    check(
+      'contract_annex_invoice_date_rule_check',
+      sql`${t.invoiceDateRule} is null or ${t.invoiceDateRule} ->> 'type' in ('first_working_day_after_period', 'nth_working_day_after_period')`,
+    ),
+    index('contract_annex_contract_idx').on(t.contractId),
+    ...rolePolicies('contract_annex', { read: 'finance', write: 'finance' }),
+  ],
+);
+
 /** A person on a contract/SOW (one row of the legacy `Current` sheet). */
 export const assignment = pgTable(
   'assignment',
@@ -95,6 +138,8 @@ export const assignment = pgTable(
       .notNull()
       .references(() => person.id),
     contractId: uuid().references(() => contract.id),
+    /** The SOW/annex of that contract the person works under (A-072); null = the contract itself. */
+    annexId: uuid().references(() => contractAnnex.id),
     isInternal: boolean().notNull().default(false),
     sowRef: text(),
     roleTitle: text(),
@@ -109,6 +154,7 @@ export const assignment = pgTable(
     check('assignment_dates_check', sql`${t.endsOn} is null or ${t.endsOn} >= ${t.startsOn}`),
     index('assignment_person_idx').on(t.personId),
     index('assignment_contract_idx').on(t.contractId),
+    index('assignment_annex_idx').on(t.annexId),
     ...rolePolicies('assignment', { read: 'finance', write: 'finance' }),
   ],
 );
@@ -248,6 +294,7 @@ export const timesheet = pgTable(
 );
 
 export type Contract = typeof contract.$inferSelect;
+export type ContractAnnex = typeof contractAnnex.$inferSelect;
 export type Timesheet = typeof timesheet.$inferSelect;
 export type Assignment = typeof assignment.$inferSelect;
 export type BillingTerms = typeof billingTerms.$inferSelect;

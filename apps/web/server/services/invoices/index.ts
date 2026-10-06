@@ -3,6 +3,7 @@ import {
   client,
   company,
   contract,
+  contractAnnex,
   document,
   documentLink,
   invoice,
@@ -90,14 +91,31 @@ export const listInvoices = defineService({
 
 async function loadInvoice(tx: DbTransaction, id: string) {
   const [row] = await tx
-    .select({ invoice, contract, client, periodMonth: period.month })
+    .select({
+      invoice,
+      contract,
+      client,
+      periodMonth: period.month,
+      annexPaymentDueRule: contractAnnex.paymentDueRule,
+      annexInvoiceDateRule: contractAnnex.invoiceDateRule,
+    })
     .from(invoice)
     .innerJoin(contract, eq(contract.id, invoice.contractId))
     .innerJoin(client, eq(client.id, invoice.clientId))
     .leftJoin(period, eq(period.id, invoice.periodId))
+    .leftJoin(contractAnnex, eq(contractAnnex.id, invoice.annexId))
     .where(eq(invoice.id, id))
     .for('update', { of: invoice });
-  return row ?? null;
+  if (!row) return null;
+  const { annexPaymentDueRule, annexInvoiceDateRule, ...rest } = row;
+  // The SOW/annex the invoice was made for may replace the contract's date rules (A-072).
+  return {
+    ...rest,
+    rules: {
+      paymentDue: (annexPaymentDueRule ?? row.contract.paymentDueRule) as PaymentDueRule,
+      invoiceDate: (annexInvoiceDateRule ?? row.contract.invoiceDateRule) as InvoiceDateRule,
+    },
+  };
 }
 
 export const getInvoice = defineService({
@@ -251,11 +269,7 @@ export const saveInvoice = defineService({
       }
       if (revising) await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
 
-      const due = dueDate(
-        row.contract.paymentDueRule as PaymentDueRule,
-        input.issueDate,
-        await loadCalendar(tx),
-      );
+      const due = dueDate(row.rules.paymentDue, input.issueDate, await loadCalendar(tx));
       const { rows, total } = await replaceLines(tx, inv.id, input.lines);
       const base = {
         issueDate: input.issueDate,
@@ -300,11 +314,7 @@ export const issuePreview = defineService({
       if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       const cal = await loadCalendar(tx);
       const suggested = row.periodMonth
-        ? defaultInvoiceDate(
-            row.contract.invoiceDateRule as InvoiceDateRule,
-            row.periodMonth as LocalDate,
-            cal,
-          )
+        ? defaultInvoiceDate(row.rules.invoiceDate, row.periodMonth as LocalDate, cal)
         : (row.invoice.issueDate as LocalDate);
       const date = issueDate ?? (row.invoice.issueDate as LocalDate);
       const sequenceKey = row.contract.numberSequenceKey ?? DEFAULT_SEQUENCE;
@@ -324,7 +334,7 @@ export const issuePreview = defineService({
       return ok({
         suggestedDate: suggested,
         issueDate: date,
-        dueDate: dueDate(row.contract.paymentDueRule as PaymentDueRule, date, cal),
+        dueDate: dueDate(row.rules.paymentDue, date, cal),
         isWorkingDay: cal.isWorkingDay(date),
         sequenceKey,
         previous: previous ?? null,
@@ -355,11 +365,7 @@ export const issueInvoice = defineService({
       const co = await companyRow(tx);
       if (!co) return err(serviceError('conflict', 'company.missing'));
 
-      const due = dueDate(
-        row.contract.paymentDueRule as PaymentDueRule,
-        issueDate,
-        await loadCalendar(tx),
-      );
+      const due = dueDate(row.rules.paymentDue, issueDate, await loadCalendar(tx));
       const total = sum(lines.map((l) => l.amount)).toFixed(2);
       const [numbered] = await tx.execute<{ n: string }>(
         sql`select public.issue_number(${row.contract.numberSequenceKey ?? DEFAULT_SEQUENCE}, ${issueDate}::date, ${row.contract.number}) as n`,

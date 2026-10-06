@@ -5,6 +5,7 @@ import {
   billingTerms,
   client,
   contract,
+  contractAnnex,
   invoice,
   adjustment,
   invoiceLine,
@@ -137,7 +138,8 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
     note: hours.find((h) => h.assignmentId === r.assignment.id)?.note ?? null,
   }));
   const timesheetIds = new Map(hours.map((h) => [h.assignmentId, h.id]));
-  return { month, assignments, timesheetIds };
+  const annexIds = new Map(active.map((r) => [r.assignment.id, r.assignment.annexId]));
+  return { month, assignments, timesheetIds, annexIds };
 }
 
 export const listPeriods = defineService({
@@ -316,37 +318,61 @@ export const closePeriod = defineService({
       const [p] = await tx.select().from(period).where(eq(period.id, periodId)).for('update');
       if (!p) return err(serviceError('not_found', 'periods.notFound'));
       if (p.status === 'closed') return err(serviceError('conflict', 'periods.alreadyClosed'));
-      const { month, assignments, timesheetIds } = await loadPeriodData(tx, p);
+      const { month, assignments, timesheetIds, annexIds } = await loadPeriodData(tx, p);
       const cal = await loadCalendar(tx);
 
       await tx
         .delete(invoice)
         .where(and(eq(invoice.periodId, periodId), eq(invoice.status, 'draft')));
       const issued = await tx
-        .select({ contractId: invoice.contractId })
+        .select({ contractId: invoice.contractId, annexId: invoice.annexId })
         .from(invoice)
         .where(eq(invoice.periodId, periodId));
-      const skip = new Set(issued.map((i) => i.contractId));
+      const invoiceKey = (contractId: string, annexId: string | null) =>
+        `${contractId}:${annexId ?? ''}`;
+      const skip = new Set(issued.map((i) => invoiceKey(i.contractId, i.annexId)));
 
-      const byContract = new Map<
+      // A SOW/annex with date rules of its own needs an invoice of its own (A-072).
+      const annexIdList = [...new Set([...annexIds.values()].filter((id) => id !== null))];
+      const annexes = new Map(
+        (annexIdList.length
+          ? await tx.select().from(contractAnnex).where(inArray(contractAnnex.id, annexIdList))
+          : []
+        )
+          .filter((x) => x.paymentDueRule !== null || x.invoiceDateRule !== null)
+          .map((x) => [x.id, x]),
+      );
+
+      const groups = new Map<
         string,
-        { a: PeriodAssignment; line: NonNullable<ReturnType<typeof draftLine>>; currency: string }[]
+        {
+          contractId: string;
+          annexId: string | null;
+          lines: {
+            a: PeriodAssignment;
+            line: NonNullable<ReturnType<typeof draftLine>>;
+            currency: string;
+          }[];
+        }
       >();
       for (const a of assignments) {
         const b = a.billing
           .filter((v) => v.validFrom <= month)
           .sort((x, y) => y.validFrom.localeCompare(x.validFrom))[0];
-        if (!b || !a.contractId || skip.has(a.contractId)) continue;
+        if (!b || !a.contractId) continue;
+        const ownAnnex = annexIds.get(a.assignmentId);
+        const annexId = ownAnnex && annexes.has(ownAnnex) ? ownAnnex : null;
+        const key = invoiceKey(a.contractId, annexId);
+        if (skip.has(key)) continue;
         const line = draftLine(a.assignmentId, b, a.hours ?? '0', p.workHours);
         if (!line) continue;
-        byContract.set(a.contractId, [
-          ...(byContract.get(a.contractId) ?? []),
-          { a, line, currency: b.currency },
-        ]);
+        const group = groups.get(key) ?? { contractId: a.contractId, annexId, lines: [] };
+        group.lines.push({ a, line, currency: b.currency });
+        groups.set(key, group);
       }
 
       let created = 0;
-      for (const [contractId, lines] of byContract) {
+      for (const { contractId, annexId, lines } of groups.values()) {
         const [c] = await tx.select().from(contract).where(eq(contract.id, contractId));
         if (!c?.clientId) continue;
         const foreign = lines.find((l) => l.currency !== c.currency);
@@ -363,15 +389,25 @@ export const closePeriod = defineService({
             ),
           );
         }
-        const issueDate = defaultInvoiceDate(c.invoiceDateRule as InvoiceDateRule, month, cal);
+        const annex = annexId ? annexes.get(annexId) : undefined;
+        const issueDate = defaultInvoiceDate(
+          (annex?.invoiceDateRule ?? c.invoiceDateRule) as InvoiceDateRule,
+          month,
+          cal,
+        );
         const [inv] = await tx
           .insert(invoice)
           .values({
             clientId: c.clientId,
             contractId,
+            annexId,
             periodId,
             issueDate,
-            dueDate: dueDate(c.paymentDueRule as PaymentDueRule, issueDate, cal),
+            dueDate: dueDate(
+              (annex?.paymentDueRule ?? c.paymentDueRule) as PaymentDueRule,
+              issueDate,
+              cal,
+            ),
             currency: c.currency,
             total: sum(lines.map((l) => l.line.amount)).toFixed(2),
           })

@@ -34,6 +34,7 @@ export const LINK_ENTITY_TYPES = [
   'payee',
   'client',
   'contract',
+  'contract_annex',
   'assignment',
   'invoice',
   'supplier_act',

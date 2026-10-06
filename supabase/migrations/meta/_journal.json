@@ -365,6 +365,20 @@
       "when": 1791279161720,
       "tag": "20261006093241_net_working_days",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1791279392926,
+      "tag": "20261006093632_contract_annex",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1791279403584,
+      "tag": "20261006093643_contract_annex_invariants",
+      "breakpoints": true
     }
   ]
 }
