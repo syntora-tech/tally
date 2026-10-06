@@ -141,6 +141,7 @@
     "payType": {
       "fixed": "Фіксована сума",
       "hourly": "Погодинно від місячної суми",
+      "hourly_rate": "Ставка за годину",
       "included": "Включено (0)"
     },
     "payoutMethod": {
@@ -267,6 +268,7 @@
       "adjustmentCurrency": "Валюта: USD або UAH",
       "adjustmentNotFound": "Коригування не знайдено",
       "noteWithoutHours": "Примітка без годин не зберігається — вкажіть години",
+      "payHoursWithoutHours": "Години людині потребують і годин клієнту в цьому рядку",
       "noHours": "Немає годин для збереження",
       "chooseCsv": "Оберіть CSV-файл",
       "rateCurrency": "Валюта ставки {person} ({rateCurrency}) не збігається з валютою договору {contract} ({contractCurrency})"
@@ -980,6 +982,7 @@
     "proration": "Якщо відпрацьовано не весь місяць",
     "fixedHint": "Вже з урахуванням FTE (2300 × 0.5 = 1150)",
     "hourlyHint": "Для погодинної: сума / норма × години",
+    "hourlyRateHint": "Виплата = ставка × години людини за місяць",
     "payoutMethod": "Спосіб виплати",
     "releasePolicy": "Коли можна виплатити",
     "graceDays": "Додаткові робочі дні після дедлайну",
@@ -1247,7 +1250,8 @@
     "col": {
       "person": "Людина",
       "client": "Клієнт",
-      "hours": "Години",
+      "hours": "Години клієнту",
+      "payHours": "Години людині",
       "invoice": "Інвойс",
       "payUsd": "ЗП, USD",
       "payUah": "ЗП, UAH ≈"
@@ -1279,10 +1283,13 @@
       "client": "Клієнт",
       "role": "Роль",
       "terms": "Умови клієнту",
-      "hours": "Години",
+      "hours": "Години клієнту",
+      "payHours": "Години людині",
       "note": "Проєкт / примітка"
     },
     "hoursAria": "Години: {person}, {client}",
+    "payHoursAria": "Години людині для {person}, {client}",
+    "payHoursPlaceholder": "= клієнту",
     "noteAria": "Проєкт: {person}, {client}",
     "notePlaceholder": "напр. Mobile app",
     "saveHours": "Зберегти години",

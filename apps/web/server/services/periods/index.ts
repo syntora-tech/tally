@@ -135,6 +135,7 @@ async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
         graceDays: t.graceDays,
       })),
     hours: hours.find((h) => h.assignmentId === r.assignment.id)?.hours ?? null,
+    payHours: hours.find((h) => h.assignmentId === r.assignment.id)?.payHours ?? null,
     note: hours.find((h) => h.assignmentId === r.assignment.id)?.note ?? null,
   }));
   const timesheetIds = new Map(hours.map((h) => [h.assignmentId, h.id]));
@@ -254,7 +255,10 @@ const hoursValue = nonNegativeDecimal.refine((v) => toDecimal(v).lte(744), 'peri
 
 export const hoursEntry = z.object({
   assignmentId: z.uuid(),
+  /** Hours billed to the client. */
   hours: hoursValue,
+  /** Hours paid to the person; omitted keeps the stored value, null or "" = same as `hours`. */
+  payHours: z.preprocess((v) => (v === '' ? null : v), hoursValue.nullable()).optional(),
   /** Project of the month; omitted keeps the stored note, an empty string clears it. */
   note: z.string().trim().max(200).optional(),
 });
@@ -268,12 +272,29 @@ async function writeHours(
   await inActorScope(ctx, async (tx) => {
     for (const e of entries) {
       const note = e.note === undefined ? {} : { note: e.note || null };
+      // Person hours equal to the billed ones are stored as null: "the same" (A-074).
+      const payHours =
+        e.payHours === undefined
+          ? {}
+          : {
+              payHours:
+                e.payHours === null || toDecimal(e.payHours).eq(toDecimal(e.hours))
+                  ? null
+                  : e.payHours,
+            };
       await tx
         .insert(timesheet)
-        .values({ periodId, assignmentId: e.assignmentId, hours: e.hours, source, ...note })
+        .values({
+          periodId,
+          assignmentId: e.assignmentId,
+          hours: e.hours,
+          source,
+          ...note,
+          ...payHours,
+        })
         .onConflictDoUpdate({
           target: [timesheet.assignmentId, timesheet.periodId],
-          set: { hours: e.hours, source, ...note },
+          set: { hours: e.hours, source, ...note, ...payHours },
         });
     }
   });

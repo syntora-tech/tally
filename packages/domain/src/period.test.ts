@@ -262,3 +262,35 @@ describe('agencyPlan (A-068)', () => {
     expect(agencyPlan(d('2026-07-01'), july)).toEqual([]);
   });
 });
+
+describe('client hours and person hours (A-074)', () => {
+  const row: PeriodAssignment = {
+    ...a(
+      'Andrii',
+      'IdeaSoft',
+      '160',
+      { type: 'hourly', rate: '47', prorationPolicy: 'full_month' },
+      { type: 'hourly_rate', amount: '25' },
+    ),
+    payHours: '172',
+    agency: [{ validFrom: JAN, payeeId: 'redjumpers', ratePerHour: '4' }],
+  };
+
+  it('bills the client hours and pays the person hours', () => {
+    const preview = periodPreview(JAN, '184', null, [row]);
+    expect(preview.rows[0]).toMatchObject({
+      hours: '160.00',
+      payHours: '172.00',
+      invoiceAmount: '7520.00',
+      payUsd: '4300.00',
+    });
+    const [item] = payrollPlan(JAN, '184', null, [row], []);
+    expect(item?.lines[0]?.amountUsd).toBe('4300.00');
+    expect(agencyPlan(JAN, [row])[0]?.totalUsd).toBe('688.00');
+  });
+
+  it('without person hours the person is paid for the client hours', () => {
+    const preview = periodPreview(JAN, '184', null, [{ ...row, payHours: null }]);
+    expect(preview.rows[0]).toMatchObject({ payHours: '160.00', payUsd: '4000.00' });
+  });
+});

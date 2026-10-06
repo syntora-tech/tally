@@ -43,7 +43,10 @@ export async function updatePeriodAction(
   return { ok: true, data: result.value };
 }
 
-/** The hours table posts `hours.<assignmentId>` fields; blank cells are left untouched. */
+/**
+ * The hours table posts `hours.<assignmentId>` (client) and `payHours.<assignmentId>` (person,
+ * blank = the client hours) fields; rows with blank client hours are left untouched.
+ */
 export async function saveHoursAction(
   _prev: PeriodFormState,
   formData: FormData,
@@ -54,13 +57,31 @@ export async function saveHoursAction(
   const notes = new Map(
     entries.filter(([k]) => k.startsWith('note.')).map(([k, v]) => [k.slice('note.'.length), v]),
   );
+  const payHours = new Map(
+    entries
+      .filter(([k]) => k.startsWith('payHours.'))
+      .map(([k, v]) => [k.slice('payHours.'.length), v.trim().replace(',', '.')]),
+  );
   const rows = entries
     .filter(([k, v]) => k.startsWith('hours.') && v.trim() !== '')
     .map(([k, v]) => {
       const assignmentId = k.slice('hours.'.length);
-      return { assignmentId, hours: v.replace(',', '.'), note: notes.get(assignmentId) };
+      return {
+        assignmentId,
+        hours: v.replace(',', '.'),
+        payHours: payHours.get(assignmentId),
+        note: notes.get(assignmentId),
+      };
     });
   const withHours = new Set(rows.map((r) => r.assignmentId));
+  if ([...payHours].some(([id, v]) => v !== '' && !withHours.has(id))) {
+    return {
+      ok: false,
+      error: await localizeForUser(
+        serviceError('validation_error', 'periods.payHoursWithoutHours'),
+      ),
+    };
+  }
   if ([...notes].some(([id, note]) => note.trim() !== '' && !withHours.has(id))) {
     return {
       ok: false,
@@ -96,6 +117,7 @@ export async function uploadHoursCsvAction(
     .map((r) => ({
       assignmentId: r.assignment_id ?? '',
       hours: (r.hours ?? '').replace(',', '.'),
+      payHours: r.pay_hours?.trim().replace(',', '.'),
       note: r.note,
     }));
   const result = await importHours.run(ctx, { periodId, rows });

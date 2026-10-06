@@ -379,6 +379,13 @@
       "when": 1791279403584,
       "tag": "20261006093643_contract_annex_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791282620836,
+      "tag": "20261006103020_person_hours_hourly_rate",
+      "breakpoints": true
     }
   ]
 }

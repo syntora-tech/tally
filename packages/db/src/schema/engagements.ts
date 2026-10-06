@@ -279,7 +279,10 @@ export const timesheet = pgTable(
     periodId: uuid()
       .notNull()
       .references(() => period.id),
+    /** Hours billed to the client. */
     hours: numeric({ precision: 6, scale: 2 }).notNull(),
+    /** Hours paid to the person when they differ from the billed ones (A-074); null = the same. */
+    payHours: numeric({ precision: 6, scale: 2 }),
     source: text().notNull().default('manual'),
     /** Which project of the assignment these hours were for, e.g. several projects under one SOW. */
     note: text(),
@@ -288,6 +291,7 @@ export const timesheet = pgTable(
     unique('timesheet_legacy_ref_key').on(t.legacyRef),
     unique('timesheet_assignment_period_key').on(t.assignmentId, t.periodId),
     check('timesheet_hours_check', sql`${t.hours} >= 0`),
+    check('timesheet_pay_hours_check', sql`${t.payHours} is null or ${t.payHours} >= 0`),
     check('timesheet_source_check', sql`${t.source} in ('manual', 'import')`),
     ...rolePolicies('timesheet', { read: 'finance', write: 'finance' }),
   ],

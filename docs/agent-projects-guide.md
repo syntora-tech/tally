@@ -28,10 +28,10 @@ Company ─┬─ Client contract (MSA No. …) ── Client
 | **SOW / Annex**     | A SOW or annex inside a contract: number, title, dates, status, its PDF; may replace the contract's payment term or invoice date                                                                       | MCP `upsert_contract_annexes`                                                                   |
 | **Assignment**      | A person on a client contract: contract, SOW/Annex, role, FTE (0 < FTE ≤ 1), start, end. Or internal (CEO/CTO on our own company) — no contract, no billing                                            | MCP `upsert_assignments` or UI: person card → “New assignment”                                  |
 | **Client terms**    | Type `hourly` / `fixed_monthly` / `none`, rate, currency, invoice channel (fiat / crypto), partial-month policy                                                                                        | With the assignment; a new month = a new version (MCP `upsert_assignments` or UI “Add version”) |
-| **Person terms**    | Type `fixed` / `hourly` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                                                                 | With the assignment; a new month = a new version (MCP `upsert_assignments` or UI “Add version”) |
+| **Person terms**    | Type `fixed` / `hourly` / `hourly_rate` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                                                 | With the assignment; a new month = a new version (MCP `upsert_assignments` or UI “Add version”) |
 | **Agency fee**      | When an agency placed the person: the agency's payee, USD per hour the person works, payout method. Rate 0 from a month ends it                                                                        | Assignment page → “Agency fee” (UI only)                                                        |
 | **Period**          | Calendar month: hours norm, reference rate, status `open` / `closed`                                                                                                                                   | UI “Periods”                                                                                    |
-| **Timesheet**       | Hours per assignment × month + a “project” note                                                                                                                                                        | UI “Periods” → step 2 (form or CSV)                                                             |
+| **Timesheet**       | Hours per assignment × month: billed to the client and, when different, paid to the person; + a “project” note                                                                                         | UI “Periods” → step 2 (form or CSV)                                                             |
 
 Over MCP the agent writes **clients, people, contracts, SOWs/annexes and assignments with their terms** (and the Ledger, payees, documents). Agency fees, periods and hours are entered by a person in the UI (section 6).
 
@@ -70,7 +70,10 @@ The “project” note is internal. It does **not** appear on the client invoice
 | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `fixed` (“Fixed amount”)                    | the monthly amount. **Already includes FTE**: for half-time enter half, not the full amount |
 | `hourly` (“Hourly from the monthly amount”) | amount / H × h                                                                              |
+| `hourly_rate` (“Rate per hour”)             | amount × h — the amount is the person's rate per hour                                       |
 | `included` (“Included (0)”)                 | 0 (paid inside another assignment)                                                          |
+
+Here h is the **person's hours** of the month. They default to the hours billed to the client; in Periods step 2 a different figure can be entered for the person (A-074) — e.g. 160 billed and 172 paid. The agency fee uses the person's hours too.
 
 All of a person's assignments in a month roll into **one payout** per method (fiat and crypto separately). The recipient is the default payee from the person card.
 

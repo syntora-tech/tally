@@ -118,6 +118,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               roleTitle: a.roleTitle,
               billing: billingText(a),
               hours: a.hours,
+              payHours: a.payHours ?? null,
               note: a.note ?? null,
             }))}
           />
@@ -132,6 +133,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               <TableHead>{t('col.person')}</TableHead>
               <TableHead>{t('col.client')}</TableHead>
               <TableHead>{t('col.hours')}</TableHead>
+              <TableHead>{t('col.payHours')}</TableHead>
               <TableHead>{t('col.invoice')}</TableHead>
               <TableHead>{t('col.payUsd')}</TableHead>
               <TableHead>{t('col.payUah')}</TableHead>
@@ -148,6 +150,9 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                   )}
                 </TableCell>
                 <TableCell>{fmt.amount(r.hours)}</TableCell>
+                <TableCell className={r.payHours === r.hours ? 'text-muted-foreground' : undefined}>
+                  {fmt.amount(r.payHours)}
+                </TableCell>
                 <TableCell>
                   {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
                 </TableCell>
@@ -158,7 +163,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={3}>{tc('total')}</TableCell>
+              <TableCell colSpan={4}>{tc('total')}</TableCell>
               <TableCell data-testid="total-invoice">
                 {fmt.amount(preview.totals.invoiceUsd)}
               </TableCell>

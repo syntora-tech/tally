@@ -135,9 +135,15 @@ export function PayFields({
       {type !== 'included' && (
         <>
           <FormField
-            label={t('monthlyAmount')}
+            label={type === 'hourly_rate' ? t('hourlyRate') : t('monthlyAmount')}
             htmlFor={id('amount')}
-            hint={type === 'fixed' ? t('fixedHint') : t('hourlyHint')}
+            hint={
+              type === 'fixed'
+                ? t('fixedHint')
+                : type === 'hourly_rate'
+                  ? t('hourlyRateHint')
+                  : t('hourlyHint')
+            }
             error={errors?.[`${prefix}amount`]}
           >
             <Input

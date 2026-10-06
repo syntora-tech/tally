@@ -49,7 +49,10 @@ export type PeriodAssignment = {
   pay: PeriodPayTerms[];
   /** Absent when the person was not placed by an agency. */
   agency?: PeriodAgencyTerms[];
+  /** Hours billed to the client. */
   hours: string | null;
+  /** Hours paid to the person (and the agency); null = the same as `hours` (A-074). */
+  payHours?: string | null;
   /** Project note of the month's timesheet row. */
   note?: string | null;
 };
@@ -61,6 +64,7 @@ export type PreviewRow = {
   contractId: string | null;
   roleTitle: string | null;
   hours: string;
+  payHours: string;
   billing: (BillingTermsInput & { currency: string }) | null;
   invoiceAmount: string | null;
   payUsd: string;
@@ -73,6 +77,11 @@ export type PeriodPreview = {
 };
 
 /** Assignments active at any time during the month take part in the period. */
+/** Hours the person is paid for: their own figure, else the client's (A-074). */
+export function personHours(a: Pick<PeriodAssignment, 'hours' | 'payHours'>): string {
+  return a.payHours ?? a.hours ?? '0';
+}
+
 export function isActiveInMonth(
   a: { startsOn: LocalDate; endsOn: LocalDate | null },
   month: LocalDate,
@@ -97,7 +106,7 @@ export function periodPreview(
       const b = effectiveVersion(a.billing, month);
       const p = effectiveVersion(a.pay, month);
       const invoice = b ? billingLineAmount(b, hours, workHours) : null;
-      const pay = p ? payrollLineAmount(p, hours, workHours) : new Decimal(0);
+      const pay = p ? payrollLineAmount(p, personHours(a), workHours) : new Decimal(0);
       return {
         assignmentId: a.assignmentId,
         personName: a.personName,
@@ -105,6 +114,7 @@ export function periodPreview(
         contractId: a.contractId,
         roleTitle: a.roleTitle,
         hours: toDecimal(hours).toFixed(2),
+        payHours: toDecimal(personHours(a)).toFixed(2),
         billing: b
           ? { type: b.type, rate: b.rate, prorationPolicy: b.prorationPolicy, currency: b.currency }
           : null,
@@ -221,7 +231,7 @@ export function payrollPlan(
     if (!terms) continue;
     itemFor(a.personId ?? a.personName, a.personName, terms.payoutMethod ?? 'fiat').lines.push({
       assignmentId: a.assignmentId,
-      amountUsd: payrollLineAmount(terms, a.hours ?? '0', workHours).toFixed(2),
+      amountUsd: payrollLineAmount(terms, personHours(a), workHours).toFixed(2),
       releasePolicy: terms.releasePolicy ?? 'on_payment_or_due',
       graceDays: terms.graceDays ?? 0,
     });
@@ -263,7 +273,8 @@ export function agencyPlan(
   for (const a of assignments) {
     if (!isActiveInMonth(a, month)) continue;
     const terms = effectiveVersion(a.agency ?? [], month);
-    const hours = toDecimal(a.hours ?? '0');
+    // The agency is paid for the hours its person worked, like the person (A-074).
+    const hours = toDecimal(personHours(a));
     if (!terms || hours.isZero() || toDecimal(terms.ratePerHour).isZero()) continue;
     const method = terms.payoutMethod ?? 'fiat';
     const key = `${terms.payeeId}:${method}`;

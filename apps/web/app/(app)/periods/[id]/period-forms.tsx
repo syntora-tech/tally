@@ -96,6 +96,8 @@ export type HoursRow = {
   roleTitle: string | null;
   billing: string;
   hours: string | null;
+  /** Null when the person is paid for the client hours (A-074). */
+  payHours: string | null;
   note: string | null;
 };
 
@@ -124,6 +126,7 @@ export function HoursForm({
             <TableHead>{t('col.role')}</TableHead>
             <TableHead>{t('col.terms')}</TableHead>
             <TableHead className="w-32">{t('col.hours')}</TableHead>
+            <TableHead className="w-32">{t('col.payHours')}</TableHead>
             <TableHead>{t('col.note')}</TableHead>
           </TableRow>
         </TableHeader>
@@ -143,6 +146,20 @@ export function HoursForm({
                   })}
                   inputMode="decimal"
                   defaultValue={r.hours ?? ''}
+                  disabled={disabled}
+                  className="h-8 w-24"
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  name={`payHours.${r.assignmentId}`}
+                  aria-label={t('payHoursAria', {
+                    person: r.personName,
+                    client: r.clientName ?? tc('internal'),
+                  })}
+                  inputMode="decimal"
+                  placeholder={t('payHoursPlaceholder')}
+                  defaultValue={r.payHours ?? ''}
                   disabled={disabled}
                   className="h-8 w-24"
                 />

@@ -2,7 +2,7 @@ import { Decimal, roundHalfUp, toDecimal, type DecimalInput } from './money';
 
 export type BillingType = 'fixed_monthly' | 'hourly' | 'none';
 export type ProrationPolicy = 'full_month' | 'by_hours' | 'trunc_hourly';
-export type PayType = 'fixed' | 'hourly' | 'included';
+export type PayType = 'fixed' | 'hourly' | 'hourly_rate' | 'included';
 
 export type BillingTermsInput = {
   type: BillingType;
@@ -39,7 +39,10 @@ export function billingLineAmount(
   }
 }
 
-/** Payroll line amount in the terms currency (spec 5.2). `fixed` already includes FTE. */
+/**
+ * Payroll line amount in the terms currency (spec 5.2). `fixed` already includes FTE; `hourly`
+ * spreads a monthly amount over the norm, `hourly_rate` pays the amount per hour (A-074).
+ */
 export function payrollLineAmount(
   terms: PayTermsInput,
   hours: DecimalInput,
@@ -50,6 +53,8 @@ export function payrollLineAmount(
       return roundHalfUp(terms.amount);
     case 'hourly':
       return roundHalfUp(toDecimal(terms.amount).div(toDecimal(workHours)).times(toDecimal(hours)));
+    case 'hourly_rate':
+      return roundHalfUp(toDecimal(terms.amount).times(toDecimal(hours)));
     case 'included':
       return new Decimal(0);
   }

@@ -61,6 +61,15 @@ describe('payrollLineAmount (spec 5.2)', () => {
     expect(payrollLineAmount({ type: 'hourly', amount: '7360' }, '5', H).toFixed(2)).toBe('200.00');
   });
 
+  it('hourly_rate: rate × h, no norm involved (A-074)', () => {
+    expect(
+      payrollLineAmount({ type: 'hourly_rate', amount: '25' }, '150.5', '184').toFixed(2),
+    ).toBe('3762.50');
+    expect(
+      payrollLineAmount({ type: 'hourly_rate', amount: '17.333' }, '3', '184').toFixed(2),
+    ).toBe('52.00');
+  });
+
   it('included: zero', () => {
     expect(payrollLineAmount({ type: 'included', amount: '999' }, '184', H).toFixed(2)).toBe(
       '0.00',

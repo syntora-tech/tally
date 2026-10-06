@@ -4,7 +4,10 @@ import { requireRole } from '@/server/request-context';
 import { getPeriodOverview } from '@/server/services/periods';
 import { FINANCE_ROLES } from '@/lib/navigation';
 
-/** Hours template for the period: fill hours (and the project note) and upload it back (6.4 step 2). */
+/**
+ * Hours template for the period (6.4 step 2): client hours, person hours when they differ (A-074)
+ * and the project note; fill it and upload it back.
+ */
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/periods/[id]/hours'>) {
   const serviceCtx = await requireRole(FINANCE_ROLES);
   const { id } = await ctx.params;
@@ -17,6 +20,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<'/api/periods
       { header: 'client', value: (a) => a.clientName ?? 'internal' },
       { header: 'role', value: (a) => a.roleTitle },
       { header: 'hours', value: (a) => a.hours },
+      { header: 'pay_hours', value: (a) => a.payHours ?? null },
       { header: 'note', value: (a) => a.note ?? null },
     ],
     result.value.assignments,

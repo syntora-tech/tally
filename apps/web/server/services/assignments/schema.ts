@@ -14,7 +14,7 @@ const emptyToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 
 export const BILLING_TYPES = ['fixed_monthly', 'hourly', 'none'] as const;
 export const PRORATION_POLICIES = ['full_month', 'by_hours', 'trunc_hourly'] as const;
-export const PAY_TYPES = ['fixed', 'hourly', 'included'] as const;
+export const PAY_TYPES = ['fixed', 'hourly', 'hourly_rate', 'included'] as const;
 export const PAYOUT_METHODS = ['fiat', 'crypto'] as const;
 export const RELEASE_POLICIES = ['immediate', 'on_payment_or_due'] as const;
 
