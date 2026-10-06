@@ -1,0 +1,2 @@
+ALTER TABLE "supplier_act" ADD COLUMN "amount_usd" numeric(20, 8);--> statement-breakpoint
+ALTER TABLE "supplier_act" ADD CONSTRAINT "supplier_act_amount_usd_check" CHECK ("supplier_act"."amount_usd" is null or "supplier_act"."amount_usd" >= 0);

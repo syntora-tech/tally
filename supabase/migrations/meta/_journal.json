@@ -449,6 +449,20 @@
       "when": 1791306789459,
       "tag": "20261006171309_planned_payments_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791309375112,
+      "tag": "20261006175615_supplier_act_parts",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791309379742,
+      "tag": "20261006175619_supplier_act_parts_invariants",
+      "breakpoints": true
     }
   ]
 }

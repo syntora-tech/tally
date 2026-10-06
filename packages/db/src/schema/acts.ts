@@ -48,6 +48,11 @@ export const supplierAct = pgTable(
     periodTo: date({ mode: 'string' }),
     amountUah: numeric({ precision: 20, scale: 2 }).notNull(),
     /**
+     * USD of the payout this act covers when the month is paid in parts (A-083), each at its own
+     * rate. Null = the act follows the rest of its payout (the usual single monthly act).
+     */
+    amountUsd: numeric({ precision: 20, scale: 8 }),
+    /**
      * USD→UAH rate approved for a monthly act made before its period closed (A-076); the payout
      * takes it at close. Null for acts made from a payout, which carries the rate itself.
      */
@@ -72,6 +77,7 @@ export const supplierAct = pgTable(
       sql`${t.status} = 'draft' or ${t.number} is not null`,
     ),
     check('supplier_act_amount_check', sql`${t.amountUah} >= 0`),
+    check('supplier_act_amount_usd_check', sql`${t.amountUsd} is null or ${t.amountUsd} >= 0`),
     check(
       'supplier_act_fx_check',
       sql`(${t.fxRate} is null) = (${t.fxSource} is null) and (${t.fxRate} is null or ${t.fxRate} > 0)`,

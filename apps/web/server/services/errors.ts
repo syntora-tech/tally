@@ -133,6 +133,8 @@ export function mapDbError(error: unknown): ServiceError | null {
         : serviceError('conflict', 'db.duplicate');
     case '23503':
       return serviceError('conflict', 'db.referenced');
+    case '23P01':
+      return serviceError('conflict', 'db.actPeriodsOverlap');
     case '23514':
     case '23502':
     case '22P02':
