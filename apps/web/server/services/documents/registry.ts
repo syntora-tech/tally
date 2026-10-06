@@ -112,6 +112,8 @@ export const searchDocuments = defineService({
           version: document.version,
           fileKey: document.driveFileId,
           url: document.url,
+          packageId: document.packageId,
+          packagePages: document.packagePages,
         })
         .from(document)
         .where(and(...conditions))
@@ -159,10 +161,28 @@ export const getDocument = defineService({
         .select({ id: document.id })
         .from(document)
         .where(eq(document.supersedesId, id));
+      const [pkg] = doc.packageId
+        ? await tx
+            .select({ id: document.id, title: document.title })
+            .from(document)
+            .where(eq(document.id, doc.packageId))
+        : [];
+      const parts = await tx
+        .select({
+          id: document.id,
+          type: document.type,
+          title: document.title,
+          pages: document.packagePages,
+        })
+        .from(document)
+        .where(eq(document.packageId, id))
+        .orderBy(asc(document.createdAt));
       return {
         document: doc,
         links: await labelLinks(tx, links),
         supersededById: newer?.id ?? null,
+        package: pkg ?? null,
+        parts,
       };
     });
     return card ? ok(card) : err(serviceError('not_found', 'documents.notFound'));

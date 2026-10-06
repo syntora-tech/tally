@@ -134,6 +134,8 @@ export type NewDocument = z.output<typeof createDocumentInput> & {
   /** Invoice/act revision the file shows; `signedAt` marks an uploaded signed copy. */
   sourceRevision?: number;
   signedAt?: Date;
+  /** Part of a signed package and the pages it was cut from (A-078). */
+  package?: { id: string; pages: string };
 };
 
 export type StoredDocumentFile = {
@@ -184,6 +186,8 @@ export async function insertDocumentRow(
       supersedesId: input.supersedes?.id ?? null,
       signedAt: input.signedAt ?? null,
       sourceRevision: input.sourceRevision ?? null,
+      packageId: input.package?.id ?? null,
+      packagePages: input.package?.pages ?? null,
     })
     .returning({ id: document.id });
   if (!row) throw new Error('Document insert returned no row');

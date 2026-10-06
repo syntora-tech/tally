@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(16);
+select plan(20);
 
 -- Count only audit rows written by this test; the shared DB may hold older ones.
 create temp table audit_start on commit drop as select coalesce(max(id), 0) as id from public.audit_log;
@@ -80,6 +80,21 @@ select lives_ok($$ insert into public.document (type, title, url) values ('other
 select pg_temp.reset_actor();
 
 select is((select count(*)::int from public.audit_log where table_name = 'document_link' and id > (select id from audit_start)), 4, 'links are audited');
+
+-- A-078: signed packages and their parts.
+insert into public.document (id, type, title) values
+  ('70000000-0000-0000-0000-0000000000a1', 'package', 'MSA + SOW 1'),
+  ('70000000-0000-0000-0000-0000000000a2', 'contract', 'Plain contract');
+select lives_ok($$ insert into public.document (type, title, package_id, package_pages)
+  values ('sow', 'SOW 1', '70000000-0000-0000-0000-0000000000a1', '11-13') $$,
+  'a part points at a package with its pages');
+select throws_ok($$ insert into public.document (type, title, package_id)
+  values ('sow', 'Bad part', '70000000-0000-0000-0000-0000000000a2') $$,
+  'TL063', null, 'a part of a document that is not a package is rejected');
+select throws_ok($$ insert into public.document (type, title, package_pages) values ('sow', 'Pages only', '1-2') $$,
+  'TL063', null, 'pages without a package are rejected');
+select throws_ok($$ update public.document set type = 'contract' where id = '70000000-0000-0000-0000-0000000000a1' $$,
+  'TL063', null, 'a package with parts keeps its type');
 
 select * from finish();
 rollback;

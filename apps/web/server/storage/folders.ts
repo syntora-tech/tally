@@ -9,7 +9,7 @@ export type FolderAnchor =
   | { kind: 'trip'; name: string; year: string }
   | { kind: 'none' };
 
-const CONTRACT_LIKE: readonly DocumentType[] = ['contract', 'sow', 'annex', 'nda'];
+const CONTRACT_LIKE: readonly DocumentType[] = ['contract', 'sow', 'annex', 'nda', 'package'];
 
 /** Folder layout from spec 7.3; year-scoped folders use the document date year. */
 export function folderPathFor(type: DocumentType, anchor: FolderAnchor, year: string): string {
@@ -21,9 +21,9 @@ export function folderPathFor(type: DocumentType, anchor: FolderAnchor, year: st
         ? `clients/${slugify(anchor.name)}/invoices/${year}`
         : `clients/${slugify(anchor.name)}/contracts`;
     case 'payee':
-      return type === 'act'
-        ? `payees/${slugify(anchor.name)}/acts/${year}`
-        : `payees/${slugify(anchor.name)}/${CONTRACT_LIKE.includes(type) ? 'contracts' : 'docs'}`;
+      if (type === 'act') return `payees/${slugify(anchor.name)}/acts/${year}`;
+      if (type === 'bill') return `payees/${slugify(anchor.name)}/bills/${year}`;
+      return `payees/${slugify(anchor.name)}/${CONTRACT_LIKE.includes(type) ? 'contracts' : 'docs'}`;
     case 'trip':
       return `trips/${anchor.year}/${slugify(anchor.name)}${type === 'receipt' ? '/receipts' : ''}`;
     case 'none':

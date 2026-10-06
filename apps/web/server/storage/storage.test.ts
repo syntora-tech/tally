@@ -33,6 +33,12 @@ describe('folderPathFor (spec 7.3)', () => {
       { kind: 'trip', name: 'Bits&Pretzels Munich', year: '2026' },
       'trips/2026/bits-pretzels-munich/receipts',
     ],
+    [
+      'bill',
+      { kind: 'payee', name: 'ФОП Безверха Оксана' },
+      'payees/fop-bezverkha-oksana/bills/2026',
+    ],
+    ['package', { kind: 'client', name: 'BoostyLabs' }, 'clients/boostylabs/contracts'],
     ['statement', { kind: 'none' }, 'ledger/statements/2026'],
     ['other', { kind: 'none' }, 'documents'],
   ] as const)('%s + %j → %s', (type, anchor, path) => {

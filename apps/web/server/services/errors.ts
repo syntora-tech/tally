@@ -113,6 +113,8 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('not_found', msg('db.linkTargetMissing', { detail: pg.detail ?? '' }));
     case 'TL062':
       return serviceError('validation_error', 'db.annexContract');
+    case 'TL063':
+      return serviceError('validation_error', 'db.packagePart');
     case 'TL020':
       return serviceError('validation_error', 'db.sequenceDown');
     case 'TL021':

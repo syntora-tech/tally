@@ -1,4 +1,5 @@
 import type { DbTransaction } from '@tally/db';
+import type { LocalDate } from '@tally/domain';
 import { document, documentLink, DOCUMENT_TYPES, LINK_ENTITY_TYPES } from '@tally/db/schema';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
@@ -16,6 +17,7 @@ import {
   optionalLocalDate,
   optionalText,
 } from '../fields';
+import { extractPages, parsePageRanges, pdfPageCount } from './package';
 import { labelLinks, type LinkChip } from './registry';
 import { lookupLinkTargets } from './targets';
 import {
@@ -279,7 +281,30 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
           select id, version, title, doc_date, status from public.document
           where id in (select id from older union select id from newer)
           order by version`);
-        return { doc, links: await labelLinks(tx, links), versions: [...versions] };
+        const [pkg] = doc.packageId
+          ? await tx
+              .select({ id: document.id, title: document.title })
+              .from(document)
+              .where(eq(document.id, doc.packageId))
+          : [];
+        const parts = await tx
+          .select({
+            id: document.id,
+            type: document.type,
+            title: document.title,
+            number: document.number,
+            pages: document.packagePages,
+          })
+          .from(document)
+          .where(eq(document.packageId, doc.id))
+          .orderBy(document.createdAt);
+        return {
+          doc,
+          links: await labelLinks(tx, links),
+          versions: [...versions],
+          package: pkg ? { ...pkg, pages: doc.packagePages } : null,
+          parts,
+        };
       });
       if (!card) return err(serviceError('not_found', 'documents.notFound'));
 
@@ -318,6 +343,8 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
         sizeBytes: doc.sizeBytes,
         viewUrl: doc.driveFileId && storage ? storage.viewUrl(doc.driveFileId) : null,
         signedAt: doc.signedAt,
+        package: card.package,
+        parts: card.parts,
         isLatestVersion: current?.id === doc.id,
         versions: card.versions.map((v) => ({
           id: v.id,
@@ -446,11 +473,165 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
     },
   });
 
-  return { addDocuments, getDocumentForAgent, deleteDocuments };
+  /**
+   * Cuts a signed PDF into its documents (A-078). The original becomes a `package` and keeps its
+   * file, signatures and links; every part is its own document with a copy of its pages, a
+   * pointer to the package and its own links (by default the package's people, clients and
+   * payees). A package may get more parts later.
+   */
+  const splitDocument = defineService({
+    name: 'documents.split',
+    input: z.object({
+      id: z.uuid().describe('The signed document holding several documents'),
+      parts: z
+        .array(
+          z.object({
+            type: z.enum(DOCUMENT_TYPES).refine((t) => t !== 'package', 'documents.partType'),
+            title: z.string().trim().min(1).max(1_000),
+            number: optionalText,
+            docDate: optionalLocalDate.describe("Defaults to the package's date"),
+            pages: z
+              .string()
+              .trim()
+              .regex(/^\d+(-\d+)?(,\d+(-\d+)?)*$/, 'documents.pages')
+              .describe('1-based pages of the package, e.g. "1-10" or "1,3-4"'),
+            notes: optionalText,
+            links: z
+              .array(documentLinkInput)
+              .max(20)
+              .optional()
+              .describe(
+                "Records of this part (contract, contract_annex, invoice…); defaults to the package's person/client/payee links",
+              ),
+          }),
+        )
+        .min(1)
+        .max(20),
+      dryRun,
+    }),
+    handler: async (ctx, input) => {
+      const loaded = await inActorScope(ctx, async (tx) => {
+        const [doc] = await tx.select().from(document).where(eq(document.id, input.id));
+        if (!doc) return { problem: 'documents.notFound' } as const;
+        if (doc.packageId) return { problem: 'documents.partOfPackage' } as const;
+        if ((await systemOwned(tx, [doc.id])).size) {
+          return { problem: 'documents.systemOwned' } as const;
+        }
+        if (!doc.driveFileId || doc.mimeType !== 'application/pdf') {
+          return { problem: 'documents.splitPdfOnly' } as const;
+        }
+        const links = await tx
+          .select({ entityType: documentLink.entityType, entityId: documentLink.entityId })
+          .from(documentLink)
+          .where(eq(documentLink.documentId, doc.id))
+          .orderBy(documentLink.createdAt);
+        return { doc, links };
+      });
+      if ('problem' in loaded) {
+        return err(serviceError('validation_error', loaded.problem ?? 'documents.notFound'));
+      }
+      const { doc } = loaded;
+      const file = await getStorage().download(doc.driveFileId ?? '');
+      const pageCount = file ? await pdfPageCount(file.data) : null;
+      if (!file || pageCount === null) {
+        return err(serviceError('validation_error', 'documents.splitPdfOnly'));
+      }
+
+      const parties = loaded.links.filter((l) =>
+        ['person', 'client', 'payee'].includes(l.entityType),
+      ) as { entityType: (typeof LINK_ENTITY_TYPES)[number]; entityId: string }[];
+      const errors: Problems = {};
+      const plan = await inActorScope(ctx, async (tx) => {
+        const parts = [];
+        for (const [index, part] of input.parts.entries()) {
+          const key = `parts.${String(index)}`;
+          const pages = parsePageRanges(part.pages, pageCount);
+          const links = part.links ?? parties;
+          const problems = await missingTargets(tx, links);
+          if (!pages) problems.push(msg('documents.pagesOutOfRange', { count: pageCount }));
+          if (problems.length) {
+            errors[key] = problems;
+            continue;
+          }
+          const docDate = part.docDate ?? (doc.docDate as LocalDate | null);
+          const anchor = await resolveAnchor(tx, links[0], ctx.today);
+          parts.push({
+            ...part,
+            index,
+            docDate,
+            links,
+            pageList: pages ?? [],
+            folderPath: folderPathFor(part.type, anchor, (docDate ?? ctx.today).slice(0, 4)),
+            chips: await labelLinks(tx, links),
+          });
+        }
+        return parts;
+      });
+      if (Object.keys(errors).length) return failed(errors);
+
+      const present = (p: (typeof plan)[number], id: string | null) => ({
+        index: p.index,
+        id,
+        status: id ? ('created' as const) : ('preview' as const),
+        type: p.type,
+        title: p.title,
+        pages: p.pages,
+        folderPath: p.folderPath,
+        links: p.chips.map(({ entityType, entityId, label }) => ({ entityType, entityId, label })),
+      });
+      const packageView = { id: doc.id, title: doc.title, pageCount, wasType: doc.type };
+      if (input.dryRun) {
+        return ok({ package: packageView, parts: plan.map((p) => present(p, null)) });
+      }
+
+      // Copies go up before the transaction, like any upload; the original file is untouched.
+      const stored: StoredDocumentFile[] = [];
+      for (const p of plan) {
+        const data = await extractPages(file.data, p.pageList);
+        stored.push(
+          await storeDocumentFile(ctx, getStorage(), {
+            type: p.type,
+            docDate: p.docDate,
+            links: p.links,
+            file: new File([Buffer.from(data)], `${p.title}.pdf`, { type: 'application/pdf' }),
+          }),
+        );
+      }
+      return inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
+        await tx.update(document).set({ type: 'package' }).where(eq(document.id, doc.id));
+        const parts = [];
+        for (const [i, p] of plan.entries()) {
+          const row = await insertDocumentRow(
+            tx,
+            {
+              type: p.type,
+              title: p.title,
+              number: p.number,
+              docDate: p.docDate,
+              url: null,
+              notes: p.notes,
+              links: p.links,
+              package: { id: doc.id, pages: p.pages },
+            },
+            stored[i] ?? null,
+          );
+          parts.push(present(p, row.id));
+        }
+        return ok({ package: packageView, parts });
+      });
+    },
+  });
+
+  return { addDocuments, getDocumentForAgent, deleteDocuments, splitDocument };
 }
 
 const documentChange = z.object({
   id: z.uuid(),
+  type: z
+    .enum(DOCUMENT_TYPES)
+    .refine((t) => t !== 'package', 'documents.packageViaSplit')
+    .optional()
+    .describe('e.g. invoice → bill for an invoice issued to us; packages come from split_document'),
   title: z.string().trim().min(1).max(1_000).optional(),
   number: z.string().trim().max(200).nullable().optional(),
   docDate: localDateString.nullable().optional(),

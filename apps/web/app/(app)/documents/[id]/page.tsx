@@ -21,7 +21,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const result = await getDocument.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { document: d, links, supersededById } = result.value;
+  const { document: d, links, supersededById, package: pkg, parts } = result.value;
   const isFinance = FINANCE_ROLES.includes(ctx.actor.role);
   const targets = isFinance ? (await linkTargets.run(ctx, {}))._unsafeUnwrap() : null;
   const [t, tc, fmt, { DOC_STATUS_LABELS, DOCUMENT_TYPE_LABELS }, localize] = await Promise.all([
@@ -82,6 +82,31 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
                 <Link className="hover:underline" href={`/documents/${supersededById}`}>
                   {t('newer')}
                 </Link>
+              )}
+              {pkg && (
+                <p data-testid="document-package">
+                  {t('partOf', { pages: d.packagePages ?? '' })}{' '}
+                  <Link className="hover:underline" href={`/documents/${pkg.id}`}>
+                    {pkg.title}
+                  </Link>
+                </p>
+              )}
+              {parts.length > 0 && (
+                <div className="flex flex-col gap-1" data-testid="document-parts">
+                  <p className="text-muted-foreground">{t('packageParts')}</p>
+                  <ul className="flex flex-col gap-1">
+                    {parts.map((part) => (
+                      <li key={part.id}>
+                        <Link className="hover:underline" href={`/documents/${part.id}`}>
+                          {DOCUMENT_TYPE_LABELS[part.type as DocumentType]} · {part.title}
+                        </Link>{' '}
+                        <span className="text-muted-foreground">
+                          {t('pages', { pages: part.pages ?? '' })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {d.notes && <p className="whitespace-pre-line">{d.notes}</p>}
             </CardContent>

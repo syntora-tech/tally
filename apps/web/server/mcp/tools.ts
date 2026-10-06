@@ -538,7 +538,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'search_documents',
     title: 'Document registry',
     description:
-      'Documents (contracts, SOWs, annexes, invoices, acts, CVs, NDAs, statements, receipts, other), newest first, each with the records it is linked to. Filters: q (number or title), type, status (draft|issued|void; issued = active), unlinked true for documents attached to nothing, linkedTo {entityType, entityId} for the documents of one record, limit (max 500).',
+      'Documents (contracts, SOWs, annexes, invoices = ours to clients, bills = issued to us, acts, CVs, NDAs, statements, receipts, signed packages, other), newest first, each with the records it is linked to; a part of a signed package carries packageId and packagePages. Filters: q (number or title), type, status (draft|issued|void; issued = active), unlinked true for documents attached to nothing, linkedTo {entityType, entityId} for the documents of one record, limit (max 500).',
     kind: 'read',
     service: searchDocuments,
     present: (rows) =>
@@ -551,7 +551,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'get_document',
     title: 'Document card',
     description:
-      'One document: metadata, file name/type/size, viewUrl (Drive), linked records, and its version chain (isLatestVersion). includeContent true also returns the file as content {contentBase64, mimeType} for files up to 3 MB; otherwise contentOmitted says why (no_file, too_large, unavailable).',
+      'One document: metadata, its signed package (package) or its parts (parts), file name/type/size, viewUrl (Drive), linked records, and its version chain (isLatestVersion). includeContent true also returns the file as content {contentBase64, mimeType} for files up to 3 MB; otherwise contentOmitted says why (no_file, too_large, unavailable).',
     kind: 'read',
     service: (deps: ToolDeps) => documentAgentServices(deps.storage).getDocumentForAgent,
   }),
@@ -575,9 +575,17 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'update_documents',
     title: 'Correct documents',
     description:
-      'Edits up to 100 documents by id; only the fields sent change (title, number, docDate, url, notes, status; null clears an optional field). To cancel a document set status void; a document uploaded by mistake is removed with delete_documents. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
+      'Edits up to 100 documents by id; only the fields sent change (type, title, number, docDate, url, notes, status; null clears an optional field). Types: invoice = ours to a client, bill = an invoice issued to us by a contractor or supplier; package only comes from split_document. To cancel a document set status void; a document uploaded by mistake is removed with delete_documents. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
     kind: 'write',
     service: updateDocuments,
+  }),
+  tool({
+    name: 'split_document',
+    title: 'Split a signed package',
+    description:
+      'Cuts one signed PDF that holds several documents (e.g. MSA + SOW, agreement + annex + invoice) into its parts by pages. The e-signature covers the whole file, so the original stays as a document of type package with its file, signature and links; each part becomes its own document (type, title, number, docDate, pages like "1-10", links) with a copy of its pages and a link back to the package. Parts default to the package date and its person/client/payee links. A package can get more parts later. Run dryRun first to check the page count and folders.',
+    kind: 'write',
+    service: (deps: ToolDeps) => documentAgentServices(deps.storage).splitDocument,
   }),
   tool({
     name: 'delete_documents',

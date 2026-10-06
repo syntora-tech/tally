@@ -20,12 +20,16 @@ export const DOCUMENT_TYPES = [
   'sow',
   'annex',
   'invoice',
+  /** An invoice issued to us by a contractor or supplier (A-078); `invoice` is ours to clients. */
+  'bill',
   'act',
   'cv',
   'nda',
   'statement',
   'receipt',
   'other',
+  /** A signed original holding several documents; its parts are separate rows (A-078). */
+  'package',
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -72,6 +76,12 @@ export const document = pgTable(
     signedAt: timestamp({ withTimezone: true }),
     /** Revision of the source invoice/act this file shows; older than current = outdated. */
     sourceRevision: integer(),
+    /**
+     * Part of a signed package (A-078): the signature covers the package's file, so the part
+     * keeps a pointer to it and the pages it was cut from; its own file is a convenience copy.
+     */
+    packageId: uuid().references((): AnyPgColumn => document.id),
+    packagePages: text(),
     notes: text(),
   },
   (t) => [
@@ -79,6 +89,11 @@ export const document = pgTable(
     check('document_type_check', sql`${t.type} in (${inList(DOCUMENT_TYPES)})`),
     check('document_version_check', sql`${t.version} >= 1`),
     unique('document_supersedes_key').on(t.supersedesId),
+    check(
+      'document_package_pages_check',
+      sql`${t.packagePages} is null or ${t.packagePages} ~ '^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$'`,
+    ),
+    index('document_package_idx').on(t.packageId),
     index('document_number_key_idx').on(t.numberKey),
     ...rolePolicies('document', { read: 'all', write: 'finance' }),
   ],

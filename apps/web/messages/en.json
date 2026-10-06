@@ -69,13 +69,15 @@
       "contract": "Contract",
       "sow": "SOW",
       "annex": "Annex",
-      "invoice": "Invoice",
+      "invoice": "Invoice (ours)",
       "act": "Act",
       "cv": "CV",
       "nda": "NDA",
       "statement": "Statement",
       "other": "Other",
-      "receipt": "Receipt"
+      "receipt": "Receipt",
+      "bill": "Bill (to us)",
+      "package": "Signed package"
     },
     "docStatus": {
       "draft": "Draft",
@@ -395,7 +397,13 @@
       "versionType": "A new version must have the same document type",
       "systemOwned": "Tally generated this document or it is a signed copy; it cannot be changed here",
       "systemLink": "The link of a generated or signed invoice/act file cannot be removed",
-      "nothingToChange": "Nothing to change: send at least one field"
+      "nothingToChange": "Nothing to change: send at least one field",
+      "partType": "A part cannot be a package itself",
+      "packageViaSplit": "Packages are made by splitting a signed document",
+      "partOfPackage": "This is already a part of a package; split the package itself",
+      "splitPdfOnly": "Only a stored PDF file can be split",
+      "pages": "Pages like 1-10 or 1,3-4",
+      "pagesOutOfRange": "Pages must be within 1–{count}, ranges in ascending order"
     },
     "payroll": {
       "notFound": "Payout not found",
@@ -446,7 +454,8 @@
       "invalid": "The data did not pass validation",
       "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})",
       "linkTargetMissing": "The linked record does not exist ({detail})",
-      "annexContract": "The SOW/annex belongs to another contract"
+      "annexContract": "The SOW/annex belongs to another contract",
+      "packagePart": "A part must point at a signed package, and a package with parts keeps its type"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -1129,7 +1138,10 @@
     "links": "Links",
     "noLinks": "No links",
     "unlink": "Unlink {label}",
-    "edit": "Edit"
+    "edit": "Edit",
+    "partOf": "Part (pages {pages}) of the signed package",
+    "packageParts": "Documents in this package; the signature covers this file:",
+    "pages": "pages {pages}"
   },
   "ledger": {
     "subtitle": "Accounts, transactions and payment allocation",

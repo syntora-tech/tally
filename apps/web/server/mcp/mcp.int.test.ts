@@ -22,6 +22,7 @@ import {
   transaction,
 } from '@tally/db/schema';
 import { and, eq, inArray, like } from 'drizzle-orm';
+import { PDFDocument } from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../test/int-helpers';
 import { createMcpClient, revokeMcpClient } from '../services/mcp';
@@ -38,6 +39,7 @@ let assistantToken = '';
 let readOnlyToken = '';
 // Write calls are rate-limited per client; the contract tests run on a client of their own.
 let contractsToken = '';
+let packagesToken = '';
 const clientIds: string[] = [];
 let storageRoot = '';
 let storage: LocalStorage;
@@ -90,6 +92,11 @@ beforeAll(async () => {
     await createMcpClient.run(ctx, { clientName: `int ${tag} contracts`, profile: 'assistant' })
   )._unsafeUnwrap();
   contractsToken = contracts.token;
+  const packages = (
+    await createMcpClient.run(ctx, { clientName: `int ${tag} packages`, profile: 'assistant' })
+  )._unsafeUnwrap();
+  packagesToken = packages.token;
+  clientIds.push(packages.clientId);
   clientIds.push(contracts.clientId);
 });
 
@@ -184,7 +191,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(38);
+    expect(tools).toHaveLength(39);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
@@ -632,6 +639,100 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(await h.db.select().from(document).where(eq(document.id, v1))).toHaveLength(1);
   });
 
+  it('documents: a signed package is split into parts that point back to it (A-078)', async () => {
+    const mcp = await connect(packagesToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const [c] = await h.db
+      .insert(client)
+      .values({ legalName: `M ${tag} Pack Ltd` })
+      .returning();
+    const pdf = await PDFDocument.create();
+    for (let i = 0; i < 5; i++) pdf.addPage();
+    const added = await call('add_documents', {
+      idempotencyKey: `pack-add-${tag}`,
+      documents: [
+        {
+          type: 'contract',
+          title: `M ${tag} MSA + SOW 1`,
+          docDate: '2046-01-15',
+          file: {
+            fileName: 'msa.pdf',
+            mimeType: 'application/pdf',
+            contentBase64: Buffer.from(await pdf.save()).toString('base64'),
+          },
+          links: [{ entityType: 'client', entityId: c?.id }],
+        },
+      ],
+    });
+    const packageId = (added.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+    const parts = [
+      { type: 'contract', title: `M ${tag} MSA`, number: 'MSA-1', pages: '1-3' },
+      { type: 'sow', title: `M ${tag} SOW 1`, number: '1', pages: '4-5' },
+    ];
+
+    const outOfRange = await call('split_document', {
+      idempotencyKey: `pack-bad-${tag}`,
+      id: packageId,
+      parts: [{ type: 'sow', title: `M ${tag} bad`, pages: '4-6' }],
+    });
+    expect(JSON.stringify(outOfRange.structuredContent)).toContain('1–5');
+
+    const preview = await call('split_document', {
+      idempotencyKey: `pack-dry-${tag}`,
+      id: packageId,
+      parts,
+      dryRun: true,
+    });
+    expect(preview.structuredContent).toMatchObject({
+      package: { id: packageId, pageCount: 5, wasType: 'contract' },
+      parts: [
+        { status: 'preview', pages: '1-3' },
+        { status: 'preview', pages: '4-5' },
+      ],
+    });
+    const split = await call('split_document', {
+      idempotencyKey: `pack-${tag}`,
+      id: packageId,
+      parts,
+    });
+    expect(split.isError).toBeFalsy();
+    const created = (split.structuredContent?.parts as { id: string }[]).map((p) => p.id);
+
+    const pkg = await call('get_document', { id: packageId });
+    expect(pkg.structuredContent).toMatchObject({
+      type: 'package',
+      parts: [
+        { id: created[0], pages: '1-3' },
+        { id: created[1], type: 'sow', pages: '4-5' },
+      ],
+    });
+    const sow = await call('get_document', { id: created[1], includeContent: true });
+    expect(sow.structuredContent).toMatchObject({
+      docDate: '2046-01-15',
+      package: { id: packageId, pages: '4-5' },
+      links: [{ entityType: 'client', entityId: c?.id }],
+    });
+    const copy = await PDFDocument.load(
+      Buffer.from(
+        (sow.structuredContent?.content as { contentBase64: string }).contentBase64,
+        'base64',
+      ),
+    );
+    expect(copy.getPageCount()).toBe(2);
+
+    const retyped = await call('update_documents', {
+      idempotencyKey: `pack-type-${tag}`,
+      documents: [{ id: packageId, type: 'contract' }],
+    });
+    expect(retyped.isError).toBe(true);
+    const bill = await call('update_documents', {
+      idempotencyKey: `pack-bill-${tag}`,
+      documents: [{ id: created[0], type: 'bill' }],
+    });
+    expect(bill.isError).toBeFalsy();
+  });
+
   it('contracts and SOWs: created with rules, documents linked without re-upload (A-072)', async () => {
     const mcp = await connect(contractsToken);
     const call = async (name: string, args: Record<string, unknown>) =>
@@ -821,7 +922,9 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       assignments: [{ id, billing: { type: 'hourly', rate: '50', validFrom: '2046-01-01' } }],
     });
     expect(edited.isError).toBe(true);
-    expect(JSON.stringify(edited.structuredContent)).toContain('versions are never edited');
+    expect(JSON.stringify(edited.structuredContent)).toContain(
+      'a version from 2046-01-01 already exists',
+    );
 
     const wrongSow = await call('upsert_assignments', {
       idempotencyKey: `as-sow-${tag}`,
