@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import { overridePayable } from '../services/payroll/payability';
+import { mergeActs } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
 import type { ActionResult } from './to-action-result';
 
@@ -53,4 +54,16 @@ export async function overridePayableAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   return { ok: true, data: { id: result.value.id } };
+}
+
+/** Joins two neighbouring draft acts of one payout (A-083). */
+export async function mergeActsAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await mergeActs.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  return { ok: true, data: result.value };
 }

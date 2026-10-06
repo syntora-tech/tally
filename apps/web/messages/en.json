@@ -1580,7 +1580,13 @@
     "noCandidates": "No unallocated Contractors / Payroll expenses in this currency since the start of the month",
     "fee": "Bank fee, {currency}",
     "feeAccount": "Fee from",
-    "feeSameAccount": "The paying account"
+    "feeSameAccount": "The paying account",
+    "merge": "Merge with the next",
+    "merged": "Acts merged",
+    "actFrom": "Act from",
+    "actTo": "Act to",
+    "actPeriodHint": "For a part of the month. Empty: from the first day without an act to the payout day; paying the whole rest keeps the act to the month's end.",
+    "partOf": "part {usd} at {rate}"
   },
   "acts": {
     "back": "← Payroll",

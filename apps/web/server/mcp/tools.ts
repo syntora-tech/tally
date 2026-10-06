@@ -46,6 +46,8 @@ import {
   upsertPlannedExpenses,
 } from '../services/planned/agent';
 import { listPlannedPayments } from '../services/planned/payments';
+import { mergePayoutActs } from '../services/acts';
+import { listPayroll } from '../services/payroll';
 
 export type ToolKind = 'read' | 'write';
 
@@ -210,7 +212,8 @@ function annexSummary(r: AnnexRow) {
  * payees are allowed since A-062, deleting transactions since A-063, the document registry and
  * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072,
  * assignments with their terms since A-073, planned payments with their taxes and marking them
- * paid since A-082.
+ * paid since A-082, the payroll queue and merging the acts of a month paid in parts since A-083
+ * (paying stays in the UI).
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -698,6 +701,50 @@ export const TOOLS: readonly ToolDef[] = [
       'Up to 100 actions on planned payments (ids from list_planned_payments): pay {transactionIds of expenses already in the Ledger, e.g. statement rows in the same currency; their unlinked money is linked} or {accountId, occurredOn, amount?, feeAmount?, feeAccountId?} to book a new expense; unlink {transactionIds?}; skip {reason} (an instalment skips its unpaid taxes too); unskip; set_amount {amount: for a salary instalment the gross — net and taxes follow — else the amount}; reset_amount. Paid payments are fixed. All-or-nothing; errors keyed "payments.<index>"; use dryRun first.',
     kind: 'write',
     service: updatePlannedPayments,
+  }),
+  tool({
+    name: 'get_payroll_queue',
+    title: 'Payroll queue',
+    description:
+      'Payouts by month (periodId optional): person or agency, payee, method fiat|crypto, status, totals (USD, UAH at the payout rate), what is left to pay, lines with funding and the deadline of those waiting for a client, and the FOP acts. A month paid in parts has an act per part (A-083): periodFrom/periodTo never overlap, amountUsd/fxRate are set on paid parts and null on the act that follows the rest. Payee requisites are not returned; paying is done in the UI.',
+    kind: 'read',
+    service: listPayroll,
+    present: (rows) =>
+      rows.map((r) => ({
+        id: r.item.id,
+        month: r.month,
+        kind: r.item.kind,
+        personId: r.item.personId,
+        personName: r.personName,
+        payeeName: r.payeeName,
+        payoutMethod: r.item.payoutMethod,
+        status: r.item.status,
+        totalUsd: r.item.totalUsd,
+        totalUah: r.item.totalUah,
+        payoutFxRate: r.item.payoutFxRate,
+        paidAmount: r.item.paidAmount,
+        remaining: r.remaining,
+        currency: r.currency,
+        nextDeadline: r.nextDeadline,
+        lines: r.lines.map((l) => ({
+          clientName: l.clientName,
+          amount: l.amount,
+          currency: l.currency,
+          status: l.status,
+          fundingSource: l.fundingSource,
+          invoiceNumber: l.invoiceNumber,
+          deadline: l.deadline,
+        })),
+        acts: r.acts,
+      })),
+  }),
+  tool({
+    name: 'merge_payout_acts',
+    title: 'Merge two acts of a payout',
+    description:
+      'Joins two neighbouring draft FOP acts of one payout (a month paid in parts, A-083) into one act covering both periods: with the act of the rest it becomes the rest, two paid parts add up at their average rate. Issued acts cannot be merged. Use dryRun first.',
+    kind: 'write',
+    service: mergePayoutActs,
   }),
 ];
 

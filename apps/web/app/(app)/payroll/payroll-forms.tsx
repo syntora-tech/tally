@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
+  mergeActsAction,
   overridePayableAction,
   payItemAction,
   setPayoutRateAction,
@@ -40,6 +41,8 @@ export type PayDialogProps = {
   /** Unallocated payout expenses already in the Ledger (statement rows), best matches first. */
   candidates: { id: string; label: string; remaining: string }[];
   isOwner: boolean;
+  /** A FOP act follows the payout: a part payment gets an act of its own (A-083). */
+  hasAct: boolean;
   /** The payee's bank tariff; its fee is suggested for a new payment (A-082). */
   fee: TransferFee | null;
   /** Every account, for a fee charged in another currency (e.g. UAH for a USD SWIFT). */
@@ -269,6 +272,25 @@ export function PayDialog(p: PayDialogProps) {
           </FormField>
         )}
       </div>
+      {p.fiat && p.hasAct && (
+        <div className="flex flex-wrap items-end gap-3">
+          <FormField
+            label={t('actFrom')}
+            htmlFor={`act-from-${p.itemId}`}
+            error={error?.fieldErrors?.actFrom}
+          >
+            <Input id={`act-from-${p.itemId}`} name="actFrom" type="date" className="w-40" />
+          </FormField>
+          <FormField
+            label={t('actTo')}
+            htmlFor={`act-to-${p.itemId}`}
+            error={error?.fieldErrors?.actTo}
+          >
+            <Input id={`act-to-${p.itemId}`} name="actTo" type="date" className="w-40" />
+          </FormField>
+          <p className="mb-2 max-w-sm text-xs text-muted-foreground">{t('actPeriodHint')}</p>
+        </div>
+      )}
       {p.isOwner && (
         <FormField
           label={t('advanceReason')}
@@ -367,6 +389,26 @@ export function RateForm({
       />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         {t('approveRate')}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/** Merges two neighbouring draft acts of a payout into one act and one period (A-083). */
+export function MergeActsButton({ firstId, secondId }: { firstId: string; secondId: string }) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    mergeActsAction,
+    null,
+  );
+  const t = useTranslations('payDialog');
+  const error = useResult(state, t('merged'));
+  return (
+    <form action={action} className="flex items-center gap-2">
+      <input type="hidden" name="firstId" value={firstId} />
+      <input type="hidden" name="secondId" value={secondId} />
+      <Button type="submit" size="sm" variant="ghost" disabled={pending}>
+        {t('merge')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>

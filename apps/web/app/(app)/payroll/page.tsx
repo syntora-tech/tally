@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { toDecimal } from '@tally/domain';
+import { sum, toDecimal } from '@tally/domain';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { suggestRate } from '@/server/services/fx';
 import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
-import { OverrideForm, PayDialog, RateForm } from './payroll-forms';
+import { MergeActsButton, OverrideForm, PayDialog, RateForm } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('payroll');
@@ -176,7 +176,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                             {tp('actIssuedRate', { number: i.actNumber ?? '' })}
                           </span>
                         ) : (
-                          toDecimal(i.item.paidAmount).isZero() && (
+                          // Paid parts keep their rates; the rate stays open for the rest (A-083).
+                          i.group !== 'paid' &&
+                          toDecimal(i.item.paidAmount).lte(
+                            sum(i.acts.filter((a) => a.amountUsd !== null).map((a) => a.amountUah)),
+                          ) && (
                             <RateForm
                               itemId={i.item.id}
                               rate={i.item.payoutFxRate}
@@ -184,12 +188,38 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                             />
                           )
                         )}
-                        {i.actId && (
-                          <Link className="hover:underline" href={`/payroll/acts/${i.actId}`}>
-                            {i.actNumber ?? tp('draftAct')}
-                          </Link>
-                        )}
                       </div>
+                    )}
+                    {i.acts.length > 0 && (
+                      <ul className="flex flex-col gap-1 text-sm" data-testid="payout-acts">
+                        {i.acts.map((a, n) => {
+                          const next = i.acts[n + 1];
+                          return (
+                            <li key={a.id} className="flex flex-wrap items-center gap-2">
+                              <Link className="hover:underline" href={`/payroll/acts/${a.id}`}>
+                                {a.number ?? tp('draftAct')}
+                              </Link>
+                              <span className="text-muted-foreground">
+                                {a.periodFrom && a.periodTo
+                                  ? `${fmt.date(a.periodFrom)}–${fmt.date(a.periodTo)}`
+                                  : ''}
+                              </span>
+                              <span>{fmt.amount(a.amountUah, 'UAH')}</span>
+                              {a.amountUsd !== null && (
+                                <span className="text-muted-foreground">
+                                  {tp('partOf', {
+                                    usd: fmt.amount(a.amountUsd, 'USD'),
+                                    rate: a.fxRate ?? '—',
+                                  })}
+                                </span>
+                              )}
+                              {next && a.status === 'draft' && next.status === 'draft' && (
+                                <MergeActsButton firstId={a.id} secondId={next.id} />
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     )}
                     <Table>
                       <TableHeader>
@@ -267,6 +297,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         isOwner={isOwner}
                         candidates={candidatesFor(i)}
                         fee={i.payeeFee}
+                        hasAct={i.acts.length > 0}
                         feeAccounts={accountRows}
                         accounts={accountRows
                           .filter((a) =>

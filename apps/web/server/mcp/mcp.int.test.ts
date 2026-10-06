@@ -225,13 +225,14 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'list_planned_expenses',
       'list_payout_charges',
       'list_planned_payments',
+      'get_payroll_queue',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(45);
+    expect(tools).toHaveLength(47);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
@@ -1095,6 +1096,15 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       charges: [{ ...tax('Tax 20 %', 'on_top', '20'), personId: abroad?.id, currency: 'UAH' }],
     });
     expect(charge.isError).toBeFalsy();
+    const queue = await call('get_payroll_queue', {});
+    expect(Array.isArray(queue.structuredContent?.items)).toBe(true);
+    const merge = await call('merge_payout_acts', {
+      idempotencyKey: `pl-merge-${tag}`,
+      dryRun: true,
+      firstId: randomUUID(),
+      secondId: randomUUID(),
+    });
+    expect(merge.isError).toBe(true);
     const charges = await call('list_payout_charges', { personIds: [abroad?.id] });
     expect(charges.structuredContent?.items).toMatchObject([
       { name: 'Tax 20 %', mode: 'on_top', ratePercent: '20.0000', currency: 'UAH' },

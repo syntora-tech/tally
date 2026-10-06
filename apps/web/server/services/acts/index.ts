@@ -31,6 +31,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-o
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { enqueueJob, type NewJob } from '../../jobs/queue';
+import { inActorScopeAtomic } from '../atomic';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
@@ -523,4 +524,16 @@ export const fopContracts = defineService({
           .orderBy(asc(payeeName)),
       ),
     ),
+});
+
+/** Merging payout acts for agents (A-083): all-or-nothing with dryRun. */
+export const mergePayoutActs = defineService({
+  name: 'acts.mergeBatch',
+  input: z.object({
+    firstId: z.uuid().describe('Draft act (from get_payroll_queue acts)'),
+    secondId: z.uuid().describe('The neighbouring draft act of the same payout'),
+    dryRun: z.boolean().default(false).describe('Validate and preview without writing'),
+  }),
+  handler: (ctx, input) =>
+    inActorScopeAtomic(ctx, input, (tx) => mergeActsIn(tx, input.firstId, input.secondId)),
 });
