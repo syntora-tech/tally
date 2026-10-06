@@ -100,7 +100,7 @@ function benchProfile(p: PersonRow) {
  * A-054, A-056). Contracts, terms, payouts, allocations, issuing documents and deletions other
  * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
  * payees are allowed since A-062, deleting transactions since A-063, the document registry and
- * its links since A-071.
+ * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -409,9 +409,18 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'update_documents',
     title: 'Correct documents',
     description:
-      'Edits up to 100 documents by id; only the fields sent change (title, number, docDate, url, notes, status; null clears an optional field). To cancel a document set status void — documents are never deleted. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
+      'Edits up to 100 documents by id; only the fields sent change (title, number, docDate, url, notes, status; null clears an optional field). To cancel a document set status void; a document uploaded by mistake is removed with delete_documents. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
     kind: 'write',
     service: updateDocuments,
+  }),
+  tool({
+    name: 'delete_documents',
+    title: 'Delete documents',
+    description:
+      'Permanently deletes up to 200 documents uploaded by mistake, by id, with all their links; a newer version of a deleted document moves to the nearest surviving predecessor. The file goes to the Drive trash (restorable there for 30 days) unless another document uses it (file kept_shared); file trash_failed means the row is gone but the file must be trashed by hand. Files Tally generated and signed copies of invoices/acts are refused. All-or-nothing; errors keyed "ids.<index>". Only on the owner\'s explicit request; always run dryRun first and show the owner what will be deleted.',
+    kind: 'write',
+    destructive: true,
+    service: (deps: ToolDeps) => documentAgentServices(deps.storage).deleteDocuments,
   }),
   tool({
     name: 'link_documents',

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { safeFileName } from './folders';
 import type { DocumentStorage, DownloadedFile, StoredFile, UploadInput } from './types';
@@ -40,6 +40,11 @@ export class LocalStorage implements DocumentStorage {
 
   viewUrl(): null {
     return null;
+  }
+
+  async trash(key: string): Promise<void> {
+    const path = this.resolveKey(key);
+    await Promise.all([rm(path, { force: true }), rm(`${path}${META_SUFFIX}`, { force: true })]);
   }
 
   /** Rejects keys that escape the root (`../`), since keys come from the database. */

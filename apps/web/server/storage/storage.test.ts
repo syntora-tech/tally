@@ -76,6 +76,19 @@ describe('LocalStorage', () => {
 
   it('rejects keys escaping the root', async () => {
     await expect(storage.download('../../etc/passwd')).rejects.toThrow('escapes');
+    await expect(storage.trash('../../etc/passwd')).rejects.toThrow('escapes');
+  });
+
+  it('trashes a file and tolerates a missing one', async () => {
+    const { key } = await storage.upload({
+      folderPath: 'documents',
+      fileName: 'cert.pdf',
+      mimeType: 'application/pdf',
+      data: new TextEncoder().encode('%PDF'),
+    });
+    await storage.trash(key);
+    expect(await storage.download(key)).toBeNull();
+    await expect(storage.trash(key)).resolves.toBeUndefined();
   });
 });
 
@@ -84,6 +97,7 @@ describe('DriveStorage', () => {
 
   function fakeDrive(existing: Record<string, string> = {}) {
     const created: Created[] = [];
+    const trashed: string[] = [];
     let seq = 0;
     const files = {
       list: (params: drive_v3.Params$Resource$Files$List) => {
@@ -112,8 +126,13 @@ describe('DriveStorage', () => {
           data: params.alt === 'media' ? new Uint8Array([7, 8]).buffer : { mimeType },
         });
       },
+      update: (params: drive_v3.Params$Resource$Files$Update) => {
+        expect(params.supportsAllDrives).toBe(true);
+        if (params.requestBody?.trashed) trashed.push(params.fileId ?? '');
+        return Promise.resolve({ data: {} });
+      },
     };
-    return { files: files as unknown as drive_v3.Resource$Files, created };
+    return { files: files as unknown as drive_v3.Resource$Files, created, trashed };
   }
 
   function memoryCache(): FolderCache & { map: Map<string, string> } {
@@ -170,5 +189,11 @@ describe('DriveStorage', () => {
       mimeType: 'application/pdf',
     });
     expect(await storage.download('doc')).toBeNull();
+  });
+
+  it('moves a file to the trash instead of deleting it', async () => {
+    const { files, trashed } = fakeDrive();
+    await new DriveStorage(files, 'root', memoryCache()).trash('file-1');
+    expect(trashed).toEqual(['file-1']);
   });
 });

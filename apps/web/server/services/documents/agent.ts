@@ -1,6 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import { document, documentLink, DOCUMENT_TYPES, LINK_ENTITY_TYPES } from '@tally/db/schema';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { folderPathFor } from '../../storage/folders';
@@ -119,12 +119,22 @@ async function systemOwned(tx: DbTransaction, ids: string[]): Promise<Set<string
         inArray(document.id, ids),
         sql`(${document.sourceRevision} is not null or ${document.signedAt} is not null
           or (${document.type} in ('invoice', 'act') and exists (
-            select 1 from ${documentLink} dl where dl.document_id = ${document.id}
+            select 1 from ${documentLink} dl where dl.document_id = "document"."id"
               and dl.entity_type in ('invoice', 'supplier_act'))))`,
       ),
     );
   return new Set(rows.map((r) => r.id));
 }
+
+type DeletedDocument = {
+  id: string;
+  type: string;
+  title: string;
+  number: string | null;
+  links: number;
+  status: 'would_delete' | 'deleted';
+  file: 'trash' | 'kept_shared' | 'none' | 'trash_failed';
+};
 
 type Preview = {
   index: number;
@@ -326,7 +336,117 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
     },
   });
 
-  return { addDocuments, getDocumentForAgent };
+  /**
+   * Removes documents uploaded by mistake with their links; the files go to the Drive trash once
+   * the rows are gone, and a file another document still uses is kept (A-072).
+   */
+  const deleteDocuments = defineService({
+    name: 'documents.deleteBatch',
+    input: z.object({
+      ids: z.array(z.uuid()).min(1).max(200).describe('Document ids (from search_documents)'),
+      dryRun,
+    }),
+    handler: async (ctx, input) => {
+      const result = await inActorScopeAtomic(ctx, input, async (tx) => {
+        const ids = [...new Set(input.ids)];
+        const rows = await tx
+          .select({
+            id: document.id,
+            type: document.type,
+            title: document.title,
+            number: document.number,
+            driveFileId: document.driveFileId,
+            supersedesId: document.supersedesId,
+            links: sql<number>`(select count(*)::int from public.document_link dl
+              where dl.document_id = "document"."id")`,
+          })
+          .from(document)
+          .where(inArray(document.id, ids));
+        const locked = await systemOwned(tx, ids);
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        const errors: Problems = {};
+        for (const [index, id] of input.ids.entries()) {
+          const key = `ids.${String(index)}`;
+          if (!byId.has(id)) errors[key] = ['documents.notFound'];
+          else if (locked.has(id)) errors[key] = ['documents.systemOwned'];
+        }
+        if (Object.keys(errors).length) return failed(errors);
+
+        // A newer version of a deleted document moves down to the nearest surviving predecessor.
+        const survivingPredecessor = (id: string | null): string | null => {
+          let current = id;
+          while (current && byId.has(current)) current = byId.get(current)?.supersedesId ?? null;
+          return current;
+        };
+        const successors = await tx
+          .select({ id: document.id, supersedesId: document.supersedesId })
+          .from(document)
+          .where(and(inArray(document.supersedesId, ids), notInArray(document.id, ids)));
+        await tx.update(document).set({ supersedesId: null }).where(inArray(document.id, ids));
+        for (const s of successors) {
+          await tx
+            .update(document)
+            .set({ supersedesId: survivingPredecessor(s.supersedesId) })
+            .where(eq(document.id, s.id));
+        }
+        await tx.delete(document).where(inArray(document.id, ids));
+
+        const keys = [...new Set(rows.flatMap((r) => (r.driveFileId ? [r.driveFileId] : [])))];
+        const shared = keys.length
+          ? await tx
+              .selectDistinct({ key: document.driveFileId })
+              .from(document)
+              .where(inArray(document.driveFileId, keys))
+          : [];
+        const keep = new Set(shared.map((r) => r.key));
+        return ok(
+          ids.map((id) => {
+            const r = byId.get(id);
+            if (!r) throw new Error('Checked above');
+            const file: 'trash' | 'kept_shared' | 'none' = !r.driveFileId
+              ? 'none'
+              : keep.has(r.driveFileId)
+                ? 'kept_shared'
+                : 'trash';
+            return {
+              id,
+              type: r.type,
+              title: r.title,
+              number: r.number,
+              links: r.links,
+              file,
+              key: r.driveFileId,
+            };
+          }),
+        );
+      });
+      if (result.isErr()) return err(result.error);
+
+      const trashed = new Map<string, boolean>();
+      if (!input.dryRun) {
+        const storage = getStorage();
+        for (const r of result.value) {
+          if (r.file !== 'trash' || !r.key || trashed.has(r.key)) continue;
+          try {
+            await storage.trash(r.key);
+            trashed.set(r.key, true);
+          } catch (error) {
+            console.error('documents.deleteBatch: file not trashed', r.key, error);
+            trashed.set(r.key, false);
+          }
+        }
+      }
+      const results: DeletedDocument[] = result.value.map(({ key, ...r }) => ({
+        ...r,
+        status: input.dryRun ? 'would_delete' : 'deleted',
+        file:
+          !input.dryRun && r.file === 'trash' && key && !trashed.get(key) ? 'trash_failed' : r.file,
+      }));
+      return ok({ results });
+    },
+  });
+
+  return { addDocuments, getDocumentForAgent, deleteDocuments };
 }
 
 const documentChange = z.object({

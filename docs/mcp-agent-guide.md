@@ -76,6 +76,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `update_documents`      | write | Corrects document metadata by `id` (≤ 100); `status: void` cancels; generated/signed files are read-only                                                |
 | `link_documents`        | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
 | `unlink_documents`      | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
+| `delete_documents`      | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
@@ -335,8 +336,9 @@ The registry (6.9) holds contracts, SOWs, annexes, NDAs, CVs, invoices, acts, st
 2. **Find the records.** Ids come from `find_link_targets` (any type), or `search_people`, `list_clients`, `list_payees`, `list_trips`, `list_transactions`. A link to a record that does not exist is an error.
 3. **Add.** `add_documents` with `type`, `title`, `number` and `docDate` as printed on the document, and either `file` `{fileName, mimeType, contentBase64}` or `url` (e.g. a Vchasno link; Tally never downloads it). Put the main record first in `links`: it picks the Drive folder (person → `people/…`, client or contract → `clients/…`, payee → `payees/…`, trip → `trips/…`). Files are limited to 3 MB per call — send several documents in separate calls, and ask the owner to upload anything larger in the UI. Run `dryRun: true` first: it shows the folder and the link labels without uploading.
 4. **Read.** `get_document` with `includeContent: true` returns the file as base64 to read a PDF or a scan; `viewUrl` opens it in Drive.
-5. **Correct.** `update_documents` changes only the fields sent. Documents are never deleted: a wrong or cancelled one gets `status: "void"`. Invoice and act files that Tally generated, and their signed copies, belong to the invoice/act and are read-only here.
+5. **Correct.** `update_documents` changes only the fields sent. A real document that was cancelled gets `status: "void"` and stays in the registry. Invoice and act files that Tally generated, and their signed copies, belong to the invoice/act and are read-only here.
 6. **Links.** `link_documents` attaches existing documents; `unlink_documents` detaches them — only when the owner asks, after `dryRun`.
+7. **Delete.** `delete_documents` is only for files uploaded by mistake (wrong file, test uploads, duplicates) and only when the owner asks (A-072). Run `dryRun: true`, show the owner the titles, link counts and `file` of each, then repeat without it. The row and its links are removed; a newer version moves down to the nearest surviving predecessor; the file goes to the Drive trash (restorable there for 30 days) unless another document uses it (`kept_shared`). `trash_failed` means the row is gone but the file is still on Drive — tell the owner. Tally's own invoice/act files and signed copies cannot be deleted.
 
 ## 9. Report to the owner
 

@@ -11,7 +11,7 @@ export interface FolderCache {
   set(path: string, folderId: string): Promise<void>;
 }
 
-type DriveFiles = Pick<drive_v3.Resource$Files, 'list' | 'create' | 'get'>;
+type DriveFiles = Pick<drive_v3.Resource$Files, 'list' | 'create' | 'get' | 'update'>;
 
 function escapeQuery(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -56,6 +56,14 @@ export class DriveStorage implements DocumentStorage {
 
   viewUrl(key: string): string {
     return `https://drive.google.com/file/d/${encodeURIComponent(key)}/view`;
+  }
+
+  async trash(key: string): Promise<void> {
+    await this.files.update({
+      fileId: key,
+      supportsAllDrives: true,
+      requestBody: { trashed: true },
+    });
   }
 
   async ensureFolder(path: string): Promise<string> {

@@ -8,7 +8,11 @@ import {
   account,
   auditLog,
   client,
+  company,
+  contract,
   document,
+  documentLink,
+  invoice,
   mcpCallLog,
   mcpClientPolicy,
   payee,
@@ -88,6 +92,9 @@ afterAll(() =>
       .set({ supersedesId: null })
       .where(like(document.title, `M ${tag}%`));
     await db.delete(document).where(like(document.title, `M ${tag}%`));
+    await db.delete(invoice).where(eq(invoice.dateOverrideReason, `M ${tag}`));
+    await db.delete(contract).where(like(contract.number, `M ${tag}%`));
+    await db.delete(company).where(like(company.nameEn, `M ${tag}%`));
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
     await db.delete(account).where(like(account.name, `M ${tag}%`));
     await db.delete(payee).where(like(payee.legalNameUa, `ФОП M ${tag}%`));
@@ -146,8 +153,8 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(30);
-    for (const name of ['delete_transactions', 'unlink_documents']) {
+    expect(tools).toHaveLength(31);
+    for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
     }
@@ -500,6 +507,98 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       documents: [{ id: generated?.id, title: 'x' }],
     });
     expect(JSON.stringify(locked.structuredContent)).toContain('generated this document');
+  });
+
+  it('documents: delete keeps version chains, trashes files, refuses Tally files (A-072)', async () => {
+    const mcp = await connect(assistantToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const [c] = await h.db
+      .insert(client)
+      .values({ legalName: `M ${tag} Del Ltd` })
+      .returning();
+    const file = (name: string) => ({
+      fileName: `${name}.pdf`,
+      mimeType: 'application/pdf',
+      contentBase64: Buffer.from(`%PDF ${name}`).toString('base64'),
+    });
+    const add = async (title: string, supersedesId?: string) => {
+      const res = await call('add_documents', {
+        idempotencyKey: `del-add-${title}-${tag}`,
+        documents: [
+          {
+            type: 'other',
+            title: `M ${tag} ${title}`,
+            file: file(title),
+            links: [{ entityType: 'client', entityId: c?.id }],
+            ...(supersedesId ? { supersedesId } : {}),
+          },
+        ],
+      });
+      return (res.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+    };
+    const v1 = await add('cert-v1');
+    const v2 = await add('cert-v2', v1);
+    const v3 = await add('cert-v3', v2);
+    const files = async () => (await readdir(storageRoot, { recursive: true })).length;
+    const before = await files();
+
+    const preview = await call('delete_documents', {
+      idempotencyKey: `del-dry-${tag}`,
+      dryRun: true,
+      ids: [v2],
+    });
+    expect(preview.structuredContent).toMatchObject({
+      results: [{ id: v2, status: 'would_delete', links: 1, file: 'trash' }],
+    });
+    expect(await files()).toBe(before);
+
+    const deleted = await call('delete_documents', { idempotencyKey: `del-${tag}`, ids: [v2] });
+    expect(deleted.structuredContent).toMatchObject({
+      results: [{ id: v2, status: 'deleted', file: 'trash' }],
+    });
+    expect(await files()).toBeLessThan(before);
+    const [newest] = await h.db.select().from(document).where(eq(document.id, v3));
+    expect(newest?.supersedesId).toBe(v1);
+    expect(await h.db.select().from(documentLink).where(eq(documentLink.documentId, v2))).toEqual(
+      [],
+    );
+
+    const [co] = await h.db
+      .insert(company)
+      .values({ nameEn: `M ${tag} Co`, nameUa: 'К' })
+      .returning();
+    const [ct] = await h.db
+      .insert(contract)
+      .values({ kind: 'client', number: `M ${tag} MSA`, companyId: co?.id ?? '', clientId: c?.id })
+      .returning();
+    const [inv] = await h.db
+      .insert(invoice)
+      .values({
+        clientId: c?.id ?? '',
+        contractId: ct?.id ?? '',
+        issueDate: '2046-02-02',
+        dueDate: '2046-02-20',
+        dateOverrideReason: `M ${tag}`,
+      })
+      .returning();
+    const [pdf] = await h.db
+      .insert(document)
+      .values({ type: 'invoice', title: `M ${tag} invoice pdf`, url: 'https://x.test/i' })
+      .returning();
+    await h.db
+      .insert(documentLink)
+      .values({ documentId: pdf?.id ?? '', entityType: 'invoice', entityId: inv?.id ?? '' });
+    const refused = await call('delete_documents', {
+      idempotencyKey: `del-locked-${tag}`,
+      ids: [v1, pdf?.id, randomUUID()],
+    });
+    expect(refused.isError).toBe(true);
+    const text = JSON.stringify(refused.structuredContent);
+    expect(text).toContain('ids.1');
+    expect(text).toContain('ids.2');
+    expect(text).not.toContain('ids.0');
+    expect(await h.db.select().from(document).where(eq(document.id, v1))).toHaveLength(1);
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

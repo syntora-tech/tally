@@ -23,4 +23,6 @@ export interface DocumentStorage {
   download(key: string): Promise<DownloadedFile | null>;
   /** Where the browser should go to view the file, or null to stream it from `/api/files`. */
   viewUrl(key: string): string | null;
+  /** Removes the file: Drive moves it to the trash (restorable for 30 days), local disk deletes it. */
+  trash(key: string): Promise<void>;
 }
