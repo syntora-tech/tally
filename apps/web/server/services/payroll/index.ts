@@ -15,6 +15,7 @@ import {
   period,
   person,
   posting,
+  supplierAct,
   transaction,
 } from '@tally/db/schema';
 import {
@@ -25,10 +26,10 @@ import {
   toDecimal,
   type LocalDate,
 } from '@tally/domain';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
-import { ensureMonthlyActDraft } from '../acts';
+import { ensureMonthlyActDraft, issuedMonthlyAct, syncMonthlyActDraft } from '../acts';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError, msg } from '../errors';
@@ -53,6 +54,10 @@ export const listPayroll = defineService({
       const items = await tx
         .select({
           item: payrollItem,
+          // The monthly act of the item: an issued one freezes the rate (A-076).
+          actId: supplierAct.id,
+          actStatus: supplierAct.status,
+          actNumber: supplierAct.number,
           personName: person.fullName,
           payeeName: sql<string | null>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`,
           payeeKind: payee.kind,
@@ -62,6 +67,14 @@ export const listPayroll = defineService({
         .leftJoin(person, eq(person.id, payrollItem.personId))
         .innerJoin(period, eq(period.id, payrollItem.periodId))
         .leftJoin(payee, eq(payee.id, payrollItem.payeeId))
+        .leftJoin(
+          supplierAct,
+          and(
+            eq(supplierAct.payrollItemId, payrollItem.id),
+            eq(supplierAct.type, 'monthly'),
+            ne(supplierAct.status, 'void'),
+          ),
+        )
         .where(periodId ? eq(payrollItem.periodId, periodId) : undefined)
         .orderBy(desc(period.month), asc(payrollItem.kind), asc(person.fullName));
       const itemIds = items.map((i) => i.item.id);
@@ -200,6 +213,12 @@ async function applyRate(
   if (!toDecimal(item.paidAmount).isZero()) {
     return err(serviceError('conflict', 'payroll.rateLocked'));
   }
+  const issued = await issuedMonthlyAct(tx, [item.id]);
+  if (issued) {
+    return err(
+      serviceError('conflict', msg('payroll.rateActIssued', { number: issued.number ?? '' })),
+    );
+  }
   const lines = await tx
     .select({ amount: payrollLine.amount, currency: payrollLine.currency })
     .from(payrollLine)
@@ -239,6 +258,7 @@ async function applyRate(
       totalUah: totalUah.value.toFixed(2),
     })
     .where(eq(payrollItem.id, item.id));
+  await syncMonthlyActDraft(tx, item.id);
   return ok({ id: item.id, totalUah: totalUah.value.toFixed(2) });
 }
 

@@ -9,7 +9,7 @@ import {
   type ActDateRule,
   type LocalDate,
 } from '@tally/domain';
-import { and, asc, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { enqueueJob, type NewJob } from '../../jobs/queue';
@@ -77,6 +77,42 @@ export async function ensureMonthlyActDraft(tx: DbTransaction, itemId: string) {
       amountUah: row.item.totalUah,
     })
     .returning({ id: supplierAct.id });
+  return act ?? null;
+}
+
+/** A monthly act still in draft follows its payroll item's total_uah (A-076). */
+export async function syncMonthlyActDraft(tx: DbTransaction, itemId: string) {
+  const [item] = await tx
+    .select({ totalUah: payrollItem.totalUah })
+    .from(payrollItem)
+    .where(eq(payrollItem.id, itemId));
+  if (!item?.totalUah) return;
+  await tx
+    .update(supplierAct)
+    .set({ amountUah: item.totalUah })
+    .where(
+      and(
+        eq(supplierAct.payrollItemId, itemId),
+        eq(supplierAct.type, 'monthly'),
+        eq(supplierAct.status, 'draft'),
+      ),
+    );
+}
+
+/** The issued (not void) monthly act of a payroll item, if any: it freezes the item's money. */
+export async function issuedMonthlyAct(tx: DbTransaction, itemIds: string[]) {
+  if (!itemIds.length) return null;
+  const [act] = await tx
+    .select({ id: supplierAct.id, number: supplierAct.number })
+    .from(supplierAct)
+    .where(
+      and(
+        inArray(supplierAct.payrollItemId, itemIds),
+        eq(supplierAct.type, 'monthly'),
+        eq(supplierAct.status, 'issued'),
+      ),
+    )
+    .limit(1);
   return act ?? null;
 }
 

@@ -6,9 +6,13 @@ import {
   payee,
   payrollItem,
   payrollLine,
+  period,
   person,
+  supplierAct,
 } from '@tally/db/schema';
 import {
+  payrollTotalUah,
+  payrollTotalUsd,
   toDecimal,
   resolvePayability,
   resolvePayee,
@@ -20,7 +24,8 @@ import {
   type PlanLine,
   type WorkCalendar,
 } from '@tally/domain';
-import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { ensureMonthlyActDraft, syncMonthlyActDraft } from '../acts';
 
 export async function loadAdjustments(tx: DbTransaction, periodId: string) {
   return tx
@@ -57,8 +62,33 @@ export async function createPayroll(
     timesheetIds: Map<string, string>;
     today: LocalDate;
     cal: WorkCalendar;
+    /** NBU USD→UAH on the closing day; fiat items with a USD part get it, editable later. */
+    payoutRate: string | null;
   },
 ) {
+  const month = (
+    await tx.select({ month: period.month }).from(period).where(eq(period.id, input.periodId))
+  )[0]?.month as LocalDate;
+  /** total_uah and the rate snapshot of a fiat item; crypto items have neither (A-075, A-076). */
+  const fiatTotals = (
+    method: 'fiat' | 'crypto',
+    lines: PlanLine[],
+    adjustments: PlanItem['adjustments'],
+  ) => {
+    if (method !== 'fiat') return {};
+    const usdPart = payrollTotalUsd(lines, adjustments);
+    const rate = usdPart.isZero() ? null : input.payoutRate;
+    const total = payrollTotalUah(lines, adjustments, rate);
+    if (total.isErr()) return {};
+    return {
+      totalUah: total.value.toFixed(2),
+      ...(rate && {
+        payoutFxRate: toDecimal(rate).toFixed(6),
+        fxSource: 'nbu' as const,
+        fxSetAt: new Date(),
+      }),
+    };
+  };
   const timesheets = [...input.timesheetIds.values()];
   const funded = timesheets.length
     ? await tx
@@ -141,16 +171,13 @@ export async function createPayroll(
         payoutMethod: plan.payoutMethod,
         payeeId: resolvePayee(plan.payoutMethod, owner?.defaultPayeeId ?? null, candidates),
         totalUsd: plan.totalUsd,
-        // Paid only in UAH: the total needs no rate (A-075).
-        totalUah:
-          plan.payoutMethod === 'fiat' && toDecimal(plan.totalUsd).isZero()
-            ? plan.totalUahPart
-            : null,
+        ...fiatTotals(plan.payoutMethod, plan.lines, plan.adjustments),
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
     await insertLines(item.id, plan.lines, false);
     await tx.execute(sql`select public.refresh_payroll_item(${item.id})`);
+    await attachMonthlyAct(tx, item.id, month);
     items++;
   }
   for (const plan of input.agency) {
@@ -162,17 +189,61 @@ export async function createPayroll(
         payeeId: plan.payeeId,
         payoutMethod: plan.payoutMethod,
         totalUsd: plan.totalUsd,
+        ...fiatTotals(plan.payoutMethod, plan.lines, []),
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
     await insertLines(item.id, plan.lines, true);
     await tx.execute(sql`select public.refresh_payroll_item(${item.id})`);
+    await attachMonthlyAct(tx, item.id, month);
     items++;
   }
   return items;
 }
 
-/** Reopening drops the payroll of the period (only possible while nothing is paid, TL032). */
+/**
+ * The monthly FOP act of a fresh payroll item (A-076): a draft left from an earlier close (or made
+ * before it) is linked again and follows the new total; otherwise a new draft is created.
+ */
+async function attachMonthlyAct(tx: DbTransaction, itemId: string, month: LocalDate) {
+  const [item] = await tx.select().from(payrollItem).where(eq(payrollItem.id, itemId));
+  if (!item?.payeeId || item.payoutMethod !== 'fiat' || !item.totalUah) return;
+  const [waiting] = await tx
+    .select({ id: supplierAct.id })
+    .from(supplierAct)
+    .where(
+      and(
+        eq(supplierAct.payeeId, item.payeeId),
+        eq(supplierAct.type, 'monthly'),
+        eq(supplierAct.status, 'draft'),
+        eq(supplierAct.periodFrom, month),
+        isNull(supplierAct.payrollItemId),
+      ),
+    )
+    .limit(1);
+  if (waiting) {
+    await tx
+      .update(supplierAct)
+      .set({ payrollItemId: itemId })
+      .where(eq(supplierAct.id, waiting.id));
+    await syncMonthlyActDraft(tx, itemId);
+    return;
+  }
+  await ensureMonthlyActDraft(tx, itemId);
+}
+
+/**
+ * Reopening drops the payroll of the period (only possible while nothing is paid, TL032). Draft
+ * monthly acts stay, detached, and are linked again at the next close with their rate (A-076).
+ */
 export async function dropPayroll(tx: DbTransaction, periodId: string) {
+  const items = tx
+    .select({ id: payrollItem.id })
+    .from(payrollItem)
+    .where(eq(payrollItem.periodId, periodId));
+  await tx
+    .update(supplierAct)
+    .set({ payrollItemId: null })
+    .where(and(inArray(supplierAct.payrollItemId, items), eq(supplierAct.status, 'draft')));
   await tx.delete(payrollItem).where(eq(payrollItem.periodId, periodId));
 }

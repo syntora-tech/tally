@@ -14,6 +14,7 @@ import { useLabels } from '@/lib/labels';
 import {
   overridePayableAction,
   payItemAction,
+  setPayoutRateAction,
   type PayrollFormState,
 } from '@/server/actions/payroll';
 
@@ -265,6 +266,53 @@ export function OverrideForm({ lineId }: { lineId: string }) {
       />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         {t('release')}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/**
+ * The payout rate set at period close from the NBU (A-076): approve it as is or correct it; the
+ * draft FOP act follows. Hidden once the act is issued or money is paid.
+ */
+export function RateForm({
+  itemId,
+  rate,
+  source,
+}: {
+  itemId: string;
+  rate: string | null;
+  source: string | null;
+}) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    setPayoutRateAction,
+    null,
+  );
+  const t = useTranslations('payDialog');
+  const error = useResult(state, t('rateApproved'));
+  const [value, setValue] = useState(rate ?? '');
+  const unchanged =
+    rate !== null &&
+    parseDecimal(value.replace(',', '.')).isOk() &&
+    parseDecimal(value.replace(',', '.'))._unsafeUnwrap().eq(rate);
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="itemId" value={itemId} />
+      <input type="hidden" name="source" value={unchanged ? (source ?? 'manual') : 'manual'} />
+      <Input
+        name="rate"
+        inputMode="decimal"
+        aria-label={t('rateLabel')}
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+        }}
+        className="h-8 w-28"
+        required
+      />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {t('approveRate')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>

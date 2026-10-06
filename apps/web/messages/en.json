@@ -264,6 +264,7 @@
       "notFound": "Period not found",
       "maxHours": "No more than 744 hours per month",
       "alreadyClosed": "The period is already closed",
+      "actIssued": "Act {number} of this period is issued or void: the period cannot be reopened",
       "notClosed": "The period is not closed or not found",
       "adjustmentCurrency": "Currency: USD or UAH",
       "adjustmentNotFound": "Adjustment not found",
@@ -388,6 +389,7 @@
     "payroll": {
       "notFound": "Payout not found",
       "rateUahOnly": "A rate is needed only for UAH payouts",
+      "rateActIssued": "Act {number} is already issued for this payout: void it to change the rate",
       "rateLocked": "The payout rate cannot change once there are payments",
       "accountCurrency": "The account is in the wrong currency",
       "chooseUahAccount": "Choose a UAH account",
@@ -1479,6 +1481,11 @@
   },
   "payDialog": {
     "paid": "Payout recorded",
+    "rateApproved": "Rate approved; the draft act follows it",
+    "rateLabel": "Payout rate USD→UAH",
+    "approveRate": "Approve rate",
+    "actIssuedRate": "Act {number} issued at this rate",
+    "draftAct": "Draft act",
     "pay": "Pay",
     "rate": "USD→UAH rate",
     "toPay": "To pay:",

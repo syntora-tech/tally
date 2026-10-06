@@ -13,6 +13,7 @@ import {
   payTerms,
   period,
   person,
+  supplierAct,
   timesheet,
   workCalendarException,
 } from '@tally/db/schema';
@@ -32,7 +33,7 @@ import {
   type PaymentDueRule,
   type PeriodAssignment,
 } from '@tally/domain';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope, type ServiceContext } from '../context';
@@ -46,6 +47,7 @@ import {
   optionalDecimal,
   requiredText,
 } from '../fields';
+import { ensureNbuRate } from '../fx';
 import { createPayroll, dropPayroll, loadAdjustments, toPlanAdjustments } from './payroll';
 
 export async function loadCalendar(tx: DbTransaction): Promise<WorkCalendar> {
@@ -335,6 +337,9 @@ export const closePeriod = defineService({
   name: 'periods.close',
   input: z.object({ periodId: z.uuid() }),
   handler: async (ctx, { periodId }) => {
+    // Fetched before the transaction so a slow NBU answer never holds the period lock (A-076).
+    const nbu = await ensureNbuRate(ctx.db, 'USD', ctx.today);
+    const payoutRate = nbu.isOk() ? nbu.value.rate : null;
     const result = await inActorScope(ctx, async (tx) => {
       const [p] = await tx.select().from(period).where(eq(period.id, periodId)).for('update');
       if (!p) return err(serviceError('not_found', 'periods.notFound'));
@@ -457,6 +462,7 @@ export const closePeriod = defineService({
         timesheetIds,
         today: ctx.today,
         cal,
+        payoutRate,
       });
 
       const closedBy = ctx.actor.kind === 'user' ? ctx.actor.userId : null;
@@ -474,19 +480,29 @@ export const closePeriod = defineService({
 export const reopenPeriod = defineService({
   name: 'periods.reopen',
   input: z.object({ periodId: z.uuid(), reason: requiredText('field.reason') }),
-  handler: async (ctx, { periodId, reason }) => {
-    const [row] = await inActorScope(ctx, async (tx) => {
+  handler: async (ctx, { periodId, reason }) =>
+    inActorScope(ctx, async (tx) => {
+      const locked = await tx
+        .select({ number: supplierAct.number })
+        .from(supplierAct)
+        .innerJoin(payrollItem, eq(payrollItem.id, supplierAct.payrollItemId))
+        .where(and(eq(payrollItem.periodId, periodId), ne(supplierAct.status, 'draft')))
+        .limit(1);
+      if (locked[0]) {
+        return err(
+          serviceError('conflict', msg('periods.actIssued', { number: locked[0].number ?? '' })),
+        );
+      }
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
-      const rows = await tx
+      const [row] = await tx
         .update(period)
         .set({ status: 'open', closedAt: null, closedBy: null })
         .where(and(eq(period.id, periodId), eq(period.status, 'closed')))
         .returning({ id: period.id });
-      if (rows.length) await dropPayroll(tx, periodId);
-      return rows;
-    });
-    return row ? ok(row) : err(serviceError('conflict', 'periods.notClosed'));
-  },
+      if (!row) return err(serviceError('conflict', 'periods.notClosed'));
+      await dropPayroll(tx, periodId);
+      return ok(row);
+    }),
 });
 
 /** Step 4 (6.4): bonus, deduction or compensation with a reason; closed periods refuse it (I6). */

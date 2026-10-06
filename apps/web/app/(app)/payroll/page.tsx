@@ -18,7 +18,7 @@ import { suggestRate } from '@/server/services/fx';
 import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
-import { OverrideForm, PayDialog } from './payroll-forms';
+import { OverrideForm, PayDialog, RateForm } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('payroll');
@@ -45,9 +45,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
         await payoutCandidates.run(ctx, { since: unpaidMonths.reduce((a, b) => (a < b ? a : b)) })
       ).unwrapOr([])
     : [];
-  const [t, tc, fmt, { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS }] = await Promise.all([
+  const [t, tc, tp, fmt, { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS }] = await Promise.all([
     getTranslations('payroll'),
     getTranslations('common'),
+    getTranslations('payDialog'),
     getFormat(),
     getLabels(),
   ]);
@@ -168,6 +169,28 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
+                    {fiat && !toDecimal(i.item.totalUsd).isZero() && (
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        {i.actStatus === 'issued' ? (
+                          <span className="text-muted-foreground">
+                            {tp('actIssuedRate', { number: i.actNumber ?? '' })}
+                          </span>
+                        ) : (
+                          toDecimal(i.item.paidAmount).isZero() && (
+                            <RateForm
+                              itemId={i.item.id}
+                              rate={i.item.payoutFxRate}
+                              source={i.item.fxSource}
+                            />
+                          )
+                        )}
+                        {i.actId && (
+                          <Link className="hover:underline" href={`/payroll/acts/${i.actId}`}>
+                            {i.actNumber ?? tp('draftAct')}
+                          </Link>
+                        )}
+                      </div>
+                    )}
                     <Table>
                       <TableHeader>
                         <TableRow>
