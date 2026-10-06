@@ -35,6 +35,10 @@ export const txType = pgEnum('tx_type', [
 ]);
 export type TxType = (typeof txType.enumValues)[number];
 export const plannedFrequency = pgEnum('planned_frequency', ['monthly', 'quarterly', 'yearly']);
+export const chargeMode = pgEnum('charge_mode', ['withheld', 'on_top']);
+export type ChargeMode = (typeof chargeMode.enumValues)[number];
+export const plannedPaymentStatus = pgEnum('planned_payment_status', ['due', 'paid', 'skipped']);
+export type PlannedPaymentStatus = (typeof plannedPaymentStatus.enumValues)[number];
 export const accountKind = pgEnum('account_kind', ['bank', 'crypto', 'cash']);
 export const fxSource = pgEnum('fx_source', ['bank_actual', 'nbu', 'manual']);
 export const payrollItemKind = pgEnum('payroll_item_kind', ['person', 'agency']);

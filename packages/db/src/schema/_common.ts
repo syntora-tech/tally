@@ -1,5 +1,13 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { check, pgPolicy, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  check,
+  numeric,
+  pgPolicy,
+  text,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 import { authenticatedRole } from 'drizzle-orm/supabase';
 
 /** Columns every business table carries (spec 4.2). `updated_at` is maintained by `set_updated_at()`. */
@@ -68,4 +76,27 @@ export function networkCheck(name: string, column: AnyPgColumn) {
 
 export function currencyCheck(name: string, column: AnyPgColumn) {
   return check(name, sql`${column} ~ '^[A-Z]{3,4}$'`);
+}
+
+/**
+ * Bank transfer fee as a tariff "fixed + %" (A-082). `feeCurrency` is the currency the bank charges
+ * in (e.g. UAH for a USD SWIFT transfer); null means the payment's own currency.
+ */
+export const transferFeeColumns = () => ({
+  feeFixed: numeric({ precision: 20, scale: 8 }),
+  feePercent: numeric({ precision: 9, scale: 4 }),
+  feeCurrency: text(),
+});
+
+export function transferFeeChecks(
+  table: string,
+  t: { feeFixed: AnyPgColumn; feePercent: AnyPgColumn; feeCurrency: AnyPgColumn },
+) {
+  return [
+    check(
+      `${table}_fee_check`,
+      sql`coalesce(${t.feeFixed}, 0) >= 0 and coalesce(${t.feePercent}, 0) between 0 and 100`,
+    ),
+    currencyCheck(`${table}_fee_currency_check`, t.feeCurrency),
+  ];
 }

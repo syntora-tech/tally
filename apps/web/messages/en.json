@@ -455,7 +455,8 @@
       "overReimbursement": "The amount exceeds what is left of the reimbursement ({detail})",
       "linkTargetMissing": "The linked record does not exist ({detail})",
       "annexContract": "The SOW/annex belongs to another contract",
-      "packagePart": "A part must point at a signed package, and a package with parts keeps its type"
+      "packagePart": "A part must point at a signed package, and a package with parts keeps its type",
+      "plannedPaid": "A paid planned payment is fixed: unlink its expenses first"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",

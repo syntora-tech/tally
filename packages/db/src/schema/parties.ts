@@ -12,7 +12,14 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
+import {
+  baseColumns,
+  currencyCheck,
+  networkCheck,
+  rolePolicies,
+  transferFeeChecks,
+  transferFeeColumns,
+} from './_common';
 
 /** Our legal entity (TOV «SYNTORA»): headers of invoices and acts. */
 export const company = pgTable(
@@ -95,9 +102,12 @@ export const payee = pgTable(
     walletAddress: text(),
     walletNetwork: text(),
     personId: uuid().references((): AnyPgColumn => person.id, { onDelete: 'set null' }),
+    /** What the bank charges for a payout to this payee (A-082). */
+    ...transferFeeColumns(),
   },
   (t) => [
     unique('payee_legacy_ref_key').on(t.legacyRef),
+    ...transferFeeChecks('payee', t),
     check('payee_kind_check', sql`${t.kind} in ('fop', 'crypto', 'other')`),
     check('payee_name_check', sql`num_nonnulls(${t.legalNameUa}, ${t.legalNameEn}) >= 1`),
     networkCheck('payee_wallet_network_check', t.walletNetwork),

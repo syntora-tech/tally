@@ -435,6 +435,20 @@
       "when": 1791305442263,
       "tag": "20261006165042_document_historical",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791306771846,
+      "tag": "20261006171251_planned_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1791306789459,
+      "tag": "20261006171309_planned_payments_invariants",
+      "breakpoints": true
     }
   ]
 }

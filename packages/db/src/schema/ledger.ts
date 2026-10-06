@@ -14,8 +14,22 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { baseColumns, currencyCheck, networkCheck, rolePolicies } from './_common';
-import { accountKind, fxSource, plannedFrequency, txType } from './enums';
+import {
+  baseColumns,
+  currencyCheck,
+  networkCheck,
+  rolePolicies,
+  transferFeeChecks,
+  transferFeeColumns,
+} from './_common';
+import {
+  accountKind,
+  chargeMode,
+  fxSource,
+  plannedFrequency,
+  plannedPaymentStatus,
+  txType,
+} from './enums';
 import { invoice } from './invoices';
 import { client, person } from './parties';
 import { payrollItem } from './payroll';
@@ -168,6 +182,7 @@ export const allocation = pgTable(
     invoiceId: uuid().references(() => invoice.id),
     payrollItemId: uuid().references((): AnyPgColumn => payrollItem.id),
     reimbursementId: uuid().references((): AnyPgColumn => reimbursement.id),
+    plannedPaymentId: uuid().references((): AnyPgColumn => plannedPayment.id),
     fxRate: numeric({ precision: 18, scale: 6 }),
     fxSource: fxSource(),
   },
@@ -176,8 +191,9 @@ export const allocation = pgTable(
     check('allocation_amount_check', sql`${t.amount} > 0`),
     check(
       'allocation_target_check',
-      sql`num_nonnulls(${t.invoiceId}, ${t.payrollItemId}, ${t.reimbursementId}) = 1`,
+      sql`num_nonnulls(${t.invoiceId}, ${t.payrollItemId}, ${t.reimbursementId}, ${t.plannedPaymentId}) = 1`,
     ),
+    index('allocation_planned_payment_idx').on(t.plannedPaymentId),
     index('allocation_reimbursement_idx').on(t.reimbursementId),
     index('allocation_payroll_item_idx').on(t.payrollItemId),
     index('allocation_transaction_idx').on(t.transactionId),
@@ -190,8 +206,9 @@ export type FxRate = typeof fxRate.$inferSelect;
 export type Allocation = typeof allocation.$inferSelect;
 
 /**
- * Recurring company costs that are not payroll (accountant, subscriptions, bank service, taxes):
- * the forecast and the payout calendar count them (6.1, A-067). Plans, not money: no postings.
+ * Recurring company costs that are not payroll (accountant, subscriptions, bank service, taxes,
+ * the director's salary): the forecast and the payout calendar count them (6.1, A-067). Each month
+ * becomes `planned_payment` rows that are marked paid by linking Ledger expenses (A-082).
  */
 export const plannedExpense = pgTable(
   'planned_expense',
@@ -208,8 +225,13 @@ export const plannedExpense = pgTable(
     startsOn: date({ mode: 'string' }).notNull(),
     endsOn: date({ mode: 'string' }),
     notes: text(),
+    /** Whose cost it is, e.g. the director's salary (A-082). */
+    personId: uuid().references(() => person.id),
+    counterparty: text(),
+    ...transferFeeColumns(),
   },
   (t) => [
+    ...transferFeeChecks('planned_expense', t),
     foreignKey({
       name: 'planned_expense_category_type_fk',
       columns: [t.categoryId, t.txType],
@@ -228,3 +250,161 @@ export const plannedExpense = pgTable(
     ...rolePolicies('planned_expense', { read: 'finance', write: 'finance' }),
   ],
 );
+
+/**
+ * Instalments of a planned expense within its month (A-082), e.g. the salary advance by the 22nd
+ * and the rest by the 7th of the next month. `amount` null = the rest of the expense's amount.
+ */
+export const plannedExpensePart = pgTable(
+  'planned_expense_part',
+  {
+    ...baseColumns,
+    plannedExpenseId: uuid()
+      .notNull()
+      .references(() => plannedExpense.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    amount: numeric({ precision: 20, scale: 8 }),
+    dueDay: integer().notNull(),
+    /** 0 = due in the month itself, 1 = in the next month (salary for the second half). */
+    monthOffset: integer().notNull().default(0),
+    sort: integer().notNull().default(0),
+  },
+  (t) => [
+    check('planned_expense_part_name_check', sql`length(trim(${t.name})) > 0`),
+    check('planned_expense_part_amount_check', sql`${t.amount} is null or ${t.amount} > 0`),
+    check('planned_expense_part_due_day_check', sql`${t.dueDay} between 1 and 31`),
+    check('planned_expense_part_offset_check', sql`${t.monthOffset} between 0 and 1`),
+    uniqueIndex('planned_expense_part_rest_key')
+      .on(t.plannedExpenseId)
+      .where(sql`${t.amount} is null`),
+    index('planned_expense_part_expense_idx').on(t.plannedExpenseId),
+    ...rolePolicies('planned_expense_part', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+/**
+ * A tax or levy on a payment (A-082): on a planned expense (PIT and military levy withheld from
+ * the gross salary, the social contribution on top) or on every payout to a person (20 % on top).
+ * Paid the same day as its base payment.
+ */
+export const paymentCharge = pgTable(
+  'payment_charge',
+  {
+    ...baseColumns,
+    name: text().notNull(),
+    plannedExpenseId: uuid().references(() => plannedExpense.id, { onDelete: 'cascade' }),
+    personId: uuid().references(() => person.id),
+    mode: chargeMode().notNull(),
+    ratePercent: numeric({ precision: 9, scale: 4 }).notNull(),
+    categoryId: uuid().notNull(),
+    txType: txType().notNull().default('expense'),
+    /** Null = the base payment's currency; a payout tax in UAH converts at the NBU rate. */
+    currency: text(),
+    counterparty: text(),
+    startsOn: date({ mode: 'string' }).notNull(),
+    endsOn: date({ mode: 'string' }),
+    ...transferFeeColumns(),
+  },
+  (t) => [
+    ...transferFeeChecks('payment_charge', t),
+    foreignKey({
+      name: 'payment_charge_category_type_fk',
+      columns: [t.categoryId, t.txType],
+      foreignColumns: [category.id, category.txType],
+    }),
+    check('payment_charge_type_check', sql`${t.txType} = 'expense'`),
+    check('payment_charge_name_check', sql`length(trim(${t.name})) > 0`),
+    check('payment_charge_rate_check', sql`${t.ratePercent} > 0 and ${t.ratePercent} <= 100`),
+    check(
+      'payment_charge_target_check',
+      sql`num_nonnulls(${t.plannedExpenseId}, ${t.personId}) = 1`,
+    ),
+    // Withholding needs a gross amount, which only a planned expense has.
+    check(
+      'payment_charge_withheld_check',
+      sql`${t.mode} = 'on_top' or ${t.plannedExpenseId} is not null`,
+    ),
+    check('payment_charge_period_check', sql`${t.endsOn} is null or ${t.endsOn} >= ${t.startsOn}`),
+    currencyCheck('payment_charge_currency_check', t.currency),
+    index('payment_charge_expense_idx').on(t.plannedExpenseId),
+    index('payment_charge_person_idx').on(t.personId),
+    ...rolePolicies('payment_charge', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+/**
+ * One payment to make (A-082): an instalment of a planned expense for a month, or a charge on it,
+ * or a charge on a payout (`source_allocation_id`). `status` follows its allocations: linked
+ * Ledger expenses make it `paid`; `skipped` needs a reason. Amounts are snapshots of the rules.
+ */
+export const plannedPayment = pgTable(
+  'planned_payment',
+  {
+    ...baseColumns,
+    plannedExpenseId: uuid().references(() => plannedExpense.id),
+    partId: uuid().references(() => plannedExpensePart.id, { onDelete: 'set null' }),
+    chargeId: uuid().references(() => paymentCharge.id, { onDelete: 'set null' }),
+    parentId: uuid().references((): AnyPgColumn => plannedPayment.id, { onDelete: 'cascade' }),
+    sourceAllocationId: uuid().references((): AnyPgColumn => allocation.id, {
+      onDelete: 'cascade',
+    }),
+    personId: uuid().references(() => person.id),
+    /** First day of the month the payment is for. */
+    month: date({ mode: 'string' }).notNull(),
+    dueOn: date({ mode: 'string' }).notNull(),
+    name: text().notNull(),
+    categoryId: uuid().notNull(),
+    txType: txType().notNull().default('expense'),
+    counterparty: text(),
+    /** Base of the charges: the gross salary of an instalment, the payout of a payout charge. */
+    gross: numeric({ precision: 20, scale: 8 }),
+    amount: numeric({ precision: 20, scale: 8 }).notNull(),
+    currency: text().notNull(),
+    feeAmount: numeric({ precision: 20, scale: 8 }),
+    feeCurrency: text(),
+    /** Set by hand for this month; rule edits leave it alone. */
+    amountOverridden: boolean().notNull().default(false),
+    status: plannedPaymentStatus().notNull().default('due'),
+    skipReason: text(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'planned_payment_category_type_fk',
+      columns: [t.categoryId, t.txType],
+      foreignColumns: [category.id, category.txType],
+    }),
+    check('planned_payment_type_check', sql`${t.txType} = 'expense'`),
+    check('planned_payment_amount_check', sql`${t.amount} >= 0`),
+    check('planned_payment_month_check', sql`extract(day from ${t.month}) = 1`),
+    check(
+      'planned_payment_skip_check',
+      sql`(${t.status} = 'skipped') = (length(trim(coalesce(${t.skipReason}, ''))) > 0)`,
+    ),
+    check(
+      'planned_payment_source_check',
+      sql`num_nonnulls(${t.plannedExpenseId}, ${t.sourceAllocationId}) = 1`,
+    ),
+    currencyCheck('planned_payment_currency_check', t.currency),
+    currencyCheck('planned_payment_fee_currency_check', t.feeCurrency),
+    uniqueIndex('planned_payment_occurrence_key')
+      .on(
+        t.plannedExpenseId,
+        sql`coalesce(${t.partId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+        sql`coalesce(${t.chargeId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+        t.month,
+      )
+      .where(sql`${t.plannedExpenseId} is not null`),
+    uniqueIndex('planned_payment_payout_charge_key')
+      .on(t.sourceAllocationId, t.chargeId)
+      .where(sql`${t.sourceAllocationId} is not null`),
+    index('planned_payment_due_idx').on(t.dueOn),
+    index('planned_payment_parent_idx').on(t.parentId),
+    index('planned_payment_person_idx').on(t.personId),
+    ...rolePolicies('planned_payment', { read: 'finance', write: 'finance' }),
+  ],
+);
+
+export type PlannedExpense = typeof plannedExpense.$inferSelect;
+export type PlannedExpensePart = typeof plannedExpensePart.$inferSelect;
+export type PaymentCharge = typeof paymentCharge.$inferSelect;
+export type PlannedPayment = typeof plannedPayment.$inferSelect;
