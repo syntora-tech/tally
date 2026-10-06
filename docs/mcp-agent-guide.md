@@ -428,3 +428,7 @@ At the end, report briefly:
 - Do not invent amounts, dates or rates. Do not “fit” a balance with adjustments without the owner's explicit permission.
 - Do not create accounts, categories, people or clients “just in case” — only those in the source or named by the owner.
 - Do not log or store the token; do not commit the xlsx or exports from it.
+
+### Reconcile invoice numbers with signed originals
+
+Use `list_invoices` and `get_invoice` to identify an issued unpaid invoice and its current signed copy. Read `get_document` with `includeContent: true` and verify the actual signed PDF against the client, SOW, period, amount and currency. An owner can call `reconcile_invoice_numbers` with the current `expectedNumber`, the exact signed `number`, `signedDocumentId`, decimal-string `signedTotal`, `signedCurrency` and a reason. Include all invoices involved in a number swap in one batch. Run `dryRun: true` first, then commit with a fresh `idempotencyKey`. This records the old snapshot and an audited correction, updates signed-copy metadata, and preserves files, financial data, dates, links and sequence counters. Ordinary issued-number edits remain prohibited.

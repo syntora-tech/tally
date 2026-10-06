@@ -1,3 +1,5 @@
+import { getInvoice, listInvoices } from '../services/invoices';
+import { reconcileInvoiceNumbers } from '../services/invoices/reconcile';
 import type { McpProfile } from '@tally/db/schema';
 import type { z } from 'zod';
 import type { DocumentStorage } from '../storage/types';
@@ -216,6 +218,29 @@ function annexSummary(r: AnnexRow) {
  * (paying stays in the UI).
  */
 export const TOOLS: readonly ToolDef[] = [
+  tool({
+    name: 'list_invoices',
+    title: 'List invoices',
+    kind: 'read',
+    description: 'Invoice registry with exact numbers, statuses, amounts, periods and revisions.',
+    service: listInvoices,
+  }),
+  tool({
+    name: 'get_invoice',
+    title: 'Read an invoice',
+    kind: 'read',
+    description:
+      'Invoice snapshot, lines, previous revisions and attached signed copies. Read before reconciliation.',
+    service: getInvoice,
+  }),
+  tool({
+    name: 'reconcile_invoice_numbers',
+    title: 'Reconcile invoice numbers with signed originals',
+    kind: 'write',
+    description:
+      'Owner only. Corrects numbers of issued unpaid invoices against their current attached signed PDF. First read get_invoice and get_document(includeContent: true), verify client, SOW, period, number, total and currency in actual signed content; signed originals have priority. Supports atomic number swaps. Preserves file bytes, amounts, dates, links and consumed sequence values; stores old revision and an audited correction with document and reason. All-or-nothing; run dryRun first.',
+    service: reconcileInvoiceNumbers,
+  }),
   tool({
     name: 'get_balances',
     title: 'Account balances',
