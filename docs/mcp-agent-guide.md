@@ -315,18 +315,18 @@ The same EVM address used on several EVM networks is entered once per network. B
 
 A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a crypto wallet (`crypto`) or `other`. It is not always the same human as the person — someone can be paid through a relative's FOP.
 
-| Field                                   | Format                                                                                                                                               |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id` or `taxId`                         | Match key; without both a new payee is created                                                                                                       |
-| `kind`                                  | `fop` (default for new), `crypto`, `other`                                                                                                           |
-| `legalNameUa` / `legalNameEn`           | At least one; e.g. `ФОП Іваненко Іван Іванович`                                                                                                      |
-| `taxId`                                 | ІПН / ЄДРПОУ, 8–12 digits                                                                                                                            |
-| `edrRecord`, `edrDate`                  | EDR record and its date `YYYY-MM-DD` (used in FOP acts)                                                                                              |
-| `addressUa`, `iban`, `bankName`         | Requisites for acts; IBAN may contain spaces                                                                                                         |
-| `walletAddress`, `walletNetwork`        | Payout wallet of a `crypto` payee (required for that kind)                                                                                           |
-| `personId`                              | The person this payee pays; `null` unlinks                                                                                                           |
-| `makeDefault`                           | `true` makes it the person's default payee for new payouts                                                                                           |
-| `feeFixed`, `feePercent`, `feeCurrency` | Bank tariff of a payout to this payee: fixed + % of the amount, in `feeCurrency` (e.g. `UAH` for a USD SWIFT); suggested as the fee in "Pay" (A-082) |
+| Field                                                                  | Format                                                                                                                                               |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id` or `taxId`                                                        | Match key; without both a new payee is created                                                                                                       |
+| `kind`                                                                 | `fop` (default for new), `crypto`, `other`                                                                                                           |
+| `legalNameUa` / `legalNameEn`                                          | At least one; e.g. `ФОП Іваненко Іван Іванович`                                                                                                      |
+| `taxId`                                                                | ІПН / ЄДРПОУ, 8–12 digits                                                                                                                            |
+| `edrRecord`, `edrDate`                                                 | EDR record and its date `YYYY-MM-DD` (used in FOP acts)                                                                                              |
+| `addressUa`, `iban`, `bankName`                                        | Requisites for acts; IBAN may contain spaces                                                                                                         |
+| `walletAddress`, `walletNetwork`                                       | Payout wallet of a `crypto` payee (required for that kind)                                                                                           |
+| `personId`                                                             | The person this payee pays; `null` unlinks                                                                                                           |
+| `makeDefault`                                                          | `true` makes it the person's default payee for new payouts                                                                                           |
+| `feeFixed`, `feePercent`, `feeCurrency`, `feeStepFrom`, `feeStepFixed` | Bank tariff of a payout to this payee: fixed + % of the amount, in `feeCurrency` (e.g. `UAH` for a USD SWIFT); suggested as the fee in "Pay" (A-082) |
 
 ### 8.5 Corrections — `update_transactions`
 

@@ -87,7 +87,7 @@ beforeAll(async () => {
     .values({
       periodId: per?.id ?? '',
       personId: worker?.id ?? '',
-      payoutMethod: 'crypto',
+      payoutMethod: 'bank_usd',
       totalUsd: '3000',
     })
     .returning();
@@ -321,6 +321,9 @@ describe('planned payments (A-082)', () => {
       .from(posting)
       .where(and(eq(posting.transactionId, transactionId), eq(posting.isFee, true)));
     expect(fees).toMatchObject([{ amount: '-2297.01000000', currency: 'UAH' }]);
+    // A USD bank payout (A-084) is settled in USD without a UAH rate.
+    const [paidItem] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item));
+    expect(paidItem).toMatchObject({ status: 'paid', payoutFxRate: null, totalUah: null });
     const [payoutTax] = await h.db
       .select()
       .from(plannedPayment)
