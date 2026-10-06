@@ -432,3 +432,7 @@ At the end, report briefly:
 ### Reconcile invoice numbers with signed originals
 
 Use `list_invoices` and `get_invoice` to identify an issued unpaid invoice and its current signed copy. Read `get_document` with `includeContent: true` and verify the actual signed PDF against the client, SOW, period, amount and currency. An owner can call `reconcile_invoice_numbers` with the current `expectedNumber`, the exact signed `number`, `signedDocumentId`, decimal-string `signedTotal`, `signedCurrency` and a reason. Include all invoices involved in a number swap in one batch. Run `dryRun: true` first, then commit with a fresh `idempotencyKey`. This records the old snapshot and an audited correction, updates signed-copy metadata, and preserves files, financial data, dates, links and sequence counters. Ordinary issued-number edits remain prohibited.
+
+### Delete a mistaken draft act
+
+On an explicit owner request, identify the exact act with `find_link_targets(entityType: "supplier_act")` and `get_act`. `delete_draft_act` removes only a standalone unnumbered draft without files, linked documents, a payroll item or a reimbursement. Supply the act id and reason, preview with `dryRun: true`, show the exact counterparty, service period and amount, then use a fresh `idempotencyKey` to delete. The old row and reason remain in the audit log. Issued acts must be voided in the UI; consumed numbers are retained.
