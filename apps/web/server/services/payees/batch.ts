@@ -29,6 +29,8 @@ const payeePatch = z.object({
   feeCurrency: text(
     'Currency the bank charges the fee in, e.g. UAH for a USD SWIFT; null = payout currency',
   ),
+  feeStepFrom: text('Tariff step: from this payout amount the fixed fee is feeStepFixed'),
+  feeStepFixed: text('Fixed fee from feeStepFrom on, e.g. "15" (PrivatBank: 15 UAH from 100 000)'),
   personId: z
     .uuid()
     .nullable()

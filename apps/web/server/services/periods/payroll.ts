@@ -23,6 +23,7 @@ import {
   type PlanItem,
   type PlanLine,
   type WorkCalendar,
+  type PayoutMethod,
 } from '@tally/domain';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { ensureMonthlyActDraft, syncMonthlyActDraft } from '../acts';
@@ -71,7 +72,7 @@ export async function createPayroll(
   )[0]?.month as LocalDate;
   /** total_uah and the rate snapshot of a fiat item; crypto items have neither (A-075, A-076). */
   const fiatTotals = async (
-    method: 'fiat' | 'crypto',
+    method: PayoutMethod,
     payeeId: string | null,
     lines: PlanLine[],
     adjustments: PlanItem['adjustments'],

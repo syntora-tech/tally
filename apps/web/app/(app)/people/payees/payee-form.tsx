@@ -126,6 +126,8 @@ export function PayeeForm({ payee, people, defaultPersonId }: Props) {
                 feeFixed: payee.feeFixed ?? null,
                 feePercent: payee.feePercent ?? null,
                 feeCurrency: payee.feeCurrency ?? null,
+                feeStepFrom: payee.feeStepFrom ?? null,
+                feeStepFixed: payee.feeStepFixed ?? null,
               }
             : null
         }

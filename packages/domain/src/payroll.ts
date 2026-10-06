@@ -13,7 +13,8 @@ import {
 } from './local-date';
 import { Decimal, roundHalfUp, sum, toDecimal, type DecimalInput } from './money';
 
-export type PayoutMethod = 'fiat' | 'crypto';
+/** `bank_usd`: USD from a USD bank account, e.g. a SWIFT abroad — no UAH rate, no FOP act (A-084). */
+export type PayoutMethod = 'fiat' | 'crypto' | 'bank_usd';
 export type ReleasePolicy = 'immediate' | 'on_payment_or_due';
 export type FundingSource = 'client' | 'company';
 

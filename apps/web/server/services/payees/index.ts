@@ -95,6 +95,8 @@ export const listPayees = defineService({
           feeFixed: payee.feeFixed,
           feePercent: payee.feePercent,
           feeCurrency: payee.feeCurrency,
+          feeStepFrom: payee.feeStepFrom,
+          feeStepFixed: payee.feeStepFixed,
         })
         .from(payee)
         .leftJoin(person, eq(person.id, payee.personId))

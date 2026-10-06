@@ -90,7 +90,7 @@ export function BillingFields({
               id={id('invoiceChannel')}
               name={`${prefix}invoiceChannel`}
               defaultValue={defaults.invoiceChannel}
-              options={toOptions(labels.PAYOUT_METHOD_LABELS)}
+              options={toOptions(labels.PAYOUT_METHOD_LABELS).filter((o) => o.value !== 'bank_usd')}
             />
           </FormField>
           {type === 'fixed_monthly' && (

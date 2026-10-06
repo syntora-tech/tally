@@ -102,5 +102,9 @@ describe('planned payments (A-082)', () => {
     expect(transferFee(swift, '3000', 'USD', toUah)).toMatchObject({ currency: 'UAH' });
     expect(transferFee(swift, '3000', 'USD', toUah)?.amount.toFixed(2)).toBe('1295.00');
     expect(transferFee({ feeFixed: null, feePercent: '0' }, '1', 'UAH')).toBeNull();
+    // PrivatBank: 5 UAH a transfer, 15 UAH from 100 000 (A-084).
+    const privat = { feeFixed: '5', feeStepFrom: '100000', feeStepFixed: '15' };
+    expect(transferFee(privat, '93174.60', 'UAH')?.amount.toFixed(2)).toBe('5.00');
+    expect(transferFee(privat, '101223', 'UAH')?.amount.toFixed(2)).toBe('15.00');
   });
 });

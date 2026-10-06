@@ -9,6 +9,7 @@ import {
   timesheet,
 } from '@tally/db/schema';
 import { agencyPlan, payrollPlan, periodPreview, toDecimal } from '@tally/domain';
+import { PAYOUT_METHODS } from '../assignments/schema';
 import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -335,7 +336,7 @@ export const addAdjustment = defineService({
   input: z.object({
     periodId: z.uuid(),
     personId: z.uuid({ error: 'field.person' }),
-    payoutMethod: z.enum(['fiat', 'crypto']).default('fiat'),
+    payoutMethod: z.enum(PAYOUT_METHODS).default('fiat'),
     kind: z.enum(['bonus', 'deduction', 'trip_reimbursement', 'correction', 'other']),
     amount: decimalString.refine((v) => !toDecimal(v).isZero(), 'field.nonZero'),
     currency: currencyCode.refine(

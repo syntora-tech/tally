@@ -29,7 +29,15 @@ export type PlannedFormState = ActionResult<{ id: string }> | null;
 const decimalField = (v: unknown) =>
   typeof v === 'string' ? v.replace(/\s/g, '').replace(',', '.') : v;
 
-const DECIMAL_KEYS = ['amount', 'ratePercent', 'feeFixed', 'feePercent', 'feeAmount'];
+const DECIMAL_KEYS = [
+  'amount',
+  'ratePercent',
+  'feeFixed',
+  'feePercent',
+  'feeAmount',
+  'feeStepFrom',
+  'feeStepFixed',
+];
 
 function formInput(formData: FormData) {
   const input: Record<string, unknown> = formDataToObject(formData);

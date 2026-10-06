@@ -41,6 +41,12 @@ const feeFields = {
   feeFixed: decimal('Bank fee per transfer, fixed part, decimal string'),
   feePercent: decimal('Bank fee per transfer, percent of the amount, 0–100'),
   feeCurrency: text('Currency the bank charges the fee in; null = the payment currency'),
+  feeStepFrom: decimal(
+    'Tariff step: from this payment amount the fixed fee is feeStepFixed, e.g. "100000"',
+  ),
+  feeStepFixed: decimal(
+    'Fixed fee from feeStepFrom on, e.g. "15" (PrivatBank: 5 UAH, 15 UAH from 100 000)',
+  ),
 };
 
 const chargeItem = z.object({

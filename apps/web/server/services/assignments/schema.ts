@@ -15,7 +15,10 @@ const emptyToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 export const BILLING_TYPES = ['fixed_monthly', 'hourly', 'none'] as const;
 export const PRORATION_POLICIES = ['full_month', 'by_hours', 'trunc_hourly'] as const;
 export const PAY_TYPES = ['fixed', 'hourly', 'hourly_rate', 'included'] as const;
-export const PAYOUT_METHODS = ['fiat', 'crypto'] as const;
+/** How a person is paid; `bank_usd` = USD from a USD bank account, e.g. a SWIFT (A-084). */
+export const PAYOUT_METHODS = ['fiat', 'crypto', 'bank_usd'] as const;
+/** How a client pays us. */
+export const INVOICE_CHANNELS = ['fiat', 'crypto'] as const;
 export const RELEASE_POLICIES = ['immediate', 'on_payment_or_due'] as const;
 /** What a person can be paid in (A-075): USD lines are converted at payout, UAH ones are not. */
 export const PAY_CURRENCIES = ['USD', 'UAH'] as const;
@@ -32,7 +35,7 @@ export const billingTermsFields = z.object({
     .preprocess(emptyToNull, currencyCode.nullable().optional())
     .transform((v) => v ?? undefined),
   prorationPolicy: z.enum(PRORATION_POLICIES).default('full_month'),
-  invoiceChannel: z.enum(PAYOUT_METHODS).default('fiat'),
+  invoiceChannel: z.enum(INVOICE_CHANNELS).default('fiat'),
 });
 
 /** «Людині» block: what we pay (spec 4.2 pay_terms, 5.2). `fixed` already includes FTE. */

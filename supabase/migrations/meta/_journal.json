@@ -463,6 +463,13 @@
       "when": 1791309379742,
       "tag": "20261006175619_supplier_act_parts_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791310957631,
+      "tag": "20261006190500_bank_usd_fee_step",
+      "breakpoints": true
     }
   ]
 }

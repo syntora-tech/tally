@@ -258,6 +258,8 @@ export const sixMonthForecast = defineService({
             feeFixed: payee.feeFixed,
             feePercent: payee.feePercent,
             feeCurrency: payee.feeCurrency,
+            feeStepFrom: payee.feeStepFrom,
+            feeStepFixed: payee.feeStepFixed,
           })
           .from(person)
           .leftJoin(payee, eq(payee.id, person.defaultPayeeId)),

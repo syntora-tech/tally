@@ -37,6 +37,8 @@ export default async function EditPayeePage({ params }: { params: Promise<{ id: 
           feeFixed: payee.feeFixed,
           feePercent: payee.feePercent,
           feeCurrency: payee.feeCurrency,
+          feeStepFrom: payee.feeStepFrom,
+          feeStepFixed: payee.feeStepFixed,
         }}
       />
     </div>

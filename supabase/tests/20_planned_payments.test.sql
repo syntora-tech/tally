@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(14);
+select plan(15);
 
 insert into public.person (id, full_name) values ('20000000-0000-0000-0000-000000000020', 'Director 20');
 insert into public.planned_expense (id, name, category_id, amount, currency, starts_on, person_id)
@@ -22,6 +22,8 @@ select throws_ok($$ insert into public.payment_charge (name, planned_expense_id,
   '23514', null, 'a rate is at most 100 %');
 select throws_ok($$ update public.planned_expense set fee_fixed = -1 where id = 'c0000000-0000-0000-0000-000000000020' $$,
   '23514', null, 'a fee is not negative');
+select throws_ok($$ update public.planned_expense set fee_step_from = 100000 where id = 'c0000000-0000-0000-0000-000000000020' $$,
+  '23514', null, 'a fee step needs its fixed fee (A-084)');
 
 insert into public.planned_payment (id, planned_expense_id, month, due_on, name, category_id, amount, currency)
   select 'c1000000-0000-0000-0000-000000000020', 'c0000000-0000-0000-0000-000000000020', '2037-01-01', '2037-01-22',

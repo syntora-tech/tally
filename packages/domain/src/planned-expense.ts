@@ -68,6 +68,9 @@ export type TransferFee = {
   feeFixed?: DecimalInput | null;
   feePercent?: DecimalInput | null;
   feeCurrency?: string | null;
+  /** From this payment amount the fixed part is `feeStepFixed` (PrivatBank: 15 UAH from 100 000). */
+  feeStepFrom?: DecimalInput | null;
+  feeStepFixed?: DecimalInput | null;
 };
 
 export type Money = { amount: Decimal; currency: string };
@@ -83,7 +86,11 @@ export function transferFee(
   currency: string,
   convert?: Convert,
 ): Money | null {
-  const fixed = toDecimal(fee.feeFixed ?? '0');
+  const stepped =
+    fee.feeStepFrom != null &&
+    fee.feeStepFixed != null &&
+    toDecimal(amount).gte(toDecimal(fee.feeStepFrom));
+  const fixed = toDecimal((stepped ? fee.feeStepFixed : fee.feeFixed) ?? '0');
   const percent = toDecimal(fee.feePercent ?? '0');
   if (fixed.isZero() && percent.isZero()) return null;
   const feeCurrency = fee.feeCurrency ?? currency;

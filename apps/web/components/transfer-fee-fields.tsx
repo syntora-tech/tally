@@ -9,6 +9,8 @@ export type TransferFeeValues = {
   feeFixed: string | null;
   feePercent: string | null;
   feeCurrency: string | null;
+  feeStepFrom?: string | null;
+  feeStepFixed?: string | null;
 };
 
 /**
@@ -29,7 +31,7 @@ export function TransferFeeFields({
     <fieldset className="col-span-full flex flex-col gap-2">
       <legend className="text-sm font-medium">{t('legend')}</legend>
       <p className="text-xs text-muted-foreground">{t('hint')}</p>
-      <div className="grid grid-cols-3 items-start gap-3 md:max-w-md">
+      <div className="grid grid-cols-3 items-start gap-3 md:max-w-2xl md:grid-cols-5">
         <FormField label={t('fixed')} htmlFor={`${idPrefix}-fee-fixed`} error={errors?.feeFixed}>
           <Input
             id={`${idPrefix}-fee-fixed`}
@@ -59,6 +61,30 @@ export function TransferFeeFields({
             id={`${idPrefix}-fee-currency`}
             name="feeCurrency"
             defaultValue={value?.feeCurrency ?? ''}
+          />
+        </FormField>
+        <FormField
+          label={t('stepFrom')}
+          htmlFor={`${idPrefix}-fee-step-from`}
+          error={errors?.feeStepFrom}
+        >
+          <Input
+            id={`${idPrefix}-fee-step-from`}
+            name="feeStepFrom"
+            inputMode="decimal"
+            defaultValue={editableDecimal(value?.feeStepFrom)}
+          />
+        </FormField>
+        <FormField
+          label={t('stepFixed')}
+          htmlFor={`${idPrefix}-fee-step-fixed`}
+          error={errors?.feeStepFixed}
+        >
+          <Input
+            id={`${idPrefix}-fee-step-fixed`}
+            name="feeStepFixed"
+            inputMode="decimal"
+            defaultValue={editableDecimal(value?.feeStepFixed)}
           />
         </FormField>
       </div>

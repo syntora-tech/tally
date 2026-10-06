@@ -148,7 +148,8 @@
     },
     "payoutMethod": {
       "fiat": "Fiat",
-      "crypto": "Crypto"
+      "crypto": "Crypto",
+      "bank_usd": "Bank, USD"
     },
     "releasePolicy": {
       "on_payment_or_due": "After client payment or at the deadline",
@@ -314,7 +315,7 @@
       "chooseAgency": "Choose the agency payee",
       "billingCurrency": "Client rates are in the contract currency: {currency}",
       "payCurrency": "Pay currency: USD or UAH",
-      "cryptoPayUsd": "Crypto payouts need pay in USD",
+      "cryptoPayUsd": "Crypto and USD bank payouts need pay in USD",
       "fixedLink": "The person, contract and internal flag of an assignment cannot change: create a new assignment",
       "newNeedsPerson": "A new assignment needs personId and startsOn",
       "newNeedsTerms": "A new assignment needs both billing and pay terms",
@@ -1895,7 +1896,9 @@
     "percent": "%",
     "currency": "Currency",
     "legend": "Bank fee per transfer",
-    "hint": "As in the bank tariff: fixed + percent of the amount. Empty currency = the payment's currency (for a USD SWIFT charged in hryvnias write UAH)."
+    "hint": "As in the bank tariff: fixed + percent of the amount; optionally another fixed fee from some amount (PrivatBank: 5 UAH, 15 UAH from 100 000). Empty currency = the payment currency (for a USD SWIFT charged in hryvnias write UAH).",
+    "stepFrom": "From amount",
+    "stepFixed": "Fixed from it"
   },
   "plannedPayments": {
     "tab": "Payments",

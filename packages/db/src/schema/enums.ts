@@ -11,7 +11,8 @@ export const prorationPolicy = pgEnum('proration_policy', [
 ]);
 export const payType = pgEnum('pay_type', ['fixed', 'hourly', 'hourly_rate', 'included']);
 export const releasePolicy = pgEnum('release_policy', ['immediate', 'on_payment_or_due']);
-export const payoutMethod = pgEnum('payout_method', ['fiat', 'crypto']);
+/** `bank_usd`: paid in USD from a USD bank account, e.g. a SWIFT abroad (A-084). */
+export const payoutMethod = pgEnum('payout_method', ['fiat', 'crypto', 'bank_usd']);
 export const periodStatus = pgEnum('period_status', ['open', 'closed']);
 export const docStatus = pgEnum('doc_status', ['draft', 'issued', 'void']);
 export const invoiceStatus = pgEnum('invoice_status', [

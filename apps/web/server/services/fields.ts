@@ -133,4 +133,7 @@ export const transferFeeFields = {
   feeCurrency: z
     .preprocess(emptyToNull, currencyCode.nullable().optional())
     .transform((v) => v ?? null),
+  /** A tariff step (A-084): from this payment amount the fixed part is `feeStepFixed`. */
+  feeStepFrom: optionalDecimal,
+  feeStepFixed: optionalDecimal,
 };

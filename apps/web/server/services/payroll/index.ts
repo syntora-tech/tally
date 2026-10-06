@@ -70,6 +70,8 @@ export const listPayroll = defineService({
             feeFixed: payee.feeFixed,
             feePercent: payee.feePercent,
             feeCurrency: payee.feeCurrency,
+            feeStepFrom: payee.feeStepFrom,
+            feeStepFixed: payee.feeStepFixed,
           },
           month: period.month,
         })

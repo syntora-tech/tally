@@ -68,14 +68,19 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
   const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
   const notes = new Map(assignments.map((a) => [a.assignmentId, a.note]));
   const closed = p.status === 'closed';
-  const [t, tp, tc, fmt, { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS }] =
-    await Promise.all([
-      getTranslations('period'),
-      getTranslations('periods'),
-      getTranslations('common'),
-      getFormat(),
-      getLabels(),
-    ]);
+  const [
+    t,
+    tp,
+    tc,
+    fmt,
+    { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS, PAYOUT_METHOD_LABELS },
+  ] = await Promise.all([
+    getTranslations('period'),
+    getTranslations('periods'),
+    getTranslations('common'),
+    getFormat(),
+    getLabels(),
+  ]);
   const billingText = (a: (typeof assignments)[number]) => {
     const b = preview.rows.find((r) => r.assignmentId === a.assignmentId)?.billing;
     if (!b || b.type === 'none') return t('notBilled');
@@ -305,7 +310,9 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                   <span className="font-medium">{personName}</span>
                   <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
                   <span className="tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
-                  {a.payoutMethod === 'crypto' && <Badge variant="outline">crypto</Badge>}
+                  {a.payoutMethod !== 'fiat' && (
+                    <Badge variant="outline">{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Badge>
+                  )}
                   <span className="text-muted-foreground">{a.reason}</span>
                   {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
                 </li>
@@ -335,7 +342,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               {plan.map((i) => (
                 <TableRow key={`${i.personId}:${i.payoutMethod}`}>
                   <TableCell>{i.personName}</TableCell>
-                  <TableCell>{i.payoutMethod === 'crypto' ? 'crypto' : 'fiat'}</TableCell>
+                  <TableCell>{PAYOUT_METHOD_LABELS[i.payoutMethod]}</TableCell>
                   <TableCell>{fmt.amount(i.totalUsd)}</TableCell>
                   <TableCell>{i.totalUahApprox ? fmt.amount(i.totalUahApprox) : '—'}</TableCell>
                 </TableRow>

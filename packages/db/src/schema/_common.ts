@@ -86,16 +86,29 @@ export const transferFeeColumns = () => ({
   feeFixed: numeric({ precision: 20, scale: 8 }),
   feePercent: numeric({ precision: 9, scale: 4 }),
   feeCurrency: text(),
+  /** A tariff step (A-084): from this amount of the payment the fixed part is `feeStepFixed`. */
+  feeStepFrom: numeric({ precision: 20, scale: 8 }),
+  feeStepFixed: numeric({ precision: 20, scale: 8 }),
 });
 
 export function transferFeeChecks(
   table: string,
-  t: { feeFixed: AnyPgColumn; feePercent: AnyPgColumn; feeCurrency: AnyPgColumn },
+  t: {
+    feeFixed: AnyPgColumn;
+    feePercent: AnyPgColumn;
+    feeCurrency: AnyPgColumn;
+    feeStepFrom: AnyPgColumn;
+    feeStepFixed: AnyPgColumn;
+  },
 ) {
   return [
     check(
       `${table}_fee_check`,
       sql`coalesce(${t.feeFixed}, 0) >= 0 and coalesce(${t.feePercent}, 0) between 0 and 100`,
+    ),
+    check(
+      `${table}_fee_step_check`,
+      sql`(${t.feeStepFrom} is null) = (${t.feeStepFixed} is null) and coalesce(${t.feeStepFrom}, 1) > 0 and coalesce(${t.feeStepFixed}, 0) >= 0`,
     ),
     currencyCheck(`${table}_fee_currency_check`, t.feeCurrency),
   ];

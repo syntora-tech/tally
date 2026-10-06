@@ -39,9 +39,10 @@ export function billingCurrency(
   return { currency: expected };
 }
 
-/** Crypto payouts go out in USD-pegged coins, so only USD pay can be paid in crypto (A-075). */
+/**
+ * Crypto payouts go out in USD-pegged coins and `bank_usd` ones in USD, so both need USD pay
+ * (A-075, A-084).
+ */
 export function payCurrencyProblem(pay: { currency: string; payoutMethod: string }): string | null {
-  return pay.payoutMethod === 'crypto' && pay.currency !== 'USD'
-    ? 'assignments.cryptoPayUsd'
-    : null;
+  return pay.payoutMethod !== 'fiat' && pay.currency !== 'USD' ? 'assignments.cryptoPayUsd' : null;
 }
