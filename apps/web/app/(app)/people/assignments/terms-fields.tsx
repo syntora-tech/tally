@@ -9,6 +9,9 @@ import { toOptions, useLabels } from '@/lib/labels';
 
 type Errors = Record<string, string[]> | undefined;
 
+// Keep in sync with PAY_CURRENCIES in the assignments service schema (A-075).
+const PAY_CURRENCY_OPTIONS = ['USD', 'UAH'].map((c) => ({ value: c, label: c }));
+
 export type BillingDefaults = {
   type: string;
   rate: string;
@@ -70,12 +73,14 @@ export function BillingFields({
               defaultValue={editableDecimal(defaults.rate)}
             />
           </FormField>
-          <FormField label={t('currency')} htmlFor={id('currency')}>
-            <Input
-              id={id('currency')}
-              name={`${prefix}currency`}
-              defaultValue={defaults.currency}
-            />
+          <FormField
+            label={t('currency')}
+            htmlFor={id('currency')}
+            hint={t('contractCurrencyHint')}
+            error={errors?.[`${prefix}currency`]}
+          >
+            <input type="hidden" name={`${prefix}currency`} value={defaults.currency} />
+            <Input id={id('currency')} value={defaults.currency} readOnly disabled />
           </FormField>
           <FormField label={t('invoiceChannel')} htmlFor={id('invoiceChannel')}>
             <NativeSelect
@@ -154,11 +159,16 @@ export function PayFields({
               defaultValue={editableDecimal(defaults.amount)}
             />
           </FormField>
-          <FormField label={t('currency')} htmlFor={id('currency')}>
-            <Input
+          <FormField
+            label={t('currency')}
+            htmlFor={id('currency')}
+            error={errors?.[`${prefix}currency`]}
+          >
+            <NativeSelect
               id={id('currency')}
               name={`${prefix}currency`}
               defaultValue={defaults.currency}
+              options={PAY_CURRENCY_OPTIONS}
             />
           </FormField>
         </>

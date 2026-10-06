@@ -9,6 +9,7 @@ import { endOfMonth, type LocalDate } from './local-date';
 import { Decimal, roundHalfUp, sum, toDecimal, type DecimalInput } from './money';
 import { effectiveVersion } from './terms';
 import {
+  payrollPartUah,
   payrollTotalUah,
   payrollTotalUsd,
   type AdjustmentInput,
@@ -67,14 +68,22 @@ export type PreviewRow = {
   payHours: string;
   billing: (BillingTermsInput & { currency: string }) | null;
   invoiceAmount: string | null;
-  payUsd: string;
+  /** Pay in the currency of the pay terms (A-075). */
+  pay: string;
+  payCurrency: string;
   payUahApprox: string | null;
 };
 
 export type PeriodPreview = {
   rows: PreviewRow[];
-  totals: { invoiceUsd: string; payUsd: string; payUahApprox: string | null };
+  totals: { invoiceUsd: string; payUsd: string; payUah: string; payUahApprox: string | null };
 };
+
+/** UAH value of a pay amount: UAH as it is, USD at the reference rate (A-075). */
+function uahApprox(amount: Decimal, currency: string, referenceFx: DecimalInput | null) {
+  if (currency === 'UAH') return amount;
+  return referenceFx === null ? null : roundHalfUp(amount.times(toDecimal(referenceFx)));
+}
 
 /** Assignments active at any time during the month take part in the period. */
 /** Hours the person is paid for: their own figure, else the client's (A-074). */
@@ -119,18 +128,22 @@ export function periodPreview(
           ? { type: b.type, rate: b.rate, prorationPolicy: b.prorationPolicy, currency: b.currency }
           : null,
         invoiceAmount: invoice ? invoice.toFixed(2) : null,
-        payUsd: pay.toFixed(2),
-        payUahApprox:
-          referenceFx === null ? null : roundHalfUp(pay.times(toDecimal(referenceFx))).toFixed(2),
+        pay: pay.toFixed(2),
+        payCurrency: p?.currency ?? 'USD',
+        payUahApprox: uahApprox(pay, p?.currency ?? 'USD', referenceFx)?.toFixed(2) ?? null,
       };
     });
+  const payIn = (currency: string) =>
+    sum(rows.filter((r) => r.payCurrency === currency).map((r) => r.pay)).toFixed(2);
   return {
     rows,
     totals: {
       invoiceUsd: sum(rows.map((r) => r.invoiceAmount ?? '0')).toFixed(2),
-      payUsd: sum(rows.map((r) => r.payUsd)).toFixed(2),
-      payUahApprox:
-        referenceFx === null ? null : sum(rows.map((r) => r.payUahApprox ?? '0')).toFixed(2),
+      payUsd: payIn('USD'),
+      payUah: payIn('UAH'),
+      payUahApprox: rows.some((r) => r.payUahApprox === null)
+        ? null
+        : sum(rows.map((r) => r.payUahApprox ?? '0')).toFixed(2),
     },
   };
 }
@@ -179,7 +192,9 @@ export type PlanAdjustment = AdjustmentInput & { personId: string; payoutMethod:
 
 export type PlanLine = {
   assignmentId: string;
-  amountUsd: string;
+  /** In `currency` — the pay terms currency; agency fees are USD (A-075). */
+  amount: string;
+  currency: string;
   releasePolicy: ReleasePolicy;
   graceDays: number;
 };
@@ -190,7 +205,10 @@ export type PlanItem = {
   payoutMethod: PayoutMethod;
   lines: PlanLine[];
   adjustments: AdjustmentInput[];
+  /** USD part (lines and adjustments), before conversion. */
   totalUsd: string;
+  /** UAH part, paid as it is. */
+  totalUahPart: string;
   /** At the reference rate; the real rate is set at payout (5.4). */
   totalUahApprox: string | null;
 };
@@ -219,6 +237,7 @@ export function payrollPlan(
         lines: [],
         adjustments: [],
         totalUsd: '0',
+        totalUahPart: '0',
         totalUahApprox: null,
       };
       items.set(key, item);
@@ -231,7 +250,8 @@ export function payrollPlan(
     if (!terms) continue;
     itemFor(a.personId ?? a.personName, a.personName, terms.payoutMethod ?? 'fiat').lines.push({
       assignmentId: a.assignmentId,
-      amountUsd: payrollLineAmount(terms, personHours(a), workHours).toFixed(2),
+      amount: payrollLineAmount(terms, personHours(a), workHours).toFixed(2),
+      currency: terms.currency,
       releasePolicy: terms.releasePolicy ?? 'on_payment_or_due',
       graceDays: terms.graceDays ?? 0,
     });
@@ -244,12 +264,12 @@ export function payrollPlan(
     });
   }
   return [...items.values()].map((item) => {
-    const lines = item.lines.map((l) => l.amountUsd);
-    const uah = referenceFx === null ? null : payrollTotalUah(lines, item.adjustments, referenceFx);
+    const uah = payrollTotalUah(item.lines, item.adjustments, referenceFx);
     return {
       ...item,
-      totalUsd: payrollTotalUsd(lines, item.adjustments).toFixed(2),
-      totalUahApprox: uah?.isOk() ? uah.value.toFixed(2) : null,
+      totalUsd: payrollTotalUsd(item.lines, item.adjustments).toFixed(2),
+      totalUahPart: payrollPartUah(item.lines, item.adjustments).toFixed(2),
+      totalUahApprox: uah.isOk() ? uah.value.toFixed(2) : null,
     };
   });
 }
@@ -286,7 +306,8 @@ export function agencyPlan(
     };
     item.lines.push({
       assignmentId: a.assignmentId,
-      amountUsd: roundHalfUp(toDecimal(terms.ratePerHour).times(hours), 2).toFixed(2),
+      amount: roundHalfUp(toDecimal(terms.ratePerHour).times(hours), 2).toFixed(2),
+      currency: 'USD',
       releasePolicy: terms.releasePolicy ?? 'on_payment_or_due',
       graceDays: terms.graceDays ?? 0,
     });
@@ -294,6 +315,6 @@ export function agencyPlan(
   }
   return [...items.values()].map((item) => ({
     ...item,
-    totalUsd: sum(item.lines.map((l) => l.amountUsd)).toFixed(2),
+    totalUsd: sum(item.lines.map((l) => l.amount)).toFixed(2),
   }));
 }

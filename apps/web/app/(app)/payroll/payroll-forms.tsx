@@ -29,7 +29,7 @@ export type PayDialogProps = {
   fiat: boolean;
   today: string;
   /** For fiat items without a rate yet: lines and adjustments to preview total_uah (5.2). */
-  linesUsd: string[];
+  lines: { amount: string; currency: string }[];
   adjustments: { amount: string; currency: string }[];
   currentRate: string | null;
   currentSource: string | null;
@@ -68,7 +68,7 @@ export function PayDialog(p: PayDialogProps) {
   const parsed = parseDecimal(rate.replace(',', '.'));
   const totalUah =
     p.fiat && parsed.isOk() && parsed.value.gt(0)
-      ? payrollTotalUah(p.linesUsd, p.adjustments, parsed.value)
+      ? payrollTotalUah(p.lines, p.adjustments, parsed.value)
       : null;
   const preview = totalUah?.isOk() ? totalUah.value.toFixed(2) : null;
   const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>('new');

@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { toDecimal } from '@tally/domain';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -146,7 +147,9 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                       </p>
                     </div>
                     <div className="text-right text-sm">
-                      <div className="font-medium">{fmt.amount(i.item.totalUsd, 'USD')}</div>
+                      {(!fiat || !toDecimal(i.item.totalUsd).isZero()) && (
+                        <div className="font-medium">{fmt.amount(i.item.totalUsd, 'USD')}</div>
+                      )}
                       {fiat && (
                         <div>
                           {i.item.totalUah ? fmt.amount(i.item.totalUah, 'UAH') : t('noRate')}
@@ -186,7 +189,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell>{fmt.amount(l.amountUsd)}</TableCell>
+                            <TableCell>{fmt.amount(l.amount, l.currency)}</TableCell>
                             <TableCell>
                               {lineStatus(l.status)}
                               {l.status === 'awaiting_client' && l.deadline && (
@@ -229,7 +232,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         itemId={i.item.id}
                         fiat={fiat}
                         today={ctx.today}
-                        linesUsd={i.lines.map((l) => l.amountUsd)}
+                        lines={i.lines.map((l) => ({ amount: l.amount, currency: l.currency }))}
                         adjustments={i.adjustments.map((a) => ({
                           amount: a.amount,
                           currency: a.currency,

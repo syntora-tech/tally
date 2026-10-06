@@ -108,7 +108,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
               <ul className="mt-1 text-xs text-muted-foreground">
                 {c.rows.map((r) => (
                   <li key={r.lineId}>
-                    {r.personName} · {fmt.amount(r.amountUsd)} ·{' '}
+                    {r.personName} ·{' '}
+                    {r.amountUsd ? fmt.amount(r.amountUsd) : fmt.amount(r.amount, r.currency)} ·{' '}
                     <Link href={`/invoices/${r.invoiceId}`} className="underline">
                       {t('invoice', { number: r.invoiceNumber ?? '' })}
                     </Link>

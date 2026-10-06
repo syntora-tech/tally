@@ -26,6 +26,7 @@ import { defineService } from '../define-service';
 import { msg, serviceError } from '../errors';
 import { localDateString, monthStart } from '../fields';
 import { definedOnly } from '../patch';
+import { billingCurrency, contractCurrency, payCurrencyProblem } from './currency';
 import { assignmentCoreShape, billingTermsFields, payTermsFields } from './schema';
 
 const clientLabel = sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`;
@@ -312,7 +313,23 @@ export const upsertAssignments = defineService({
           await tx.insert(table).values({ ...fields, assignmentId, validFrom } as never);
           return 'added';
         };
-        const billingStatus = await addVersion(billingTerms, 'billing', billing);
+        const billed = billing
+          ? billingCurrency(billing.currency, await contractCurrency(tx, { assignmentId }))
+          : null;
+        if (billed && 'error' in billed) problems.push(billed.error);
+        const payProblem = pay ? payCurrencyProblem(pay) : null;
+        if (payProblem) problems.push(payProblem);
+        if (problems.length) {
+          errors[key] = problems;
+          continue;
+        }
+        const billingStatus = await addVersion(
+          billingTerms,
+          'billing',
+          billing && billed && 'currency' in billed
+            ? { ...billing, currency: billed.currency }
+            : billing,
+        );
         const payStatus = await addVersion(payTerms, 'pay', pay);
         if (problems.length) {
           errors[key] = problems;

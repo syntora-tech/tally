@@ -35,6 +35,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     clientName,
     clientId,
     contractNumber,
+    contractCurrency,
     annexLabel,
     billing,
     pay,
@@ -172,7 +173,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
               defaults={{
                 type: lastBilling?.type ?? 'hourly',
                 rate: lastBilling?.rate ?? '',
-                currency: lastBilling?.currency ?? 'USD',
+                currency: contractCurrency ?? 'USD',
                 prorationPolicy: lastBilling?.prorationPolicy ?? 'full_month',
                 invoiceChannel: lastBilling?.invoiceChannel ?? 'fiat',
               }}

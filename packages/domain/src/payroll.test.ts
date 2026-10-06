@@ -14,8 +14,9 @@ import {
 
 const d = (s: string): LocalDate => parseLocalDate(s)._unsafeUnwrap();
 const cal = new WorkCalendar([]);
+const usd = (amounts: string[]) => amounts.map((amount) => ({ amount, currency: 'USD' }));
 const uah = (lines: string[], adj: { amount: string; currency: string }[] = [], fx = '44.48') =>
-  payrollTotalUah(lines, adj, fx)._unsafeUnwrap().toFixed(2);
+  payrollTotalUah(usd(lines), adj, fx)._unsafeUnwrap().toFixed(2);
 
 describe('payroll item totals (spec 5.2, 9.2)', () => {
   it('CTO: 2 020 × 44.48 + 3 325 UAH adjustment = 93 174.60 (act 1002 - А8)', () => {
@@ -24,14 +25,33 @@ describe('payroll item totals (spec 5.2, 9.2)', () => {
 
   it('USD adjustments are converted with the lines, stablecoins count as USD', () => {
     expect(uah(['1000'], [{ amount: '-100', currency: 'USD' }], '40')).toBe('36000.00');
-    expect(payrollTotalUsd(['1000'], [{ amount: '20', currency: 'USDT' }]).toFixed(2)).toBe(
+    expect(payrollTotalUsd(usd(['1000']), [{ amount: '20', currency: 'USDT' }]).toFixed(2)).toBe(
       '1020.00',
     );
   });
 
+  it('UAH lines are added as they are; a rate is needed only for a USD part (A-075)', () => {
+    const lines = [
+      { amount: '1000', currency: 'USD' },
+      { amount: '20000', currency: 'UAH' },
+    ];
+    expect(payrollTotalUah(lines, [], '41.5')._unsafeUnwrap().toFixed(2)).toBe('61500.00');
+    expect(payrollTotalUsd(lines, []).toFixed(2)).toBe('1000.00');
+    expect(payrollTotalUah(lines, [], null)._unsafeUnwrapErr()).toEqual({ code: 'rate_required' });
+    expect(
+      payrollTotalUah(
+        [{ amount: '20000', currency: 'UAH' }],
+        [{ amount: '500', currency: 'UAH' }],
+        null,
+      )
+        ._unsafeUnwrap()
+        .toFixed(2),
+    ).toBe('20500.00');
+  });
+
   it('rejects adjustments in other currencies', () => {
     expect(
-      payrollTotalUah(['1'], [{ amount: '1', currency: 'EUR' }], '44')._unsafeUnwrapErr(),
+      payrollTotalUah(usd(['1']), [{ amount: '1', currency: 'EUR' }], '44')._unsafeUnwrapErr(),
     ).toEqual({
       code: 'unsupported_currency',
       currency: 'EUR',

@@ -78,7 +78,8 @@ export const monthMargin = defineService({
       const accrued = await tx
         .select({
           assignmentId: payrollLine.assignmentId,
-          amountUsd: payrollLine.amountUsd,
+          amount: payrollLine.amount,
+          currency: payrollLine.currency,
           agencyFee: payrollLine.agencyFee,
         })
         .from(payrollLine)
@@ -146,8 +147,8 @@ export const monthMargin = defineService({
     }
     for (const a of data.accrued) {
       for (const r of rowsFor(a.assignmentId)) {
-        if (a.agencyFee) r.agency = r.agency.plus(a.amountUsd);
-        else r.pay = r.pay.plus(a.amountUsd);
+        if (a.agencyFee) r.agency = r.agency.plus(usd(a.amount, a.currency));
+        else r.pay = r.pay.plus(usd(a.amount, a.currency));
       }
     }
     for (const adj of data.adjustments) {

@@ -100,7 +100,7 @@ beforeAll(async () => {
   await h.db.insert(payrollLine).values({
     payrollItemId: item?.id ?? '',
     assignmentId: a?.id ?? '',
-    amountUsd: '2020',
+    amount: '2020',
     status: 'payable',
     fundingSource: 'company',
   });

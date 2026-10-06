@@ -29,35 +29,48 @@ export function resolvePayee(
 
 export type AdjustmentInput = { amount: DecimalInput; currency: string };
 
-export type PayrollTotalError = { code: 'unsupported_currency'; currency: string };
+/** A payroll line in the currency of its pay terms: USD or UAH (A-075). */
+export type PayLineInput = { amount: DecimalInput; currency: string };
 
-/**
- * total_uah = round2((Σ line_usd + Σ adj_usd) × payout_fx) + Σ adj_uah (spec 5.2).
- * Check: 2 020 × 44.48 + 3 325 = 93 174.60 (act 1002 - А8).
- */
-export function payrollTotalUah(
-  linesUsd: readonly DecimalInput[],
-  adjustments: readonly AdjustmentInput[],
-  payoutFx: DecimalInput,
-): Result<Decimal, PayrollTotalError> {
-  const foreign = adjustments.find((a) => !USD_LIKE.has(a.currency) && a.currency !== 'UAH');
-  if (foreign) return err({ code: 'unsupported_currency', currency: foreign.currency });
-  const usd = sum([
-    ...linesUsd,
-    ...adjustments.filter((a) => USD_LIKE.has(a.currency)).map((a) => a.amount),
-  ]);
-  const uah = sum(adjustments.filter((a) => a.currency === 'UAH').map((a) => a.amount));
-  return ok(roundHalfUp(usd.times(toDecimal(payoutFx))).plus(uah));
-}
+export type PayrollTotalError =
+  { code: 'unsupported_currency'; currency: string } | { code: 'rate_required' };
 
-/** USD part of a payroll item: lines plus USD adjustments, before conversion. */
+/** USD part of a payroll item: USD lines plus USD adjustments, before conversion. */
 export function payrollTotalUsd(
-  linesUsd: readonly DecimalInput[],
+  lines: readonly PayLineInput[],
   adjustments: readonly AdjustmentInput[],
 ): Decimal {
   return roundHalfUp(
-    sum([...linesUsd, ...adjustments.filter((a) => USD_LIKE.has(a.currency)).map((a) => a.amount)]),
+    sum([...lines, ...adjustments].filter((x) => USD_LIKE.has(x.currency)).map((x) => x.amount)),
   );
+}
+
+/** UAH part of a payroll item: UAH lines plus UAH adjustments, paid as they are. */
+export function payrollPartUah(
+  lines: readonly PayLineInput[],
+  adjustments: readonly AdjustmentInput[],
+): Decimal {
+  return sum([...lines, ...adjustments].filter((x) => x.currency === 'UAH').map((x) => x.amount));
+}
+
+/**
+ * total_uah = round2(USD part × payout_fx) + UAH part (spec 5.2, A-075). Check: 2 020 × 44.48 +
+ * 3 325 = 93 174.60 (act 1002 - А8). A rate is needed only when there is a USD part.
+ */
+export function payrollTotalUah(
+  lines: readonly PayLineInput[],
+  adjustments: readonly AdjustmentInput[],
+  payoutFx: DecimalInput | null,
+): Result<Decimal, PayrollTotalError> {
+  const foreign = [...lines, ...adjustments].find(
+    (x) => !USD_LIKE.has(x.currency) && x.currency !== 'UAH',
+  );
+  if (foreign) return err({ code: 'unsupported_currency', currency: foreign.currency });
+  const usd = payrollTotalUsd(lines, adjustments);
+  const uah = payrollPartUah(lines, adjustments);
+  if (usd.isZero()) return ok(uah);
+  if (payoutFx === null) return err({ code: 'rate_required' });
+  return ok(roundHalfUp(usd.times(toDecimal(payoutFx))).plus(uah));
 }
 
 export type InvoiceState = { total: DecimalInput; paidAmount: DecimalInput; dueDate: LocalDate };

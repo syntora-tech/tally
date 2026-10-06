@@ -227,4 +227,35 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
     const cleared = (await getAssignment.run(h.ctxFor(owner), { id }))._unsafeUnwrap();
     expect(cleared.annexLabel).toBeNull();
   });
+
+  it('A-075: client rates follow the contract currency; crypto pay is USD only', async () => {
+    const base = {
+      personId: ids.person,
+      contractId: ids.contract,
+      startsOn: '2026-08-01',
+      pay: { type: 'fixed', amount: '60000', currency: 'UAH' },
+    };
+    const wrongBilling = await createAssignment.run(h.ctxFor(owner), {
+      ...base,
+      billing: { type: 'hourly', rate: '47', currency: 'EUR' },
+    });
+    expect(wrongBilling._unsafeUnwrapErr().fieldErrors).toHaveProperty('billing.currency');
+
+    const cryptoUah = await createAssignment.run(h.ctxFor(owner), {
+      ...base,
+      billing: { type: 'hourly', rate: '47' },
+      pay: { ...base.pay, payoutMethod: 'crypto' },
+    });
+    expect(cryptoUah._unsafeUnwrapErr().message).toBe('assignments.cryptoPayUsd');
+
+    const ok = await createAssignment.run(h.ctxFor(owner), {
+      ...base,
+      billing: { type: 'hourly', rate: '47' },
+    });
+    const id = ok._unsafeUnwrap().id;
+    assignmentIds.push(id);
+    const card = (await getAssignment.run(h.ctxFor(owner), { id }))._unsafeUnwrap();
+    expect(card.billing[0]?.currency).toBe('USD');
+    expect(card.pay[0]?.currency).toBe('UAH');
+  });
 });

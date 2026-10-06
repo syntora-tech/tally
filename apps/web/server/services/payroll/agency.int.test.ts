@@ -201,7 +201,7 @@ describe('agency fees (A-068)', () => {
       status: 'draft',
     });
     expect(await agencyLine()).toMatchObject({
-      amountUsd: '640.00000000',
+      amount: '640.00000000',
       status: 'awaiting_client',
     });
     const queue = (

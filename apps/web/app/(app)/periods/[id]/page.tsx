@@ -1,4 +1,4 @@
-import { sum } from '@tally/domain';
+import { sum, toDecimal } from '@tally/domain';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -156,7 +156,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                 <TableCell>
                   {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
                 </TableCell>
-                <TableCell>{fmt.amount(r.payUsd)}</TableCell>
+                <TableCell>{fmt.amount(r.pay, r.payCurrency)}</TableCell>
                 <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
               </TableRow>
             ))}
@@ -167,7 +167,19 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
               <TableCell data-testid="total-invoice">
                 {fmt.amount(preview.totals.invoiceUsd)}
               </TableCell>
-              <TableCell data-testid="total-pay">{fmt.amount(preview.totals.payUsd)}</TableCell>
+              <TableCell data-testid="total-pay">
+                {[
+                  !toDecimal(preview.totals.payUsd).isZero() ||
+                  toDecimal(preview.totals.payUah).isZero()
+                    ? fmt.amount(preview.totals.payUsd, 'USD')
+                    : null,
+                  toDecimal(preview.totals.payUah).isZero()
+                    ? null
+                    : fmt.amount(preview.totals.payUah, 'UAH'),
+                ]
+                  .filter(Boolean)
+                  .join(' + ')}
+              </TableCell>
               <TableCell>
                 {preview.totals.payUahApprox ? fmt.amount(preview.totals.payUahApprox) : '—'}
               </TableCell>

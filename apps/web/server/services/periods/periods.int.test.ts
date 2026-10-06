@@ -199,7 +199,7 @@ describe('period wizard (spec 6.4)', () => {
     const total = (pick: (r: (typeof rows)[number]) => string | null) =>
       sum(rows.map((r) => pick(r) ?? '0')).toFixed(2);
     expect(total((r) => r.invoiceAmount)).toBe('14373.00');
-    expect(total((r) => r.payUsd)).toBe('10220.00');
+    expect(total((r) => r.pay)).toBe('10220.00');
     expect(total((r) => r.payUahApprox)).toBe('454585.60');
   });
 
@@ -286,7 +286,7 @@ describe('period wizard (spec 6.4)', () => {
     expect(byAssignment('ceo')).toMatchObject({ status: 'payable', fundingSource: 'company' });
     expect(byAssignment('ideasoft')).toMatchObject({
       status: 'awaiting_client',
-      amountUsd: '3000.00000000',
+      amount: '3000.00000000',
     });
     expect(byAssignment('ideasoft')?.fundedByInvoiceLineId).not.toBeNull();
     expect(items.find((i) => i.personId === ids.people[3])?.status).toBe('payable');

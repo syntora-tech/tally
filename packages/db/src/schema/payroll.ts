@@ -63,9 +63,10 @@ export const payrollItem = pgTable(
       'payroll_item_kind_check',
       sql`(${t.kind} = 'person') = (${t.personId} is not null) and (${t.kind} = 'person' or ${t.payeeId} is not null)`,
     ),
+    // An item paid only in UAH has total_uah without a rate (A-075).
     check(
       'payroll_item_fx_check',
-      sql`(${t.payoutFxRate} is null) = (${t.totalUah} is null) and (${t.payoutFxRate} is null) = (${t.fxSource} is null)`,
+      sql`(${t.payoutFxRate} is null) = (${t.fxSource} is null) and (${t.payoutFxRate} is null or ${t.totalUah} is not null)`,
     ),
     index('payroll_item_period_idx').on(t.periodId),
     ...rolePolicies('payroll_item', { read: 'finance', write: 'finance' }),
@@ -84,7 +85,9 @@ export const payrollLine = pgTable(
       .notNull()
       .references(() => assignment.id),
     timesheetId: uuid().references(() => timesheet.id),
-    amountUsd: numeric({ precision: 20, scale: 8 }).notNull(),
+    /** In the pay terms currency (A-075): USD lines are converted at payout, UAH ones are not. */
+    amount: numeric({ precision: 20, scale: 8 }).notNull(),
+    currency: text().notNull().default('USD'),
     fundedByInvoiceLineId: uuid().references(() => invoiceLine.id, { onDelete: 'set null' }),
     fundingSource: fundingSource(),
     status: payrollLineStatus().notNull().default('accrued'),
@@ -95,6 +98,7 @@ export const payrollLine = pgTable(
   },
   (t) => [
     unique('payroll_line_timesheet_key').on(t.timesheetId, t.agencyFee),
+    check('payroll_line_currency_check', sql`${t.currency} in ('USD', 'UAH')`),
     unique('payroll_line_assignment_key').on(t.payrollItemId, t.assignmentId),
     check(
       'payroll_line_payable_check',

@@ -36,7 +36,7 @@ select throws_ok($$ insert into public.adjustment (period_id, person_id, kind, a
 
 insert into public.payroll_item (id, period_id, person_id, payout_method, total_usd)
   values ('c0000000-0000-0000-0000-000000000011', '80000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000011', 'fiat', 800);
-insert into public.payroll_line (id, payroll_item_id, assignment_id, timesheet_id, amount_usd, funded_by_invoice_line_id, status)
+insert into public.payroll_line (id, payroll_item_id, assignment_id, timesheet_id, amount, funded_by_invoice_line_id, status)
   values ('c1000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000011', '60000000-0000-0000-0000-000000000011',
           '90000000-0000-0000-0000-000000000011', 800, 'b1000000-0000-0000-0000-000000000011', 'awaiting_client');
 update public.period set status = 'closed' where id = '80000000-0000-0000-0000-000000000011';
@@ -44,7 +44,7 @@ update public.period set status = 'closed' where id = '80000000-0000-0000-0000-0
 select throws_ok($$ insert into public.adjustment (period_id, person_id, kind, amount, currency, reason)
   values ('80000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000011', 'bonus', 1, 'UAH', 'late') $$,
   'TL030', null, 'I6: no adjustments in a closed period');
-select throws_ok($$ update public.payroll_line set amount_usd = 900 where id = 'c1000000-0000-0000-0000-000000000011' $$,
+select throws_ok($$ update public.payroll_line set amount = 900 where id = 'c1000000-0000-0000-0000-000000000011' $$,
   'TL030', null, 'I6: accrued amounts are frozen');
 select throws_ok($$ update public.payroll_line set status = 'payable' where id = 'c1000000-0000-0000-0000-000000000011' $$,
   '23514', null, 'a payable line needs a funding source');

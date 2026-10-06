@@ -146,10 +146,17 @@ export const listPayroll = defineService({
         currency,
         remaining,
         group,
+        // USD value of the released lines; UAH lines at the item's rate when it has one (A-075).
         payableUsd: sum(
           lines
             .filter((l) => l.status === 'payable' || l.status === 'paid')
-            .map((l) => l.amountUsd),
+            .map((l) =>
+              l.currency === 'UAH'
+                ? item.payoutFxRate
+                  ? toDecimal(l.amount).div(item.payoutFxRate)
+                  : '0'
+                : l.amount,
+            ),
         ).toFixed(2),
         nextDeadline:
           lines
@@ -194,7 +201,7 @@ async function applyRate(
     return err(serviceError('conflict', 'payroll.rateLocked'));
   }
   const lines = await tx
-    .select({ amountUsd: payrollLine.amountUsd })
+    .select({ amount: payrollLine.amount, currency: payrollLine.currency })
     .from(payrollLine)
     .where(eq(payrollLine.payrollItemId, item.id));
   // Adjustments belong to people; an agency item has none (A-068).
@@ -210,12 +217,11 @@ async function applyRate(
           ),
         )
     : [];
-  const totalUah = payrollTotalUah(
-    lines.map((l) => l.amountUsd),
-    adjustments,
-    input.rate,
-  );
+  const totalUah = payrollTotalUah(lines, adjustments, input.rate);
   if (totalUah.isErr()) {
+    if (totalUah.error.code === 'rate_required') {
+      return err(serviceError('validation_error', 'payroll.rateFirst'));
+    }
     return err(
       serviceError(
         'validation_error',
@@ -306,19 +312,23 @@ export const payItem = defineService({
       const currencyOk = (c: string) => (fiat ? c === 'UAH' : USD_LIKE.includes(c));
 
       const lines = await tx
-        .select({ status: payrollLine.status, amountUsd: payrollLine.amountUsd })
+        .select({
+          status: payrollLine.status,
+          amount: payrollLine.amount,
+          currency: payrollLine.currency,
+        })
         .from(payrollLine)
         .where(eq(payrollLine.payrollItemId, item.item.id));
       const allReady = lines.every((l) => l.status === 'payable' || l.status === 'paid');
       const total = fiat ? item.item.totalUah : item.item.totalUsd;
       if (total === null) return err(serviceError('validation_error', 'payroll.rateFirst'));
-      const payableUsd = sum(
-        lines.filter((l) => l.status === 'payable' || l.status === 'paid').map((l) => l.amountUsd),
-      );
+      const released = lines.filter((l) => l.status === 'payable' || l.status === 'paid');
+      const payableUsd = sum(released.filter((l) => l.currency !== 'UAH').map((l) => l.amount));
+      const payableUah = sum(released.filter((l) => l.currency === 'UAH').map((l) => l.amount));
       const payable = allReady
         ? toDecimal(total)
         : fiat
-          ? payableUsd.times(toDecimal(item.item.payoutFxRate ?? '0'))
+          ? payableUsd.times(toDecimal(item.item.payoutFxRate ?? '0')).plus(payableUah)
           : payableUsd;
       const after = toDecimal(item.item.paidAmount).plus(input.amount);
       if (after.gt(payable.toDecimalPlaces(2)) && !input.overrideReason) {

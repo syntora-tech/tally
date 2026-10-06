@@ -9,6 +9,7 @@ import {
   person,
 } from '@tally/db/schema';
 import {
+  toDecimal,
   resolvePayability,
   resolvePayee,
   type AgencyPlanItem,
@@ -114,7 +115,8 @@ export async function createPayroll(
           payrollItemId: itemId,
           assignmentId: l.assignmentId,
           timesheetId,
-          amountUsd: l.amountUsd,
+          amount: l.amount,
+          currency: l.currency,
           agencyFee,
           fundedByInvoiceLineId: fund?.lineId ?? null,
           status: state.payable ? ('payable' as const) : ('awaiting_client' as const),
@@ -139,6 +141,11 @@ export async function createPayroll(
         payoutMethod: plan.payoutMethod,
         payeeId: resolvePayee(plan.payoutMethod, owner?.defaultPayeeId ?? null, candidates),
         totalUsd: plan.totalUsd,
+        // Paid only in UAH: the total needs no rate (A-075).
+        totalUah:
+          plan.payoutMethod === 'fiat' && toDecimal(plan.totalUsd).isZero()
+            ? plan.totalUahPart
+            : null,
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');

@@ -37,13 +37,13 @@ select throws_ok($$ insert into public.payroll_item (kind, period_id, payee_id, 
   '23505', null, 'one agency item per payee, period and method');
 
 -- Lines: the same timesheet gives one pay line and one agency fee line, each in its kind of item.
-select lives_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, timesheet_id, amount_usd) values
+select lives_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, timesheet_id, amount) values
   ('c0000000-0000-0000-0000-000000000018', '60000000-0000-0000-0000-000000000018', '90000000-0000-0000-0000-000000000018', 1000) $$,
   'the person line');
-select lives_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, timesheet_id, amount_usd, agency_fee) values
+select lives_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, timesheet_id, amount, agency_fee) values
   ('c2000000-0000-0000-0000-000000000018', '60000000-0000-0000-0000-000000000018', '90000000-0000-0000-0000-000000000018', 640, true) $$,
   'the agency fee line of the same timesheet');
-select throws_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, amount_usd, agency_fee) values
+select throws_ok($$ insert into public.payroll_line (payroll_item_id, assignment_id, amount, agency_fee) values
   ('c0000000-0000-0000-0000-000000000018', '60000000-0000-0000-0000-000000000018', 1, true) $$,
   'TL057', null, 'an agency fee line cannot sit in a person item');
 

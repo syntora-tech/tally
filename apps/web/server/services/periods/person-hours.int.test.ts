@@ -21,7 +21,16 @@ import { closePeriod, getPeriodOverview, openPeriod, setHours } from '.';
 // March 2040 (22 weekdays → 176 h), far from real periods in the shared DB.
 const h = intHarness('2040-04-02');
 let finance: Awaited<ReturnType<typeof h.user>>;
-const ids = { company: '', client: '', contract: '', person: '', assignment: '', period: '' };
+const ids = {
+  company: '',
+  client: '',
+  contract: '',
+  person: '',
+  assignment: '',
+  period: '',
+  uahPerson: '',
+  uahAssignment: '',
+};
 
 beforeAll(async () => {
   finance = await h.user('finance');
@@ -45,6 +54,23 @@ beforeAll(async () => {
     type: 'hourly_rate',
     amount: '25',
   });
+  const [up] = await h.db.insert(person).values({ fullName: 'Hours UAH Person' }).returning();
+  const [ua] = await h.db
+    .insert(assignment)
+    .values({ personId: up?.id ?? '', contractId: ct?.id, startsOn: '2040-01-01' })
+    .returning();
+  await h.db
+    .insert(billingTerms)
+    .values({ assignmentId: ua?.id ?? '', validFrom: '2040-01-01', type: 'hourly', rate: '10' });
+  await h.db.insert(payTerms).values({
+    assignmentId: ua?.id ?? '',
+    validFrom: '2040-01-01',
+    type: 'fixed',
+    amount: '60000',
+    currency: 'UAH',
+  });
+  ids.uahPerson = up?.id ?? '';
+  ids.uahAssignment = ua?.id ?? '';
   Object.assign(ids, {
     company: co?.id,
     client: cl?.id,
@@ -76,8 +102,8 @@ afterAll(() =>
         await tx.delete(period).where(eq(period.id, ids.period));
       });
     }
-    await db.delete(assignment).where(eq(assignment.id, ids.assignment));
-    await db.delete(person).where(eq(person.id, ids.person));
+    await db.delete(assignment).where(inArray(assignment.id, [ids.assignment, ids.uahAssignment]));
+    await db.delete(person).where(inArray(person.id, [ids.person, ids.uahPerson]));
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(client).where(eq(client.id, ids.client));
     await db.delete(company).where(eq(company.id, ids.company));
@@ -109,17 +135,44 @@ describe('client hours, person hours and hourly_rate pay (A-074)', () => {
       hours: '160.00',
       payHours: '172.00',
       invoiceAmount: '7520.00',
-      payUsd: '4300.00',
+      pay: '4300.00',
     });
 
+    await setHours.run(h.ctxFor(finance), {
+      periodId: ids.period,
+      assignmentId: ids.uahAssignment,
+      hours: '160',
+    });
+    const uahRow = (await getPeriodOverview.run(h.ctxFor(finance), { periodId: ids.period }))
+      ._unsafeUnwrap()
+      .preview.rows.find((r) => r.assignmentId === ids.uahAssignment);
+    expect(uahRow).toMatchObject({ pay: '60000.00', payCurrency: 'UAH', payUahApprox: '60000.00' });
     expect((await closePeriod.run(h.ctxFor(finance), { periodId: ids.period })).isOk()).toBe(true);
     const [inv] = await h.db.select().from(invoice).where(eq(invoice.contractId, ids.contract));
-    expect(inv?.total).toBe('7520.00000000');
+    // 47 × 160 plus the UAH-paid colleague's 10 × 160 on the same contract.
+    expect(inv?.total).toBe('9120.00000000');
     const lines = await h.db
-      .select({ amountUsd: payrollLine.amountUsd })
+      .select({ amountUsd: payrollLine.amount })
       .from(payrollLine)
       .innerJoin(payrollItem, eq(payrollItem.id, payrollLine.payrollItemId))
       .where(eq(payrollItem.personId, ids.person));
     expect(lines.map((l) => l.amountUsd)).toEqual(['4300.00000000']);
+  });
+
+  it('A-075: UAH pay is a UAH line and the item total needs no rate', async () => {
+    const [item] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.personId, ids.uahPerson));
+    expect(item).toMatchObject({
+      totalUsd: '0.00000000',
+      totalUah: '60000.00',
+      payoutFxRate: null,
+    });
+    const [line] = await h.db
+      .select()
+      .from(payrollLine)
+      .where(eq(payrollLine.payrollItemId, item?.id ?? ''));
+    expect(line).toMatchObject({ amount: '60000.00000000', currency: 'UAH' });
   });
 });

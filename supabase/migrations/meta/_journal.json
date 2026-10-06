@@ -386,6 +386,27 @@
       "when": 1791282620836,
       "tag": "20261006103020_person_hours_hourly_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791284695165,
+      "tag": "20261006110455_payroll_line_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791284705189,
+      "tag": "20261006110505_payroll_line_amount_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1791284716175,
+      "tag": "20261006110516_payroll_line_amount",
+      "breakpoints": true
     }
   ]
 }

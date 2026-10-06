@@ -17,6 +17,8 @@ export const PRORATION_POLICIES = ['full_month', 'by_hours', 'trunc_hourly'] as 
 export const PAY_TYPES = ['fixed', 'hourly', 'hourly_rate', 'included'] as const;
 export const PAYOUT_METHODS = ['fiat', 'crypto'] as const;
 export const RELEASE_POLICIES = ['immediate', 'on_payment_or_due'] as const;
+/** What a person can be paid in (A-075): USD lines are converted at payout, UAH ones are not. */
+export const PAY_CURRENCIES = ['USD', 'UAH'] as const;
 
 /** A number or blank; blank means zero for types that carry no amount (`none`, `included`). */
 const amountOrZero = z.preprocess((v) => emptyToNull(v) ?? '0', nonNegativeDecimal);
@@ -25,7 +27,10 @@ const amountOrZero = z.preprocess((v) => emptyToNull(v) ?? '0', nonNegativeDecim
 export const billingTermsFields = z.object({
   type: z.enum(BILLING_TYPES),
   rate: amountOrZero,
-  currency: currencyCode.default('USD'),
+  /** Always the contract currency; omitted = taken from the contract (A-075). */
+  currency: z
+    .preprocess(emptyToNull, currencyCode.nullable().optional())
+    .transform((v) => v ?? undefined),
   prorationPolicy: z.enum(PRORATION_POLICIES).default('full_month'),
   invoiceChannel: z.enum(PAYOUT_METHODS).default('fiat'),
 });
@@ -34,7 +39,7 @@ export const billingTermsFields = z.object({
 export const payTermsFields = z.object({
   type: z.enum(PAY_TYPES),
   amount: amountOrZero,
-  currency: currencyCode.default('USD'),
+  currency: z.enum(PAY_CURRENCIES, { error: 'assignments.payCurrency' }).default('USD'),
   payoutMethod: z.enum(PAYOUT_METHODS).default('fiat'),
   releasePolicy: z.enum(RELEASE_POLICIES).default('on_payment_or_due'),
   graceDays: z.coerce.number().int().min(0).max(60).default(0),

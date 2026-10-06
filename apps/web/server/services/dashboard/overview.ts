@@ -145,13 +145,14 @@ export const dashboardOverview = defineService({
       const title = i.item.kind === 'agency' ? (i.payeeName ?? '') : (i.personName ?? '');
       for (const l of i.lines) {
         if (l.status !== 'accrued' && l.status !== 'awaiting_client') continue;
-        awaitingUsd = awaitingUsd.plus(l.amountUsd);
+        const lineUsd = usd(l.amount, l.currency) ?? new Decimal(0);
+        awaitingUsd = awaitingUsd.plus(lineUsd);
         if (l.deadline && l.deadline <= until) {
           events.push({
             on: l.deadline < today ? today : l.deadline,
             kind: 'payout_deadline',
             label: title,
-            usd: toDecimal(l.amountUsd).neg().toFixed(2),
+            usd: lineUsd.neg().toFixed(2),
             href: `/payroll?period=${i.item.periodId}`,
           });
         }

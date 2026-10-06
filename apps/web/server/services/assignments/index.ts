@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { annexLabel } from '../contracts/annexes';
+import { billingCurrency, contractCurrency, payCurrencyProblem } from './currency';
 import { serviceError } from '../errors';
 import {
   addAgencyVersionInput,
@@ -105,6 +106,7 @@ const assignmentSelect = {
   assignment,
   personName: person.fullName,
   contractNumber: contract.number,
+  contractCurrency: contract.currency,
   annexLabel,
   clientId: client.id,
   clientName: clientLabel,
@@ -192,13 +194,24 @@ export const contractOptions = defineService({
   handler: async (ctx) => {
     const rows = await inActorScope(ctx, (tx) =>
       tx
-        .select({ id: contract.id, number: contract.number, clientName: clientLabel })
+        .select({
+          id: contract.id,
+          number: contract.number,
+          currency: contract.currency,
+          clientName: clientLabel,
+        })
         .from(contract)
         .innerJoin(client, eq(client.id, contract.clientId))
         .where(and(eq(contract.kind, 'client'), eq(contract.status, 'active')))
         .orderBy(asc(clientLabel), asc(contract.number)),
     );
-    return ok(rows.map((r) => ({ value: r.id, label: `${r.clientName ?? ''} · ${r.number}` })));
+    return ok(
+      rows.map((r) => ({
+        value: r.id,
+        label: `${r.clientName ?? ''} · ${r.number}`,
+        currency: r.currency,
+      })),
+    );
   },
 });
 
@@ -211,14 +224,28 @@ export const createAssignment = defineService({
   input: createAssignmentInput,
   handler: async (ctx, { billing, pay, ...core }) => {
     const validFrom = startOfMonth(core.startsOn);
-    const created = await inActorScope(ctx, async (tx) => {
+    return inActorScope(ctx, async (tx) => {
+      const billed = billingCurrency(
+        billing.currency,
+        await contractCurrency(tx, { contractId: core.isInternal ? null : core.contractId }),
+      );
+      const payProblem = payCurrencyProblem(pay);
+      if ('error' in billed || payProblem) {
+        return err(
+          serviceError('validation_error', 'error' in billed ? billed.error : (payProblem ?? ''), {
+            ...('error' in billed && { 'billing.currency': [billed.error] }),
+            ...(payProblem && { 'pay.currency': [payProblem] }),
+          }),
+        );
+      }
       const [row] = await tx.insert(assignment).values(core).returning({ id: assignment.id });
       if (!row) throw new Error('Assignment insert returned no row');
-      await tx.insert(billingTerms).values({ ...billing, assignmentId: row.id, validFrom });
+      await tx
+        .insert(billingTerms)
+        .values({ ...billing, currency: billed.currency, assignmentId: row.id, validFrom });
       await tx.insert(payTerms).values({ ...pay, assignmentId: row.id, validFrom });
-      return row;
+      return ok(row);
     });
-    return ok(created);
   },
 });
 
@@ -237,20 +264,33 @@ export const updateAssignment = defineService({
 export const addBillingVersion = defineService({
   name: 'assignments.addBillingVersion',
   input: addBillingVersionInput,
-  handler: async (ctx, input) => {
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx.insert(billingTerms).values(input).returning({ id: billingTerms.id }),
-    );
-    return row
-      ? ok({ id: input.assignmentId })
-      : err(serviceError('internal_error', 'general.saveFailed'));
-  },
+  handler: async (ctx, input) =>
+    inActorScope(ctx, async (tx) => {
+      const billed = billingCurrency(
+        input.currency,
+        await contractCurrency(tx, { assignmentId: input.assignmentId }),
+      );
+      if ('error' in billed) {
+        return err(serviceError('validation_error', billed.error, { currency: [billed.error] }));
+      }
+      const [row] = await tx
+        .insert(billingTerms)
+        .values({ ...input, currency: billed.currency })
+        .returning({ id: billingTerms.id });
+      return row
+        ? ok({ id: input.assignmentId })
+        : err(serviceError('internal_error', 'general.saveFailed'));
+    }),
 });
 
 export const addPayVersion = defineService({
   name: 'assignments.addPayVersion',
   input: addPayVersionInput,
   handler: async (ctx, input) => {
+    const problem = payCurrencyProblem(input);
+    if (problem) {
+      return err(serviceError('validation_error', problem, { currency: [problem] }));
+    }
     const [row] = await inActorScope(ctx, (tx) =>
       tx.insert(payTerms).values(input).returning({ id: payTerms.id }),
     );

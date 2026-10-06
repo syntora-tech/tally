@@ -27,7 +27,7 @@ export type AssignmentCore = {
 type Props = {
   assignment: AssignmentCore;
   personName: string;
-  contracts: { value: string; label: string }[];
+  contracts: { value: string; label: string; currency: string }[];
   /** SOWs/annexes of those contracts; the form shows the ones of the chosen contract. */
   annexes: { value: string; label: string; contractId: string }[];
 };
@@ -45,6 +45,7 @@ export function AssignmentForm({ assignment, personName, contracts, annexes }: P
   const [internal, setInternal] = useState(assignment.isInternal);
   const [contractId, setContractId] = useState(assignment.contractId ?? '');
   const contractAnnexes = annexes.filter((a) => a.contractId === contractId);
+  const billingCurrency = contracts.find((c) => c.value === contractId)?.currency ?? 'USD';
   const editing = Boolean(assignment.id);
   const t = useTranslations('assignmentForm');
   const tc = useTranslations('common');
@@ -167,11 +168,11 @@ export function AssignmentForm({ assignment, personName, contracts, annexes }: P
                 defaults={{
                   type: internal ? 'none' : 'hourly',
                   rate: '',
-                  currency: 'USD',
+                  currency: internal ? 'USD' : billingCurrency,
                   prorationPolicy: 'full_month',
                   invoiceChannel: 'fiat',
                 }}
-                key={internal ? 'internal' : 'client'}
+                key={internal ? 'internal' : `client-${contractId}`}
               />
             </CardContent>
           </Card>

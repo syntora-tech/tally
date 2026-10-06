@@ -84,20 +84,20 @@ describe('periodPreview — spec 9.2 etalon, July 2026', () => {
     );
     expect(byName['Vladyslav:Trady']).toMatchObject({
       invoiceAmount: '5500.00',
-      payUsd: '5000.00',
+      pay: '5000.00',
       payUahApprox: '222400.00',
     });
     expect(byName['Andrii:IdeaSoft']).toMatchObject({
       invoiceAmount: '8648.00',
-      payUsd: '3000.00',
+      pay: '3000.00',
       payUahApprox: '133440.00',
     });
     expect(byName['Sklyarov:Boosty']).toMatchObject({
       invoiceAmount: '225.00',
-      payUsd: '200.00',
+      pay: '200.00',
       payUahApprox: '8896.00',
     });
-    expect(byName['Anton:-']).toMatchObject({ payUsd: '1150.00', payUahApprox: '51152.00' });
+    expect(byName['Anton:-']).toMatchObject({ pay: '1150.00', payUahApprox: '51152.00' });
     expect(byName['Wita:Boosty']?.invoiceAmount).toBeNull();
   });
 
@@ -136,7 +136,8 @@ describe('payrollPlan — spec 9.2 payroll columns', () => {
     expect(plan.find((i) => i.personId === 'Wita' && i.payoutMethod === 'crypto')?.lines).toEqual([
       {
         assignmentId: 'Wita:Boosty',
-        amountUsd: '0.00',
+        amount: '0.00',
+        currency: 'USD',
         releasePolicy: 'on_payment_or_due',
         graceDays: 0,
       },
@@ -247,7 +248,8 @@ describe('agencyPlan (A-068)', () => {
         lines: [
           {
             assignmentId: 'andrii:agency',
-            amountUsd: '736.00',
+            amount: '736.00',
+            currency: 'USD',
             releasePolicy: 'on_payment_or_due',
             graceDays: 0,
           },
@@ -282,15 +284,40 @@ describe('client hours and person hours (A-074)', () => {
       hours: '160.00',
       payHours: '172.00',
       invoiceAmount: '7520.00',
-      payUsd: '4300.00',
+      pay: '4300.00',
     });
     const [item] = payrollPlan(JAN, '184', null, [row], []);
-    expect(item?.lines[0]?.amountUsd).toBe('4300.00');
+    expect(item?.lines[0]?.amount).toBe('4300.00');
     expect(agencyPlan(JAN, [row])[0]?.totalUsd).toBe('688.00');
   });
 
   it('without person hours the person is paid for the client hours', () => {
     const preview = periodPreview(JAN, '184', null, [{ ...row, payHours: null }]);
-    expect(preview.rows[0]).toMatchObject({ payHours: '160.00', payUsd: '4000.00' });
+    expect(preview.rows[0]).toMatchObject({ payHours: '160.00', pay: '4000.00' });
+  });
+
+  it('pay in UAH is shown in UAH and not converted (A-075)', () => {
+    const uahRow: PeriodAssignment = {
+      ...row,
+      payHours: null,
+      pay: [{ type: 'fixed', amount: '60000', currency: 'UAH', validFrom: JAN }],
+    };
+    const preview = periodPreview(JAN, '184', '41.50', [uahRow, { ...row, payHours: null }]);
+    expect(preview.rows[0]).toMatchObject({
+      pay: '60000.00',
+      payCurrency: 'UAH',
+      payUahApprox: '60000.00',
+    });
+    expect(preview.totals).toMatchObject({
+      payUsd: '4000.00',
+      payUah: '60000.00',
+      payUahApprox: '226000.00',
+    });
+    const [item] = payrollPlan(JAN, '184', null, [uahRow], []);
+    expect(item).toMatchObject({
+      totalUsd: '0.00',
+      totalUahPart: '60000.00',
+      totalUahApprox: '60000.00',
+    });
   });
 });
