@@ -65,7 +65,7 @@ export function PlannedExpenseForm({
     label: tm(String(i + 1) as '1'),
   }));
   return (
-    <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-6">
+    <form action={action} className="grid grid-cols-2 items-start gap-3 md:grid-cols-6">
       {value && <input type="hidden" name="id" value={value.id} />}
       <FormField
         label={t('name')}
@@ -84,12 +84,7 @@ export function PlannedExpenseForm({
           options={categories}
         />
       </FormField>
-      <FormField
-        label={t('amount')}
-        htmlFor={`${p}-amount`}
-        hint={t('amountHint')}
-        error={errors?.amount}
-      >
+      <FormField label={t('amount')} htmlFor={`${p}-amount`} error={errors?.amount}>
         <Input
           id={`${p}-amount`}
           name="amount"
@@ -152,7 +147,12 @@ export function PlannedExpenseForm({
           defaultValue={value?.endsOn?.slice(0, 7) ?? ''}
         />
       </FormField>
-      <FormField label={t('person')} htmlFor={`${p}-person`} error={errors?.personId}>
+      <FormField
+        label={t('person')}
+        htmlFor={`${p}-person`}
+        error={errors?.personId}
+        className="col-span-2"
+      >
         <NativeSelect
           id={`${p}-person`}
           name="personId"
@@ -168,11 +168,11 @@ export function PlannedExpenseForm({
           defaultValue={value?.counterparty ?? ''}
         />
       </FormField>
-      <TransferFeeFields idPrefix={p} value={value} errors={errors} />
-      <FormField label={t('notes')} htmlFor={`${p}-notes`} className="col-span-2">
+      <FormField label={t('notes')} htmlFor={`${p}-notes`} className="col-span-2 md:col-span-6">
         <Input id={`${p}-notes`} name="notes" defaultValue={value?.notes ?? ''} />
       </FormField>
-      <div className="flex h-9 items-center">
+      <TransferFeeFields idPrefix={p} value={value} errors={errors} />
+      <div className="col-span-full">
         <Button type="submit" variant={value ? 'outline' : 'default'} disabled={pending}>
           {value ? tc('save') : tc('add')}
         </Button>
@@ -256,17 +256,11 @@ export function PlannedPartForm({ expenseId, value }: { expenseId: string; value
   const errors = usePlannedFeedback(state, t('partSaved'));
   const p = `part-${value?.id ?? expenseId}`;
   return (
-    <form action={action} className="flex flex-wrap items-end gap-3">
+    <form action={action} className="flex flex-wrap items-start gap-3">
       <input type="hidden" name="plannedExpenseId" value={expenseId} />
       {value && <input type="hidden" name="id" value={value.id} />}
       <FormField label={t('partName')} htmlFor={`${p}-name`} error={errors?.name}>
-        <Input
-          id={`${p}-name`}
-          name="name"
-          defaultValue={value?.name}
-          placeholder={t('partNamePlaceholder')}
-          className="w-40"
-        />
+        <Input id={`${p}-name`} name="name" defaultValue={value?.name} className="w-40" />
       </FormField>
       <FormField label={t('partAmount')} htmlFor={`${p}-amount`} error={errors?.amount}>
         <Input

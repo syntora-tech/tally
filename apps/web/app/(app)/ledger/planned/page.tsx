@@ -294,8 +294,10 @@ export default async function PlannedExpensesPage({
               <h3 className="text-sm font-medium">{t('parts')}</h3>
               <p className="text-xs text-muted-foreground">{t('partsHint')}</p>
               {parts.map((part) => (
-                <div key={part.id} className="flex items-end gap-2">
-                  <PlannedPartForm expenseId={e.id} value={part} />
+                <div key={part.id} className="flex items-start gap-2 rounded-md border p-3">
+                  <div className="min-w-0 flex-1">
+                    <PlannedPartForm expenseId={e.id} value={part} />
+                  </div>
                   <DeletePlannedPartButton id={part.id} />
                 </div>
               ))}
@@ -305,13 +307,15 @@ export default async function PlannedExpensesPage({
               <h3 className="text-sm font-medium">{tch('title')}</h3>
               <p className="text-xs text-muted-foreground">{tch('plannedHint')}</p>
               {charges.map(({ charge }) => (
-                <div key={charge.id} className="flex items-end gap-2">
-                  <PaymentChargeForm
-                    target={{ plannedExpenseId: e.id }}
-                    value={charge}
-                    categories={expenseCategories}
-                    thisMonth={thisMonth}
-                  />
+                <div key={charge.id} className="flex items-start gap-2 rounded-md border p-3">
+                  <div className="min-w-0 flex-1">
+                    <PaymentChargeForm
+                      target={{ plannedExpenseId: e.id }}
+                      value={charge}
+                      categories={expenseCategories}
+                      thisMonth={thisMonth}
+                    />
+                  </div>
                   <DeletePaymentChargeButton id={charge.id} />
                 </div>
               ))}

@@ -1075,8 +1075,7 @@
       "bank": "Bank",
       "address": "Address",
       "wallet": "Wallet address",
-      "network": "Network",
-      "fee": "Bank fee per payout (suggested in “Pay”)"
+      "network": "Network"
     },
     "card": {
       "newContract": "New contract",
@@ -1734,7 +1733,6 @@
   },
   "wallets": {
     "title": "Crypto wallets",
-    "empty": "No wallets yet. They help recognise this counterparty in Ledger transactions.",
     "network": "Network",
     "address": "Address",
     "label": "Note",
@@ -1743,7 +1741,8 @@
     "activated": "Wallet activated",
     "deactivated": "Wallet deactivated",
     "activate": "Activate",
-    "deactivate": "Deactivate"
+    "deactivate": "Deactivate",
+    "add": "Add a wallet"
   },
   "reconcile": {
     "title": "Reconciliation",
@@ -1791,16 +1790,14 @@
     "next": "next {date}",
     "noNext": "no upcoming dates",
     "tab": "Plans",
-    "amountHint": "Gross for a salary; parts below may split it",
     "person": "Person (whose cost)",
     "counterparty": "Recipient",
     "feeIs": "fee {fee}",
     "parts": "Parts within the month",
     "partsHint": "E.g. the advance by the 22nd and the rest by the 7th of the next month. Without parts the whole amount is due on the day above.",
     "partName": "Part",
-    "partNamePlaceholder": "Advance",
     "partAmount": "Amount",
-    "rest": "the rest",
+    "rest": "empty = the rest",
     "monthOffset": "Paid in",
     "sameMonth": "the same month",
     "nextMonth": "the next month",
@@ -1885,10 +1882,11 @@
     "otherHint": "People, trips, statements and unlinked documents"
   },
   "transferFee": {
-    "fixed": "Fee, fixed",
-    "percent": "Fee, %",
-    "currency": "Fee currency",
-    "currencyHint": "Empty = the payment's currency"
+    "fixed": "Fixed",
+    "percent": "%",
+    "currency": "Currency",
+    "legend": "Bank fee per transfer",
+    "hint": "As in the bank tariff: fixed + percent of the amount. Empty currency = the payment's currency (for a USD SWIFT charged in hryvnias write UAH)."
   },
   "plannedPayments": {
     "tab": "Payments",
@@ -1941,20 +1939,20 @@
     "personTitle": "Taxes on payouts",
     "personHint": "Charged on every payout to this person, on top of it, in the chosen currency at the NBU rate of the payout day; they appear in Ledger → Planned payments.",
     "name": "Name",
-    "namePlaceholder": "PIT",
     "mode": "How",
     "withheld": "Withheld from gross",
     "onTop": "On top",
     "rate": "Rate, %",
     "category": "Category",
     "chooseCategory": "Choose a category",
-    "currency": "Currency",
-    "currencyHint": "Empty = the payment's currency",
+    "currency": "Tax currency",
     "counterparty": "Paid to",
     "startsOn": "From month",
     "endsOn": "To month",
     "saved": "Charge saved",
     "deleted": "Charge deleted",
-    "confirmDelete": "Delete this charge? Its unpaid payments are removed; paid ones stay."
+    "confirmDelete": "Delete this charge? Its unpaid payments are removed; paid ones stay.",
+    "samePaymentCurrency": "as the payment",
+    "add": "Add a tax"
   }
 }

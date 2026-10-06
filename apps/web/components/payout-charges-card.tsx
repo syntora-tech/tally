@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AddDetails, CollapsibleCard } from '@/components/collapsible-card';
 import { DeletePaymentChargeButton, PaymentChargeForm } from '@/components/payment-charge-forms';
 import type { ServiceContext } from '@/server/services/context';
 import { listCategories } from '@/server/services/ledger';
@@ -23,30 +23,34 @@ export async function PayoutChargesCard({
     .filter((c) => c.txType === 'expense')
     .map((c) => ({ value: c.id, label: c.name }));
   const thisMonth = ctx.today.slice(0, 7);
+  const rows = charges.unwrapOr([]);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t('personTitle')}</CardTitle>
-        <p className="text-xs text-muted-foreground">{t('personHint')}</p>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {charges.unwrapOr([]).map(({ charge }) => (
-          <div key={charge.id} className="flex items-end gap-2">
+    <CollapsibleCard
+      title={t('personTitle')}
+      description={t('personHint')}
+      count={rows.length}
+      open={rows.length > 0}
+    >
+      {rows.map(({ charge }) => (
+        <div key={charge.id} className="flex items-start gap-2 rounded-md border p-3">
+          <div className="min-w-0 flex-1">
             <PaymentChargeForm
               target={{ personId }}
               value={charge}
               categories={expenseCategories}
               thisMonth={thisMonth}
             />
-            <DeletePaymentChargeButton id={charge.id} personId={personId} />
           </div>
-        ))}
+          <DeletePaymentChargeButton id={charge.id} personId={personId} />
+        </div>
+      ))}
+      <AddDetails label={t('add')} open={rows.length === 0}>
         <PaymentChargeForm
           target={{ personId }}
           categories={expenseCategories}
           thisMonth={thisMonth}
         />
-      </CardContent>
-    </Card>
+      </AddDetails>
+    </CollapsibleCard>
   );
 }

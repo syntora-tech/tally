@@ -57,7 +57,7 @@ export function PaymentChargeForm({
   const onPlanned = 'plannedExpenseId' in target;
   const p = `charge-${value?.id ?? ('personId' in target ? target.personId : target.plannedExpenseId)}`;
   return (
-    <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-6">
+    <form action={action} className="grid grid-cols-2 items-start gap-3 md:grid-cols-4">
       {value && <input type="hidden" name="id" value={value.id} />}
       {'personId' in target ? (
         <input type="hidden" name="personId" value={target.personId} />
@@ -65,12 +65,7 @@ export function PaymentChargeForm({
         <input type="hidden" name="plannedExpenseId" value={target.plannedExpenseId} />
       )}
       <FormField label={t('name')} htmlFor={`${p}-name`} error={errors?.name}>
-        <Input
-          id={`${p}-name`}
-          name="name"
-          defaultValue={value?.name}
-          placeholder={t('namePlaceholder')}
-        />
+        <Input id={`${p}-name`} name="name" defaultValue={value?.name} />
       </FormField>
       {onPlanned ? (
         <FormField label={t('mode')} htmlFor={`${p}-mode`} error={errors?.mode}>
@@ -106,16 +101,12 @@ export function PaymentChargeForm({
           options={categories}
         />
       </FormField>
-      <FormField
-        label={t('currency')}
-        htmlFor={`${p}-currency`}
-        hint={t('currencyHint')}
-        error={errors?.currency}
-      >
+      <FormField label={t('currency')} htmlFor={`${p}-currency`} error={errors?.currency}>
         <Input
           id={`${p}-currency`}
           name="currency"
           defaultValue={value?.currency ?? (onPlanned ? '' : 'UAH')}
+          placeholder={onPlanned ? t('samePaymentCurrency') : undefined}
         />
       </FormField>
       <FormField label={t('counterparty')} htmlFor={`${p}-to`} error={errors?.counterparty}>
@@ -138,7 +129,7 @@ export function PaymentChargeForm({
         />
       </FormField>
       <TransferFeeFields idPrefix={p} value={value} errors={errors} />
-      <div className="flex h-9 items-center">
+      <div className="col-span-full">
         <Button type="submit" size="sm" variant={value ? 'outline' : 'default'} disabled={pending}>
           {value ? tc('save') : tc('add')}
         </Button>
