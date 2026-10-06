@@ -57,6 +57,10 @@ test.afterAll(() =>
     db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
       const periodIds = sql`(select id from public.period where month = ${`${MONTH}-01`})`;
+      // Closing drafts monthly FOP acts for every fiat payout of the month (A-076).
+      await tx.execute(
+        sql`delete from public.supplier_act where payroll_item_id in (select id from public.payroll_item where period_id in ${periodIds})`,
+      );
       await tx.execute(
         sql`delete from public.payroll_line where payroll_item_id in (select id from public.payroll_item where period_id in ${periodIds})`,
       );

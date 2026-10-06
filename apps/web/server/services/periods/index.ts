@@ -1,39 +1,15 @@
-import type { DbTransaction } from '@tally/db';
 import {
-  agencyTerms,
-  assignment,
-  billingTerms,
   client,
-  contract,
-  contractAnnex,
   invoice,
   adjustment,
-  invoiceLine,
   payrollItem,
-  payTerms,
   period,
   person,
   supplierAct,
   timesheet,
-  workCalendarException,
 } from '@tally/db/schema';
-import {
-  agencyPlan,
-  defaultInvoiceDate,
-  draftLine,
-  dueDate,
-  isActiveInMonth,
-  payrollPlan,
-  periodPreview,
-  sum,
-  toDecimal,
-  WorkCalendar,
-  type InvoiceDateRule,
-  type LocalDate,
-  type PaymentDueRule,
-  type PeriodAssignment,
-} from '@tally/domain';
-import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { agencyPlan, payrollPlan, periodPreview, toDecimal } from '@tally/domain';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope, type ServiceContext } from '../context';
@@ -48,102 +24,26 @@ import {
   requiredText,
 } from '../fields';
 import { ensureNbuRate } from '../fx';
+import {
+  frozenAdjustments,
+  frozenHours,
+  periodOf,
+  periodOfAdjustment,
+  refreshEarlyActs,
+  refreshEarlyInvoices,
+} from './early';
 import { createPayroll, dropPayroll, loadAdjustments, toPlanAdjustments } from './payroll';
+import {
+  clientLabel,
+  invoiceGroups,
+  invoiceKey,
+  loadCalendar,
+  loadPeriodData,
+  writeDraftInvoice,
+} from './data';
 
-export async function loadCalendar(tx: DbTransaction): Promise<WorkCalendar> {
-  const rows = await tx
-    .select({ date: workCalendarException.onDate, isWorking: workCalendarException.isWorking })
-    .from(workCalendarException);
-  return new WorkCalendar(rows.map((r) => ({ date: r.date as LocalDate, isWorking: r.isWorking })));
-}
-
-const clientLabel = sql<string | null>`coalesce(${client.shortName}, ${client.legalName})`;
-
-type PeriodRow = typeof period.$inferSelect;
-
-/** Everything the wizard needs for one month: assignments with all term versions and hours. */
-async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
-  const month = p.month as LocalDate;
-  const rows = await tx
-    .select({
-      assignment,
-      personName: person.fullName,
-      clientName: clientLabel,
-    })
-    .from(assignment)
-    .innerJoin(person, eq(person.id, assignment.personId))
-    .leftJoin(contract, eq(contract.id, assignment.contractId))
-    .leftJoin(client, eq(client.id, contract.clientId))
-    .orderBy(person.fullName);
-  const active = rows.filter((r) =>
-    isActiveInMonth(
-      {
-        startsOn: r.assignment.startsOn as LocalDate,
-        endsOn: r.assignment.endsOn as LocalDate | null,
-      },
-      month,
-    ),
-  );
-  const ids = active.map((r) => r.assignment.id);
-  const [billing, pay, agency, hours] = ids.length
-    ? await Promise.all([
-        tx.select().from(billingTerms).where(inArray(billingTerms.assignmentId, ids)),
-        tx.select().from(payTerms).where(inArray(payTerms.assignmentId, ids)),
-        tx.select().from(agencyTerms).where(inArray(agencyTerms.assignmentId, ids)),
-        tx
-          .select()
-          .from(timesheet)
-          .where(and(eq(timesheet.periodId, p.id), inArray(timesheet.assignmentId, ids))),
-      ])
-    : [[], [], [], []];
-  const assignments: PeriodAssignment[] = active.map((r) => ({
-    assignmentId: r.assignment.id,
-    personId: r.assignment.personId,
-    personName: r.personName,
-    clientName: r.assignment.isInternal ? null : r.clientName,
-    contractId: r.assignment.contractId,
-    roleTitle: r.assignment.roleTitle,
-    isInternal: r.assignment.isInternal,
-    startsOn: r.assignment.startsOn as LocalDate,
-    endsOn: r.assignment.endsOn as LocalDate | null,
-    billing: billing
-      .filter((b) => b.assignmentId === r.assignment.id)
-      .map((b) => ({
-        type: b.type,
-        rate: b.rate,
-        prorationPolicy: b.prorationPolicy,
-        currency: b.currency,
-        validFrom: b.validFrom as LocalDate,
-      })),
-    pay: pay
-      .filter((t) => t.assignmentId === r.assignment.id)
-      .map((t) => ({
-        type: t.type,
-        amount: t.amount,
-        currency: t.currency,
-        validFrom: t.validFrom as LocalDate,
-        payoutMethod: t.payoutMethod,
-        releasePolicy: t.releasePolicy,
-        graceDays: t.graceDays,
-      })),
-    agency: agency
-      .filter((t) => t.assignmentId === r.assignment.id)
-      .map((t) => ({
-        validFrom: t.validFrom as LocalDate,
-        payeeId: t.payeeId,
-        ratePerHour: t.ratePerHour,
-        payoutMethod: t.payoutMethod,
-        releasePolicy: t.releasePolicy,
-        graceDays: t.graceDays,
-      })),
-    hours: hours.find((h) => h.assignmentId === r.assignment.id)?.hours ?? null,
-    payHours: hours.find((h) => h.assignmentId === r.assignment.id)?.payHours ?? null,
-    note: hours.find((h) => h.assignmentId === r.assignment.id)?.note ?? null,
-  }));
-  const timesheetIds = new Map(hours.map((h) => [h.assignmentId, h.id]));
-  const annexIds = new Map(active.map((r) => [r.assignment.id, r.assignment.annexId]));
-  return { month, assignments, timesheetIds, annexIds };
-}
+export { loadCalendar };
+export { draftEarlyAct, draftEarlyInvoice, periodDocuments } from './early';
 
 export const listPeriods = defineService({
   name: 'periods.list',
@@ -271,7 +171,11 @@ async function writeHours(
   entries: readonly z.output<typeof hoursEntry>[],
   source: 'manual' | 'import',
 ) {
-  await inActorScope(ctx, async (tx) => {
+  return inActorScope(ctx, async (tx) => {
+    const p = await periodOf(tx, periodId);
+    if (!p) return err(serviceError('not_found', 'periods.notFound'));
+    const frozen = p.status === 'open' ? await frozenHours(tx, p, entries) : null;
+    if (frozen) return err(serviceError('conflict', frozen));
     for (const e of entries) {
       const note = e.note === undefined ? {} : { note: e.note || null };
       // Person hours equal to the billed ones are stored as null: "the same" (A-074).
@@ -299,6 +203,12 @@ async function writeHours(
           set: { hours: e.hours, source, ...note, ...payHours },
         });
     }
+    if (p.status === 'open') {
+      const refreshed = await refreshEarlyInvoices(tx, p);
+      if (refreshed.isErr()) return err(refreshed.error);
+      await refreshEarlyActs(tx, p);
+    }
+    return ok({ id: periodId });
   });
 }
 
@@ -306,28 +216,17 @@ async function writeHours(
 export const setHours = defineService({
   name: 'periods.setHours',
   input: hoursEntry.extend({ periodId: z.uuid() }),
-  handler: async (ctx, { periodId, ...entry }) => {
-    await writeHours(ctx, periodId, [entry], 'manual');
-    return ok({ id: periodId });
-  },
+  handler: (ctx, { periodId, ...entry }) => writeHours(ctx, periodId, [entry], 'manual'),
 });
 
 export const importHours = defineService({
   name: 'periods.importHours',
   input: z.object({ periodId: z.uuid(), rows: z.array(hoursEntry).min(1).max(500) }),
   handler: async (ctx, { periodId, rows }) => {
-    await writeHours(ctx, periodId, rows, 'import');
-    return ok({ id: periodId, count: rows.length });
+    const written = await writeHours(ctx, periodId, rows, 'import');
+    return written.map((r) => ({ ...r, count: rows.length }));
   },
 });
-
-function describe(personName: string, roleTitle: string | null) {
-  const role = roleTitle ? `, ${roleTitle}` : '';
-  return {
-    descriptionEn: `Software development services — ${personName}${role}`,
-    descriptionUa: `Послуги з розробки програмного забезпечення — ${personName}${role}`,
-  };
-}
 
 /**
  * Step 5: closes the month and (re)creates draft invoices — one per contract × period with a line
@@ -354,103 +253,28 @@ export const closePeriod = defineService({
         .select({ contractId: invoice.contractId, annexId: invoice.annexId })
         .from(invoice)
         .where(eq(invoice.periodId, periodId));
-      const invoiceKey = (contractId: string, annexId: string | null) =>
-        `${contractId}:${annexId ?? ''}`;
       const skip = new Set(issued.map((i) => invoiceKey(i.contractId, i.annexId)));
-
-      // A SOW/annex with date rules of its own needs an invoice of its own (A-072).
-      const annexIdList = [...new Set([...annexIds.values()].filter((id) => id !== null))];
-      const annexes = new Map(
-        (annexIdList.length
-          ? await tx.select().from(contractAnnex).where(inArray(contractAnnex.id, annexIdList))
-          : []
-        )
-          .filter((x) => x.paymentDueRule !== null || x.invoiceDateRule !== null)
-          .map((x) => [x.id, x]),
+      const { groups, annexes } = await invoiceGroups(
+        tx,
+        month,
+        p.workHours,
+        assignments,
+        annexIds,
       );
 
-      const groups = new Map<
-        string,
-        {
-          contractId: string;
-          annexId: string | null;
-          lines: {
-            a: PeriodAssignment;
-            line: NonNullable<ReturnType<typeof draftLine>>;
-            currency: string;
-          }[];
-        }
-      >();
-      for (const a of assignments) {
-        const b = a.billing
-          .filter((v) => v.validFrom <= month)
-          .sort((x, y) => y.validFrom.localeCompare(x.validFrom))[0];
-        if (!b || !a.contractId) continue;
-        const ownAnnex = annexIds.get(a.assignmentId);
-        const annexId = ownAnnex && annexes.has(ownAnnex) ? ownAnnex : null;
-        const key = invoiceKey(a.contractId, annexId);
-        if (skip.has(key)) continue;
-        const line = draftLine(a.assignmentId, b, a.hours ?? '0', p.workHours);
-        if (!line) continue;
-        const group = groups.get(key) ?? { contractId: a.contractId, annexId, lines: [] };
-        group.lines.push({ a, line, currency: b.currency });
-        groups.set(key, group);
-      }
-
       let created = 0;
-      for (const { contractId, annexId, lines } of groups.values()) {
-        const [c] = await tx.select().from(contract).where(eq(contract.id, contractId));
-        if (!c?.clientId) continue;
-        const foreign = lines.find((l) => l.currency !== c.currency);
-        if (foreign) {
-          return err(
-            serviceError(
-              'conflict',
-              msg('periods.rateCurrency', {
-                person: foreign.a.personName,
-                rateCurrency: foreign.currency,
-                contract: c.number,
-                contractCurrency: c.currency,
-              }),
-            ),
-          );
-        }
-        const annex = annexId ? annexes.get(annexId) : undefined;
-        const issueDate = defaultInvoiceDate(
-          (annex?.invoiceDateRule ?? c.invoiceDateRule) as InvoiceDateRule,
+      for (const group of groups.values()) {
+        if (skip.has(group.key)) continue;
+        const written = await writeDraftInvoice(tx, {
+          periodId,
           month,
           cal,
-        );
-        const [inv] = await tx
-          .insert(invoice)
-          .values({
-            clientId: c.clientId,
-            contractId,
-            annexId,
-            periodId,
-            issueDate,
-            dueDate: dueDate(
-              (annex?.paymentDueRule ?? c.paymentDueRule) as PaymentDueRule,
-              issueDate,
-              cal,
-            ),
-            currency: c.currency,
-            total: sum(lines.map((l) => l.line.amount)).toFixed(2),
-          })
-          .returning({ id: invoice.id });
-        if (!inv) throw new Error('Invoice insert returned no row');
-        await tx.insert(invoiceLine).values(
-          lines.map((l, i) => ({
-            invoiceId: inv.id,
-            timesheetId: timesheetIds.get(l.a.assignmentId) ?? null,
-            position: i + 1,
-            ...describe(l.a.personName, l.a.roleTitle),
-            quantity: l.line.quantity,
-            unitPrice: l.line.unitPrice,
-            amount: l.line.amount,
-          })),
-        );
-        created++;
+          group,
+          annexes,
+          timesheetIds,
+        });
+        if (written.isErr()) return err(written.error);
+        if (written.value) created++;
       }
 
       const adjustments = toPlanAdjustments(await loadAdjustments(tx, periodId));
@@ -523,23 +347,41 @@ export const addAdjustment = defineService({
   handler: async (ctx, input) => {
     const amount =
       input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx
+    return inActorScope(ctx, async (tx) => {
+      const p = await periodOf(tx, input.periodId);
+      if (!p) return err(serviceError('not_found', 'periods.notFound'));
+      const frozen =
+        p.status === 'open' && input.payoutMethod === 'fiat'
+          ? await frozenAdjustments(tx, p, input.personId)
+          : null;
+      if (frozen) return err(serviceError('conflict', frozen));
+      const [row] = await tx
         .insert(adjustment)
         .values({ ...input, amount })
-        .returning({ id: adjustment.id }),
-    );
-    return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
+        .returning({ id: adjustment.id });
+      if (!row) return err(serviceError('forbidden', 'general.forbidden'));
+      if (p.status === 'open') await refreshEarlyActs(tx, p);
+      return ok(row);
+    });
   },
 });
 
 export const removeAdjustment = defineService({
   name: 'periods.removeAdjustment',
   input: z.object({ id: z.uuid() }),
-  handler: async (ctx, { id }) => {
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx.delete(adjustment).where(eq(adjustment.id, id)).returning({ id: adjustment.id }),
-    );
-    return row ? ok(row) : err(serviceError('not_found', 'periods.adjustmentNotFound'));
-  },
+  handler: async (ctx, { id }) =>
+    inActorScope(ctx, async (tx) => {
+      const owner = await periodOfAdjustment(tx, id);
+      if (!owner) return err(serviceError('not_found', 'periods.adjustmentNotFound'));
+      const open = owner.period.status === 'open';
+      const frozen = open ? await frozenAdjustments(tx, owner.period, owner.personId) : null;
+      if (frozen) return err(serviceError('conflict', frozen));
+      const [row] = await tx
+        .delete(adjustment)
+        .where(eq(adjustment.id, id))
+        .returning({ id: adjustment.id });
+      if (!row) return err(serviceError('not_found', 'periods.adjustmentNotFound'));
+      if (open) await refreshEarlyActs(tx, owner.period);
+      return ok(row);
+    }),
 });

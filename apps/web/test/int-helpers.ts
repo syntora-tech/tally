@@ -10,6 +10,7 @@ import {
   invoiceRevision,
   payrollItem,
   payrollLine,
+  supplierAct,
   posting,
   transaction,
   type AppRole,
@@ -127,6 +128,8 @@ export async function purgeProtected(
         .where(eq(payrollItem.periodId, target.periodId));
       if (items.length) {
         const itemIds = items.map((i) => i.id);
+        // Closing drafts monthly FOP acts for every fiat payout of the month (A-076).
+        await tx.delete(supplierAct).where(inArray(supplierAct.payrollItemId, itemIds));
         await tx.delete(payrollLine).where(inArray(payrollLine.payrollItemId, itemIds));
         await tx.delete(payrollItem).where(inArray(payrollItem.id, itemIds));
       }

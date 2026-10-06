@@ -16,10 +16,12 @@ import {
 } from '@/components/ui/table';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { getPeriodOverview } from '@/server/services/periods';
+import { getPeriodOverview, periodDocuments } from '@/server/services/periods';
 import {
   AdjustmentForm,
   CloseForm,
+  EarlyActForm,
+  EarlyInvoiceButton,
   HoursCsvForm,
   HoursForm,
   ParamsForm,
@@ -57,8 +59,12 @@ function Step({
 export default async function PeriodPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireRole(FINANCE_ROLES);
   const { id } = await params;
-  const result = await getPeriodOverview.run(ctx, { periodId: id });
+  const [result, documents] = await Promise.all([
+    getPeriodOverview.run(ctx, { periodId: id }),
+    periodDocuments.run(ctx, { periodId: id }),
+  ]);
   if (result.isErr()) notFound();
+  const docs = documents.unwrapOr(null);
   const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
   const notes = new Map(assignments.map((a) => [a.assignmentId, a.note]));
   const closed = p.status === 'closed';
@@ -186,6 +192,108 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
             </TableRow>
           </TableFooter>
         </Table>
+        {docs && (docs.invoices.length > 0 || docs.acts.length > 0) && (
+          <div className="mt-6 flex flex-col gap-4">
+            <div>
+              <h3 className="font-medium">{t('earlyDocs')}</h3>
+              <p className="text-sm text-muted-foreground">{t('earlyDocsDescription')}</p>
+            </div>
+            {docs.invoices.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('earlyInvoice')}</TableHead>
+                    <TableHead>{t('col.person')}</TableHead>
+                    <TableHead>{t('earlyState')}</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {docs.invoices.map((g) => (
+                    <TableRow key={`${g.contractId}:${g.annexId ?? ''}`}>
+                      <TableCell>{g.label}</TableCell>
+                      <TableCell className="text-muted-foreground">{g.people.join(', ')}</TableCell>
+                      <TableCell>
+                        {g.invoice ? (
+                          <Link className="hover:underline" href={`/invoices/${g.invoice.id}`}>
+                            {g.invoice.number ?? t('draft')} ·{' '}
+                            {fmt.amount(g.invoice.total, g.invoice.currency)} ·{' '}
+                            {INVOICE_STATUS_LABELS[g.invoice.status]}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {docs.open && (!g.invoice || g.invoice.status === 'draft') && (
+                          <EarlyInvoiceButton
+                            periodId={p.id}
+                            contractId={g.contractId}
+                            annexId={g.annexId}
+                            label={g.invoice ? t('recalculate') : t('createInvoice')}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {docs.acts.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('earlyAct')}</TableHead>
+                    <TableHead>{t('earlyPay')}</TableHead>
+                    <TableHead>{t('earlyState')}</TableHead>
+                    <TableHead>{t('earlyRate')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {docs.acts.map((a) => (
+                    <TableRow key={a.personId}>
+                      <TableCell>
+                        {a.personName}
+                        <div className="text-xs text-muted-foreground">{a.payeeName}</div>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {[
+                          toDecimal(a.usd).isZero() ? null : fmt.amount(a.usd, 'USD'),
+                          toDecimal(a.uah).isZero() ? null : fmt.amount(a.uah, 'UAH'),
+                        ]
+                          .filter(Boolean)
+                          .join(' + ') || '—'}
+                      </TableCell>
+                      <TableCell>
+                        {a.act ? (
+                          <Link className="hover:underline" href={`/payroll/acts/${a.act.id}`}>
+                            {a.act.number ?? t('draft')} · {fmt.amount(a.act.amountUah, 'UAH')}
+                            {a.act.fxRate && ` · ${a.act.fxRate}`}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {docs.open && a.act?.status !== 'issued' && (
+                          <EarlyActForm
+                            periodId={p.id}
+                            personId={a.personId}
+                            usd={a.usd}
+                            uah={a.uah}
+                            needsRate={a.needsRate}
+                            defaultRate={a.act?.fxRate ?? docs.nbuRate}
+                            label={a.act ? t('updateAct') : t('createAct')}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
       </Step>
 
       <Step n={4} title={t('step4')} description={t('step4Description')}>

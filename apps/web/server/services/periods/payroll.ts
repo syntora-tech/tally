@@ -70,21 +70,29 @@ export async function createPayroll(
     await tx.select({ month: period.month }).from(period).where(eq(period.id, input.periodId))
   )[0]?.month as LocalDate;
   /** total_uah and the rate snapshot of a fiat item; crypto items have neither (A-075, A-076). */
-  const fiatTotals = (
+  const fiatTotals = async (
     method: 'fiat' | 'crypto',
+    payeeId: string | null,
     lines: PlanLine[],
     adjustments: PlanItem['adjustments'],
   ) => {
     if (method !== 'fiat') return {};
+    // A monthly act made before the close carries the rate approved for it (A-076).
+    const early = payeeId ? await waitingMonthlyAct(tx, payeeId, month) : undefined;
+    const approved = early?.fxRate
+      ? { rate: early.fxRate, source: early.fxSource ?? ('manual' as const) }
+      : input.payoutRate
+        ? { rate: input.payoutRate, source: 'nbu' as const }
+        : null;
     const usdPart = payrollTotalUsd(lines, adjustments);
-    const rate = usdPart.isZero() ? null : input.payoutRate;
-    const total = payrollTotalUah(lines, adjustments, rate);
+    const rate = usdPart.isZero() ? null : approved;
+    const total = payrollTotalUah(lines, adjustments, rate?.rate ?? null);
     if (total.isErr()) return {};
     return {
       totalUah: total.value.toFixed(2),
       ...(rate && {
-        payoutFxRate: toDecimal(rate).toFixed(6),
-        fxSource: 'nbu' as const,
+        payoutFxRate: toDecimal(rate.rate).toFixed(6),
+        fxSource: rate.source,
         fxSetAt: new Date(),
       }),
     };
@@ -163,15 +171,16 @@ export async function createPayroll(
     const candidates = payees
       .filter((p) => p.personId === plan.personId || p.id === owner?.defaultPayeeId)
       .map((p) => ({ id: p.id, kind: p.kind as 'fop' | 'crypto' | 'other' }));
+    const payeeId = resolvePayee(plan.payoutMethod, owner?.defaultPayeeId ?? null, candidates);
     const [item] = await tx
       .insert(payrollItem)
       .values({
         periodId: input.periodId,
         personId: plan.personId,
         payoutMethod: plan.payoutMethod,
-        payeeId: resolvePayee(plan.payoutMethod, owner?.defaultPayeeId ?? null, candidates),
+        payeeId,
         totalUsd: plan.totalUsd,
-        ...fiatTotals(plan.payoutMethod, plan.lines, plan.adjustments),
+        ...(await fiatTotals(plan.payoutMethod, payeeId, plan.lines, plan.adjustments)),
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
@@ -189,7 +198,7 @@ export async function createPayroll(
         payeeId: plan.payeeId,
         payoutMethod: plan.payoutMethod,
         totalUsd: plan.totalUsd,
-        ...fiatTotals(plan.payoutMethod, plan.lines, []),
+        ...(await fiatTotals(plan.payoutMethod, plan.payeeId, plan.lines, [])),
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
@@ -205,28 +214,35 @@ export async function createPayroll(
  * The monthly FOP act of a fresh payroll item (A-076): a draft left from an earlier close (or made
  * before it) is linked again and follows the new total; otherwise a new draft is created.
  */
-async function attachMonthlyAct(tx: DbTransaction, itemId: string, month: LocalDate) {
-  const [item] = await tx.select().from(payrollItem).where(eq(payrollItem.id, itemId));
-  if (!item?.payeeId || item.payoutMethod !== 'fiat' || !item.totalUah) return;
-  const [waiting] = await tx
-    .select({ id: supplierAct.id })
+/** The monthly act of a payee and month not linked to a payout yet: made before the close. */
+async function waitingMonthlyAct(tx: DbTransaction, payeeId: string, month: LocalDate) {
+  const [act] = await tx
+    .select()
     .from(supplierAct)
     .where(
       and(
-        eq(supplierAct.payeeId, item.payeeId),
+        eq(supplierAct.payeeId, payeeId),
         eq(supplierAct.type, 'monthly'),
-        eq(supplierAct.status, 'draft'),
+        ne(supplierAct.status, 'void'),
         eq(supplierAct.periodFrom, month),
         isNull(supplierAct.payrollItemId),
       ),
     )
     .limit(1);
+  return act;
+}
+
+async function attachMonthlyAct(tx: DbTransaction, itemId: string, month: LocalDate) {
+  const [item] = await tx.select().from(payrollItem).where(eq(payrollItem.id, itemId));
+  if (!item?.payeeId || item.payoutMethod !== 'fiat' || !item.totalUah) return;
+  const waiting = await waitingMonthlyAct(tx, item.payeeId, month);
   if (waiting) {
+    // An issued act is linked as it is (set once, A-076); a draft follows the new total.
     await tx
       .update(supplierAct)
       .set({ payrollItemId: itemId })
       .where(eq(supplierAct.id, waiting.id));
-    await syncMonthlyActDraft(tx, itemId);
+    if (waiting.status === 'draft') await syncMonthlyActDraft(tx, itemId);
     return;
   }
   await ensureMonthlyActDraft(tx, itemId);

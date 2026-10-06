@@ -15,7 +15,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { baseColumns, rolePolicies } from './_common';
 import { contract } from './engagements';
-import { actType, docStatus } from './enums';
+import { actType, docStatus, fxSource } from './enums';
 import { payee } from './parties';
 import { payrollItem } from './payroll';
 import { reimbursement } from './trips';
@@ -47,6 +47,12 @@ export const supplierAct = pgTable(
     periodFrom: date({ mode: 'string' }),
     periodTo: date({ mode: 'string' }),
     amountUah: numeric({ precision: 20, scale: 2 }).notNull(),
+    /**
+     * USD→UAH rate approved for a monthly act made before its period closed (A-076); the payout
+     * takes it at close. Null for acts made from a payout, which carries the rate itself.
+     */
+    fxRate: numeric({ precision: 18, scale: 6 }),
+    fxSource: fxSource(),
     status: docStatus().notNull().default('draft'),
     snapshot: jsonb(),
     gdocFileId: text(),
@@ -66,6 +72,10 @@ export const supplierAct = pgTable(
       sql`${t.status} = 'draft' or ${t.number} is not null`,
     ),
     check('supplier_act_amount_check', sql`${t.amountUah} >= 0`),
+    check(
+      'supplier_act_fx_check',
+      sql`(${t.fxRate} is null) = (${t.fxSource} is null) and (${t.fxRate} is null or ${t.fxRate} > 0)`,
+    ),
     check(
       'supplier_act_period_check',
       sql`${t.periodFrom} is null or ${t.periodTo} is null or ${t.periodTo} >= ${t.periodFrom}`,

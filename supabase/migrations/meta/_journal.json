@@ -407,6 +407,20 @@
       "when": 1791284716175,
       "tag": "20261006110516_payroll_line_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791285764714,
+      "tag": "20261006112244_supplier_act_rate",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791285778490,
+      "tag": "20261006112258_supplier_act_early_link",
+      "breakpoints": true
     }
   ]
 }

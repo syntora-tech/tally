@@ -1,12 +1,14 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useActionState, useEffect } from 'react';
+import { parseDecimal, payrollTotalUah } from '@tally/domain';
+import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useFormat } from '@/lib/format';
 import { toOptions, useLabels } from '@/lib/labels';
 import {
   Table,
@@ -19,6 +21,8 @@ import {
 import {
   addAdjustmentAction,
   closePeriodAction,
+  draftEarlyActAction,
+  draftEarlyInvoiceAction,
   removeAdjustmentAction,
   reopenPeriodAction,
   saveHoursAction,
@@ -347,6 +351,105 @@ export function RemoveAdjustmentButton({ id, periodId }: { id: string; periodId:
       <Button type="submit" size="sm" variant="ghost" disabled={pending}>
         {tc('delete')}
       </Button>
+    </form>
+  );
+}
+
+/** "Create invoice" / "Recalculate" for one contract or SOW before the close (A-076). */
+export function EarlyInvoiceButton({
+  periodId,
+  contractId,
+  annexId,
+  label,
+}: {
+  periodId: string;
+  contractId: string;
+  annexId: string | null;
+  label: string;
+}) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    draftEarlyInvoiceAction,
+    null,
+  );
+  const t = useTranslations('periodForms');
+  const error = useResult(state, t('earlyInvoiceDone'));
+  return (
+    <form action={action} className="flex items-center gap-2">
+      <input type="hidden" name="periodId" value={periodId} />
+      <input type="hidden" name="contractId" value={contractId} />
+      <input type="hidden" name="annexId" value={annexId ?? ''} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {label}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/**
+ * Monthly FOP act before the close (A-076): the USD part is converted at the rate approved here
+ * (NBU of today by default); the UAH part is taken as it is.
+ */
+export function EarlyActForm({
+  periodId,
+  personId,
+  usd,
+  uah,
+  needsRate,
+  defaultRate,
+  label,
+}: {
+  periodId: string;
+  personId: string;
+  usd: string;
+  uah: string;
+  needsRate: boolean;
+  defaultRate: string | null;
+  label: string;
+}) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    draftEarlyActAction,
+    null,
+  );
+  const t = useTranslations('periodForms');
+  const fmt = useFormat();
+  const error = useResult(state, t('earlyActDone'));
+  const [rate, setRate] = useState(defaultRate ?? '');
+  const parsed = parseDecimal(rate.replace(',', '.'));
+  const total = payrollTotalUah(
+    [
+      { amount: usd, currency: 'USD' },
+      { amount: uah, currency: 'UAH' },
+    ],
+    [],
+    parsed.isOk() && parsed.value.gt(0) ? parsed.value : null,
+  );
+  const unchanged = defaultRate !== null && parsed.isOk() && parsed.value.eq(defaultRate);
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="periodId" value={periodId} />
+      <input type="hidden" name="personId" value={personId} />
+      <input type="hidden" name="rateSource" value={unchanged ? 'nbu' : 'manual'} />
+      {needsRate && (
+        <Input
+          name="rate"
+          inputMode="decimal"
+          aria-label={t('earlyActRate')}
+          value={rate}
+          onChange={(e) => {
+            setRate(e.target.value);
+          }}
+          className="h-8 w-28"
+          required
+        />
+      )}
+      <span className="text-sm tabular-nums">
+        {total.isOk() ? fmt.amount(total.value.toFixed(2), 'UAH') : '—'}
+      </span>
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {label}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>
   );
 }

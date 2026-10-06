@@ -99,6 +99,10 @@ test.afterAll(() =>
         sql`delete from public.supplier_act s using public.payee pe where pe.id = s.payee_id and pe.legal_name_ua = ${fop}`,
       );
       const periodIds = sql`(select id from public.period where month = ${`${MONTH}-01`})`;
+      // Closing drafts monthly FOP acts for every fiat payout of the month (A-076).
+      await tx.execute(
+        sql`delete from public.supplier_act where payroll_item_id in (select id from public.payroll_item where period_id in ${periodIds})`,
+      );
       await tx.execute(
         sql`delete from public.payroll_line where payroll_item_id in (select id from public.payroll_item where period_id in ${periodIds})`,
       );

@@ -9,6 +9,8 @@ import { requireUserContext } from '../request-context';
 import {
   addAdjustment,
   closePeriod,
+  draftEarlyAct,
+  draftEarlyInvoice,
   importHours,
   openPeriod,
   removeAdjustment,
@@ -124,6 +126,37 @@ export async function uploadHoursCsvAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${periodId}`);
   return { ok: true, data: { id: periodId } };
+}
+
+/** Invoice draft for one contract (or SOW) before the period closes (A-076). */
+export async function draftEarlyInvoiceAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await draftEarlyInvoice.run(ctx, input);
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  revalidatePath('/invoices');
+  return { ok: true, data: { id: result.value?.id ?? '' } };
+}
+
+/** Monthly FOP act draft at the approved rate before the period closes (A-076). */
+export async function draftEarlyActAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await draftEarlyAct.run(ctx, {
+    ...input,
+    rate: typeof input.rate === 'string' ? input.rate.replace(',', '.').trim() : input.rate,
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  revalidatePath('/payroll/acts');
+  return { ok: true, data: result.value };
 }
 
 export async function closePeriodAction(

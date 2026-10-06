@@ -106,6 +106,7 @@ afterAll(() =>
           .select({ id: payrollItem.id })
           .from(payrollItem)
           .where(eq(payrollItem.periodId, ids.period));
+        await tx.delete(supplierAct).where(inArray(supplierAct.payrollItemId, items));
         await tx.delete(payrollLine).where(inArray(payrollLine.payrollItemId, items));
         await tx.delete(payrollItem).where(eq(payrollItem.periodId, ids.period));
         if (invoiceIds.length) {
