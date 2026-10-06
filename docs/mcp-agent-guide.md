@@ -44,41 +44,46 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 
 ## 3. Tools
 
-| Tool                    | Kind  | What it does                                                                                                                                            |
-| ----------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_balances`          | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + postings; `asOf` = up to that date) |
-| `list_categories`       | read  | Categories: `txType`, `name`, `id`                                                                                                                      |
-| `list_transactions`     | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`                   |
-| `list_fx_rates`         | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                               |
-| `upsert_accounts`       | write | Creates or updates accounts by exact name (≤ 100)                                                                                                       |
-| `upsert_categories`     | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                                    |
-| `set_fx_rates`          | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                              |
-| `add_transactions`      | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                                         |
-| `update_transactions`   | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                                   |
-| `delete_transactions`   | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request                |
-| `search_people`         | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data              |
-| `get_person`            | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                                         |
-| `list_clients`          | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                                  |
-| `find_wallets`          | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                                        |
-| `list_payees`           | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                                 |
-| `upsert_person_profile` | write | Creates or partially updates people profiles (≤ 200)                                                                                                    |
-| `upsert_clients`        | write | Creates or partially updates clients (≤ 100)                                                                                                            |
-| `upsert_wallets`        | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
-| `upsert_payees`         | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
-| `list_trips`            | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
-| `get_trip`              | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
-| `upsert_trips`          | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
-| `add_trip_expenses`     | write | Adds expenses to a trip (≤ 200) with optional receipt files; NBU rate by default; duplicate receipts refused                                            |
-| `search_documents`      | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
-| `get_document`          | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
-| `find_link_targets`     | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
-| `add_documents`         | write | Adds documents (≤ 10) with a base64 file (≤ 3 MB per call) or a link, plus links; `supersedesId` for a new version                                      |
-| `update_documents`      | write | Corrects document metadata by `id` (≤ 100); `status: void` cancels; generated/signed files are read-only                                                |
-| `link_documents`        | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
-| `unlink_documents`      | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
-| `delete_documents`      | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
+| Tool                      | Kind  | What it does                                                                                                                                            |
+| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_balances`            | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + postings; `asOf` = up to that date) |
+| `list_categories`         | read  | Categories: `txType`, `name`, `id`                                                                                                                      |
+| `list_transactions`       | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`                   |
+| `list_fx_rates`           | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                               |
+| `upsert_accounts`         | write | Creates or updates accounts by exact name (≤ 100)                                                                                                       |
+| `upsert_categories`       | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                                    |
+| `set_fx_rates`            | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                              |
+| `add_transactions`        | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                                         |
+| `update_transactions`     | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                                   |
+| `delete_transactions`     | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request                |
+| `search_people`           | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data              |
+| `get_person`              | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                                         |
+| `list_clients`            | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                                  |
+| `find_wallets`            | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                                        |
+| `list_payees`             | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                                 |
+| `upsert_person_profile`   | write | Creates or partially updates people profiles (≤ 200)                                                                                                    |
+| `upsert_clients`          | write | Creates or partially updates clients (≤ 100)                                                                                                            |
+| `list_contracts`          | read  | Client and FOP contracts: counterparty, currency, status, date rules, SOW/assignment counts, linked documents                                           |
+| `get_contract`            | read  | One contract with its documents, SOWs/annexes and assignments of people                                                                                 |
+| `upsert_contracts`        | write | Creates or partially updates contracts (≤ 50); `documentIds` links registry documents                                                                   |
+| `list_contract_annexes`   | read  | SOWs/annexes inside contracts with their own date rules, documents and assignment count                                                                 |
+| `upsert_contract_annexes` | write | Creates or partially updates SOWs/annexes (≤ 100); each result has the `id` for assignments                                                             |
+| `upsert_wallets`          | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
+| `upsert_payees`           | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
+| `list_trips`              | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
+| `get_trip`                | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
+| `upsert_trips`            | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
+| `add_trip_expenses`       | write | Adds expenses to a trip (≤ 200) with optional receipt files; NBU rate by default; duplicate receipts refused                                            |
+| `search_documents`        | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
+| `get_document`            | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
+| `find_link_targets`       | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
+| `add_documents`           | write | Adds documents (≤ 10) with a base64 file (≤ 3 MB per call) or a link, plus links; `supersedesId` for a new version                                      |
+| `update_documents`        | write | Corrects document metadata by `id` (≤ 100); `status: void` cancels; generated/signed files are read-only                                                |
+| `link_documents`          | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
+| `unlink_documents`        | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
+| `delete_documents`        | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
 
-A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Contracts, billing and pay rates, and assignments of people to projects are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
+A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Billing and pay rates and assignments of people to projects are UI only for now; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
 ## 4. Rules for every call
 
@@ -279,7 +284,7 @@ The Bench profile: who the person is, what they know, when they are free. Fields
 | `contacts`                        | Array of `{ name, role?, email?, phone? }`; when sent, replaces the whole list |
 | `defaultCurrency`                 | `USD`, `EUR`, … (a new client defaults to `USD`)                               |
 
-Matching, partial updates and renaming work as for people, with `legalName` as the key. Contracts with the client and billing rates are added by a person in the UI.
+Matching, partial updates and renaming work as for people, with `legalName` as the key. Contracts are written with `upsert_contracts` (8.8); billing rates are added by a person in the UI.
 
 ### 8.3 Crypto wallets — `upsert_wallets`, `find_wallets`
 
@@ -339,6 +344,27 @@ The registry (6.9) holds contracts, SOWs, annexes, NDAs, CVs, invoices, acts, st
 5. **Correct.** `update_documents` changes only the fields sent. A real document that was cancelled gets `status: "void"` and stays in the registry. Invoice and act files that Tally generated, and their signed copies, belong to the invoice/act and are read-only here.
 6. **Links.** `link_documents` attaches existing documents; `unlink_documents` detaches them — only when the owner asks, after `dryRun`.
 7. **Delete.** `delete_documents` is only for files uploaded by mistake (wrong file, test uploads, duplicates) and only when the owner asks (A-072). Run `dryRun: true`, show the owner the titles, link counts and `file` of each, then repeat without it. The row and its links are removed; a newer version moves down to the nearest surviving predecessor; the file goes to the Drive trash (restorable there for 30 days) unless another document uses it (`kept_shared`). `trash_failed` means the row is gone but the file is still on Drive — tell the owner. Tally's own invoice/act files and signed copies cannot be deleted.
+
+### 8.8 Contracts and SOWs — `upsert_contracts`, `upsert_contract_annexes`
+
+A contract is either with a client (`kind: "client"`, `clientId`) or with a payee's FOP (`kind: "fop"`, `payeeId`) — exactly one counterparty. A SOW or annex lives inside its contract; people are assigned to a contract and, optionally, to one of its SOWs (A-072).
+
+1. **Look first.** `list_contracts` with `clientId`/`payeeId` or `q`, then `get_contract` for SOWs and assignments. Contract and SOW PDFs are usually already in the registry: find them with `search_documents` (`type: "contract" | "sow" | "annex"`) and pass their ids in `documentIds` — never upload a file again.
+2. **Contract.** `upsert_contracts` matches by `id`, else by `number` (case-insensitive) plus the `clientId`/`payeeId` sent; the number is the lookup key, so renaming needs the `id`. A new contract needs `kind`, `number` and the counterparty.
+
+| Field             | Format                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signedOn`        | `YYYY-MM-DD` as printed on the contract                                                                                                               |
+| `currency`        | Invoice currency, `USD` by default                                                                                                                    |
+| `status`          | `active` or `ended`                                                                                                                                   |
+| `paymentDueRule`  | `{type: "day_of_month", day}` · `{type: "net_days", days}` (calendar days) · `{type: "net_working_days", days}` (working days after the invoice date) |
+| `invoiceDateRule` | `{type: "first_working_day_after_period"}` · `{type: "nth_working_day_after_period", n}`                                                              |
+| `actDateRule`     | FOP acts: `last_working_day_of_period`, `nth_working_day_after_period` with `n`, or `manual`                                                          |
+
+"15 working days after receipt of the invoice" (IdeaSoft) is `{type: "net_working_days", days: 15}`: Tally counts from the invoice date, since invoices are sent the day they are issued.
+
+3. **SOW / annex.** `upsert_contract_annexes` with `contractId`, `kind` (`sow` or `annex`), `number` as printed, `title`, `signedOn`, `validFrom`/`validTo`, `status` (`draft`, `active`, `ended`) and `documentIds`. Set `paymentDueRule` or `invoiceDateRule` only when the SOW itself changes them — the SOW then gets an invoice of its own at period close; `null` returns to the contract's rules. Keep the returned `id`: assignments will point to it.
+4. **Link later.** A document found afterwards is attached with `link_documents` and `entityType: "contract_annex"` (or `contract`); `find_link_targets` searches SOWs by number, title, contract number or client.
 
 ## 9. Report to the owner
 

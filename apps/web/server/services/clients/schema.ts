@@ -60,25 +60,28 @@ export const actDateRule = z.discriminatedUnion('type', [
 
 export const CONTRACT_STATUSES = ['active', 'ended'] as const;
 
-export const contractInput = z
-  .object({
-    kind: z.enum(['client', 'fop']),
-    number: requiredText('contracts.number'),
-    signedOn: optionalLocalDate,
-    clientId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
-    payeeId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
-    currency: currencyCode.default('USD'),
-    paymentDueRule: paymentDueRule.default({ type: 'day_of_month', day: 20 }),
-    invoiceDateRule: invoiceDateRule.default({ type: 'first_working_day_after_period' }),
-    actDateRule: actDateRule.default({ type: 'last_working_day_of_period' }),
-    invoiceTemplateFileId: optionalText,
-    actTemplateFileId: optionalText,
-    numberSequenceKey: optionalText,
-    status: z.enum(CONTRACT_STATUSES).default('active'),
-  })
-  .refine((c) => (c.kind === 'client' ? c.clientId && !c.payeeId : c.payeeId && !c.clientId), {
+export const contractFields = z.object({
+  kind: z.enum(['client', 'fop']),
+  number: requiredText('contracts.number'),
+  signedOn: optionalLocalDate,
+  clientId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
+  payeeId: z.preprocess(emptyToNull, z.uuid().nullable().optional()).transform((v) => v ?? null),
+  currency: currencyCode.default('USD'),
+  paymentDueRule: paymentDueRule.default({ type: 'day_of_month', day: 20 }),
+  invoiceDateRule: invoiceDateRule.default({ type: 'first_working_day_after_period' }),
+  actDateRule: actDateRule.default({ type: 'last_working_day_of_period' }),
+  invoiceTemplateFileId: optionalText,
+  actTemplateFileId: optionalText,
+  numberSequenceKey: optionalText,
+  status: z.enum(CONTRACT_STATUSES).default('active'),
+});
+
+export const contractInput = contractFields.refine(
+  (c) => (c.kind === 'client' ? c.clientId && !c.payeeId : c.payeeId && !c.clientId),
+  {
     message: 'contracts.counterparty',
     path: ['kind'],
-  });
+  },
+);
 
 export type ContractInput = z.output<typeof contractInput>;

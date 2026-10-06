@@ -10,6 +10,7 @@ import {
   client,
   company,
   contract,
+  contractAnnex,
   document,
   documentLink,
   invoice,
@@ -34,6 +35,8 @@ const usd = `M ${tag} USD`;
 let owner: Awaited<ReturnType<typeof h.user>>;
 let assistantToken = '';
 let readOnlyToken = '';
+// Write calls are rate-limited per client; the contract tests run on a client of their own.
+let contractsToken = '';
 const clientIds: string[] = [];
 let storageRoot = '';
 let storage: LocalStorage;
@@ -82,6 +85,11 @@ beforeAll(async () => {
   assistantToken = assistant.token;
   readOnlyToken = readOnly.token;
   clientIds.push(assistant.clientId, readOnly.clientId);
+  const contracts = (
+    await createMcpClient.run(ctx, { clientName: `int ${tag} contracts`, profile: 'assistant' })
+  )._unsafeUnwrap();
+  contractsToken = contracts.token;
+  clientIds.push(contracts.clientId);
 });
 
 afterAll(() =>
@@ -93,6 +101,18 @@ afterAll(() =>
       .where(like(document.title, `M ${tag}%`));
     await db.delete(document).where(like(document.title, `M ${tag}%`));
     await db.delete(invoice).where(eq(invoice.dateOverrideReason, `M ${tag}`));
+    const testContracts = await db
+      .select({ id: contract.id })
+      .from(contract)
+      .where(like(contract.number, `M ${tag}%`));
+    if (testContracts.length) {
+      await db.delete(contractAnnex).where(
+        inArray(
+          contractAnnex.contractId,
+          testContracts.map((c) => c.id),
+        ),
+      );
+    }
     await db.delete(contract).where(like(contract.number, `M ${tag}%`));
     await db.delete(company).where(like(company.nameEn, `M ${tag}%`));
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
@@ -140,6 +160,9 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'search_people',
       'get_person',
       'list_clients',
+      'list_contracts',
+      'get_contract',
+      'list_contract_annexes',
       'find_wallets',
       'list_payees',
       'list_trips',
@@ -153,7 +176,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(31);
+    expect(tools).toHaveLength(36);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
@@ -599,6 +622,115 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(text).toContain('ids.2');
     expect(text).not.toContain('ids.0');
     expect(await h.db.select().from(document).where(eq(document.id, v1))).toHaveLength(1);
+  });
+
+  it('contracts and SOWs: created with rules, documents linked without re-upload (A-072)', async () => {
+    const mcp = await connect(contractsToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const [c] = await h.db
+      .insert(client)
+      .values({ legalName: `M ${tag} IdeaSoft` })
+      .returning();
+    const clientId = c?.id ?? '';
+    const added = await call('add_documents', {
+      idempotencyKey: `ct-docs-${tag}`,
+      documents: [
+        { type: 'contract', title: `M ${tag} MSA pdf`, url: 'https://x.test/msa' },
+        { type: 'sow', title: `M ${tag} SOW pdf`, url: 'https://x.test/sow' },
+      ],
+    });
+    const [msaDoc, sowDoc] = (added.structuredContent?.results as { id: string }[]).map(
+      (r) => r.id,
+    );
+    const item = {
+      kind: 'client',
+      number: `M ${tag} MSA-1`,
+      clientId,
+      signedOn: '2046-01-15',
+      paymentDueRule: { type: 'net_working_days', days: 15 },
+      documentIds: [msaDoc],
+    };
+
+    const invalid = await call('upsert_contracts', {
+      idempotencyKey: `ct-bad-${tag}`,
+      contracts: [{ ...item, clientId: undefined }],
+    });
+    expect(invalid.isError).toBe(true);
+    expect(JSON.stringify(invalid.structuredContent)).toContain('contracts.0');
+
+    const dry = await call('upsert_contracts', {
+      idempotencyKey: `ct-dry-${tag}`,
+      dryRun: true,
+      contracts: [item],
+    });
+    expect(dry.structuredContent).toMatchObject({ results: [{ status: 'created' }] });
+    expect(await h.db.select().from(contract).where(eq(contract.clientId, clientId))).toEqual([]);
+
+    const created = await call('upsert_contracts', {
+      idempotencyKey: `ct-${tag}`,
+      contracts: [item],
+    });
+    expect(created.structuredContent).toMatchObject({
+      results: [{ status: 'created', linkedDocuments: 1 }],
+    });
+    const contractId = (created.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+    const again = await call('upsert_contracts', {
+      idempotencyKey: `ct-again-${tag}`,
+      contracts: [{ number: item.number.toLowerCase(), clientId, status: 'active' }],
+    });
+    expect(again.structuredContent).toMatchObject({
+      results: [{ id: contractId, status: 'updated', linkedDocuments: 0 }],
+    });
+
+    const sow = await call('upsert_contract_annexes', {
+      idempotencyKey: `sow-${tag}`,
+      annexes: [
+        {
+          contractId,
+          kind: 'sow',
+          number: '1',
+          title: 'Trading terminal',
+          validFrom: '2046-02-01',
+          invoiceDateRule: { type: 'nth_working_day_after_period', n: 3 },
+          documentIds: [sowDoc],
+        },
+      ],
+    });
+    expect(sow.isError).toBeFalsy();
+    const sowId = (sow.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+    const backwards = await call('upsert_contract_annexes', {
+      idempotencyKey: `sow-bad-${tag}`,
+      annexes: [{ id: sowId, validTo: '2046-01-01' }],
+    });
+    expect(backwards.isError).toBe(true);
+
+    const targets = await call('find_link_targets', { entityType: 'contract_annex', q: 'Trading' });
+    expect(targets.structuredContent?.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: sowId })]),
+    );
+
+    const card = await call('get_contract', { id: contractId });
+    expect(card.structuredContent).toMatchObject({
+      number: item.number,
+      clientName: `M ${tag} IdeaSoft`,
+      paymentDueRule: { type: 'net_working_days', days: 15 },
+      documents: [{ id: msaDoc }],
+      annexes: [
+        {
+          id: sowId,
+          kind: 'sow',
+          paymentDueRule: null,
+          invoiceDateRule: { type: 'nth_working_day_after_period', n: 3 },
+          documents: [{ id: sowDoc }],
+        },
+      ],
+      assignments: [],
+    });
+    const listed = await call('list_contracts', { clientId });
+    expect(listed.structuredContent?.items).toMatchObject([{ id: contractId, annexes: 1 }]);
+    const annexes = await call('list_contract_annexes', { contractId });
+    expect(annexes.structuredContent?.items).toMatchObject([{ id: sowId, number: '1' }]);
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

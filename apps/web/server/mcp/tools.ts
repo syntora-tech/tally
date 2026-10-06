@@ -27,6 +27,9 @@ import {
   updateDocuments,
 } from '../services/documents/agent';
 import { searchDocuments } from '../services/documents/registry';
+import { getContractCard, listContracts, type ContractRow } from '../services/contracts';
+import { listContractAnnexes, type AnnexRow } from '../services/contracts/annexes';
+import { upsertContractAnnexes, upsertContracts } from '../services/contracts/batch';
 import { getTrip, listTrips } from '../services/trips';
 import { tripBatchServices, upsertTrips } from '../services/trips/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
@@ -95,9 +98,55 @@ function benchProfile(p: PersonRow) {
   };
 }
 
+function contractSummary(r: ContractRow) {
+  const c = r.contract;
+  return {
+    id: c.id,
+    kind: c.kind,
+    number: c.number,
+    signedOn: c.signedOn,
+    clientId: c.clientId,
+    clientName: r.clientName,
+    payeeId: c.payeeId,
+    payeeName: r.payeeName,
+    currency: c.currency,
+    status: c.status,
+    paymentDueRule: c.paymentDueRule,
+    invoiceDateRule: c.invoiceDateRule,
+    actDateRule: c.actDateRule,
+    numberSequenceKey: c.numberSequenceKey,
+    annexes: r.annexes,
+    assignments: r.assignments,
+    documents: r.documents,
+  };
+}
+
+function annexSummary(r: AnnexRow) {
+  const a = r.annex;
+  return {
+    id: a.id,
+    contractId: a.contractId,
+    contractNumber: r.contractNumber,
+    clientId: r.clientId,
+    clientName: r.clientName,
+    kind: a.kind,
+    number: a.number,
+    title: a.title,
+    signedOn: a.signedOn,
+    validFrom: a.validFrom,
+    validTo: a.validTo,
+    status: a.status,
+    paymentDueRule: a.paymentDueRule,
+    invoiceDateRule: a.invoiceDateRule,
+    notes: a.notes,
+    assignments: r.assignments,
+    documents: r.documents,
+  };
+}
+
 /**
  * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
- * A-054, A-056). Contracts, terms, payouts, allocations, issuing documents and deletions other
+ * A-054, A-056). Terms, payouts, allocations, issuing documents and deletions other
  * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
  * payees are allowed since A-062, deleting transactions since A-063, the document registry and
  * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072.
@@ -193,9 +242,40 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'list_clients',
     title: 'Clients',
     description:
-      'Clients with legal and short name, country, default currency, the number of contracts and crypto wallets (network, address, label, isActive).',
+      'Clients with legal and short name, country, default currency, the number of contracts (see list_contracts) and crypto wallets (network, address, label, isActive).',
     kind: 'read',
     service: listClients,
+  }),
+  tool({
+    name: 'list_contracts',
+    title: 'Contracts',
+    description:
+      'Client and FOP contracts with the counterparty, currency, status, date rules (paymentDueRule: day_of_month {day} | net_days {days} | net_working_days {days}; invoiceDateRule; actDateRule), counts of SOWs/annexes and assignments, and the linked documents. Filters: clientId, payeeId, kind client|fop, status active|ended, q (number or counterparty name).',
+    kind: 'read',
+    service: listContracts,
+    present: (rows) => rows.map(contractSummary),
+  }),
+  tool({
+    name: 'get_contract',
+    title: 'Contract card',
+    description:
+      'One contract: requisites, date rules, linked documents, its SOWs/annexes (each with its own date rules, documents and assignment count) and the assignments of people (personId, role, annexId, fte, startsOn, endsOn).',
+    kind: 'read',
+    service: getContractCard,
+    present: (card) => ({
+      ...contractSummary(card),
+      annexes: card.annexList.map(annexSummary),
+      assignments: card.assignmentList,
+    }),
+  }),
+  tool({
+    name: 'list_contract_annexes',
+    title: 'SOWs and annexes',
+    description:
+      "SOWs/annexes inside contracts: id, contract, kind sow|annex, number, title, signedOn, validFrom/validTo, status draft|active|ended, their own date rules (null = the contract's), documents and assignment count. Filters: contractId, clientId, status.",
+    kind: 'read',
+    service: listContractAnnexes,
+    present: (rows) => rows.map(annexSummary),
   }),
   tool({
     name: 'find_wallets',
@@ -225,7 +305,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'upsert_clients',
     title: 'Create or update clients',
     description:
-      'Clients in bulk (max 100). Matched by id, else by legalName (case-insensitive); only the fields sent are changed, a missing client is created (legalName required). contacts is an array of {name, role?, email?, phone?} and replaces the stored list when sent. Contracts and billing terms are not editable here. All-or-nothing; errors keyed "clients.<index>"; use dryRun first.',
+      'Clients in bulk (max 100). Matched by id, else by legalName (case-insensitive); only the fields sent are changed, a missing client is created (legalName required). contacts is an array of {name, role?, email?, phone?} and replaces the stored list when sent. Contracts are written with upsert_contracts; billing terms are not editable here. All-or-nothing; errors keyed "clients.<index>"; use dryRun first.',
     kind: 'write',
     service: upsertClients,
   }),
@@ -244,6 +324,22 @@ export const TOOLS: readonly ToolDef[] = [
       'Payees in bulk (max 100). Matched by id, else by taxId; only the fields sent change, a missing payee is created (kind defaults to fop; a name in Ukrainian or English is required; crypto needs walletAddress). personId links the payee to a person (null unlinks); makeDefault also makes it that person\'s default payee for new payouts. IBAN and tax id formats are checked. All-or-nothing; errors keyed "payees.<index>"; use dryRun first.',
     kind: 'write',
     service: upsertPayees,
+  }),
+  tool({
+    name: 'upsert_contracts',
+    title: 'Create or update contracts',
+    description:
+      'Contracts in bulk (max 50). kind client needs clientId, kind fop needs payeeId (exactly one). Matched by id, else by number (case-insensitive) plus the clientId/payeeId sent; only the fields sent change, a missing contract is created (kind, number and the counterparty required). Fields: number, signedOn, currency, status active|ended, paymentDueRule {type: day_of_month, day} | {type: net_days, days} | {type: net_working_days, days} (working days after the invoice date, e.g. 15 for IdeaSoft), invoiceDateRule {type: first_working_day_after_period} | {type: nth_working_day_after_period, n}, actDateRule (also manual), numberSequenceKey. documentIds links documents already in the registry (no re-upload). All-or-nothing; errors keyed "contracts.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertContracts,
+  }),
+  tool({
+    name: 'upsert_contract_annexes',
+    title: 'Create or update SOWs and annexes',
+    description:
+      'SOWs/annexes inside contracts in bulk (max 100). Matched by id, else by contractId + kind + number; only the fields sent change, a missing one is created (contractId, kind sow|annex and number required). Fields: title, signedOn, validFrom, validTo, status draft|active|ended (default active), notes, paymentDueRule and invoiceDateRule (same shapes as upsert_contracts) to replace the contract\'s rules for this SOW — its assignments then get an invoice of their own; null returns to the contract\'s rules. documentIds links documents already in the registry. Each result has the id to use for assignments. All-or-nothing; errors keyed "annexes.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertContractAnnexes,
   }),
   tool({
     name: 'upsert_accounts',
@@ -393,7 +489,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'find_link_targets',
     title: 'Find records to link',
     description:
-      'Records a document can be attached to, by entityType (person, payee, client, contract, assignment, invoice, supplier_act, trip, transaction) and optional text q (name, number, title, description); returns {id, label}. Use the id in add_documents.links or link_documents.',
+      'Records a document can be attached to, by entityType (person, payee, client, contract, contract_annex, assignment, invoice, supplier_act, trip, transaction) and optional text q (name, number, title, description); returns {id, label}. Use the id in add_documents.links or link_documents.',
     kind: 'read',
     service: findLinkTargets,
   }),
@@ -426,7 +522,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'link_documents',
     title: 'Link documents to records',
     description:
-      'Attaches documents to records, up to 200 {documentId, entityType, entityId}; an existing link is reported as "existing". The record must exist (find it with find_link_targets). All-or-nothing; errors keyed "links.<index>"; use dryRun first.',
+      'Attaches documents to records, up to 200 {documentId, entityType, entityId}; entityType contract_annex attaches to a SOW/annex. An existing link is reported as "existing". The record must exist (find it with find_link_targets). All-or-nothing; errors keyed "links.<index>"; use dryRun first.',
     kind: 'write',
     service: linkDocuments,
   }),
