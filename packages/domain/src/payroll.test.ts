@@ -3,6 +3,10 @@ import { WorkCalendar } from './calendar';
 import { parseLocalDate, type LocalDate } from './local-date';
 import { sum } from './money';
 import {
+  nextPartPeriod,
+  payoutPartOf,
+  payoutRest,
+  payoutRestUah,
   derivedRate,
   payrollItemStatus,
   payrollTotalUah,
@@ -169,5 +173,49 @@ describe('FX (5.4, 9.1)', () => {
     expect(
       suggestPayoutRate(d('2026-09-23'), { exchanges: [], nbu: null, lastManual: null }),
     ).toBeNull();
+  });
+});
+
+describe('payout parts (A-083)', () => {
+  const lines = [{ amount: '5000', currency: 'USD' }];
+  const adjustments = [{ amount: '3325', currency: 'UAH' }];
+
+  it('takes USD first at the payment rate and leaves the rest for the next rate', () => {
+    const rest = payoutRest(lines, adjustments, []);
+    const part = payoutPartOf(rest, '41500', '41.5');
+    expect(part).toMatchObject({ coversRest: false });
+    expect(part.usd.toFixed(2)).toBe('1000.00');
+    const after = payoutRest(lines, adjustments, [{ usd: part.usd, uah: part.uah, rate: '41.5' }]);
+    expect(after.usd.toFixed(2)).toBe('4000.00');
+    expect(after.uah.toFixed(2)).toBe('3325.00');
+    // 4 000 × 42 + 3 325 at the later rate.
+    expect(payoutRestUah(after, '42')?.toFixed(2)).toBe('171325.00');
+    const last = payoutPartOf(after, '171325', '42');
+    expect(last).toMatchObject({ coversRest: true });
+    const done = payoutRest(lines, adjustments, [
+      { usd: part.usd, uah: part.uah, rate: '41.5' },
+      { usd: last.usd, uah: last.uah, rate: '42' },
+    ]);
+    expect([done.usd.toFixed(2), done.uah.toFixed(2)]).toEqual(['0.00', '0.00']);
+  });
+
+  it('dates a part from the first uncovered day to the payout day in the month of work', () => {
+    const m = d('2026-09-01');
+    expect(nextPartPeriod(m, [], d('2026-10-16'), false)).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-16',
+    });
+    expect(
+      nextPartPeriod(m, [{ from: d('2026-09-01'), to: d('2026-09-16') }], d('2026-10-31'), true),
+    ).toEqual({ from: '2026-09-17', to: '2026-09-30' });
+    expect(
+      nextPartPeriod(m, [{ from: d('2026-09-01'), to: d('2026-09-30') }], d('2026-10-31'), true),
+    ).toBeNull();
+    expect(
+      nextPartPeriod(m, [{ from: d('2026-09-01'), to: d('2026-09-20') }], d('2026-10-05'), false),
+    ).toEqual({
+      from: '2026-09-21',
+      to: '2026-09-21',
+    });
   });
 });

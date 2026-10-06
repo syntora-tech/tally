@@ -1,7 +1,16 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { WorkCalendar } from './calendar';
 import { payoutDeadline } from './date-rules';
-import { addDays, compareLocalDate, type LocalDate } from './local-date';
+import {
+  addDays,
+  compareLocalDate,
+  daysInMonth,
+  endOfMonth,
+  localDate,
+  startOfMonth,
+  toParts,
+  type LocalDate,
+} from './local-date';
 import { Decimal, roundHalfUp, sum, toDecimal, type DecimalInput } from './money';
 
 export type PayoutMethod = 'fiat' | 'crypto';
@@ -157,4 +166,79 @@ export function suggestPayoutRate(on: LocalDate, c: FxCandidates): SuggestedRate
     return { rate: toDecimal(c.lastManual.rate), source: 'manual', onDate: c.lastManual.onDate };
   }
   return null;
+}
+
+/** A part of a month's payout paid on its own, with its own act and rate (A-083). */
+export type PayoutPart = { usd: DecimalInput; uah: DecimalInput; rate: DecimalInput | null };
+
+export type PayoutRest = { usd: Decimal; uah: Decimal };
+
+/**
+ * What of a payout is left after its parts (A-083): the USD share not yet covered and the UAH
+ * lines/adjustments not yet covered (a part's UAH beyond its USD × rate came from them).
+ */
+export function payoutRest(
+  lines: readonly PayLineInput[],
+  adjustments: readonly AdjustmentInput[],
+  parts: readonly PayoutPart[],
+): PayoutRest {
+  let usd = payrollTotalUsd(lines, adjustments);
+  let uah = payrollPartUah(lines, adjustments);
+  for (const p of parts) {
+    const ownUsd = toDecimal(p.usd);
+    usd = usd.minus(ownUsd);
+    const fromUsd = p.rate === null ? new Decimal(0) : roundHalfUp(ownUsd.times(toDecimal(p.rate)));
+    uah = uah.minus(toDecimal(p.uah).minus(fromUsd));
+  }
+  return { usd: Decimal.max(usd, 0), uah: Decimal.max(uah, 0) };
+}
+
+/** The rest in UAH at a rate: round2(USD × rate) + UAH, as total_uah (5.2). */
+export function payoutRestUah(rest: PayoutRest, rate: DecimalInput | null): Decimal | null {
+  if (rest.usd.isZero()) return rest.uah;
+  if (rate === null) return null;
+  return roundHalfUp(rest.usd.times(toDecimal(rate))).plus(rest.uah);
+}
+
+/**
+ * The part a payment of `paidUah` covers (A-083): USD first, at the payment rate, then the UAH
+ * lines. A payment of the whole rest covers it all, so no cents are left over by rounding.
+ */
+export function payoutPartOf(
+  rest: PayoutRest,
+  paidUah: DecimalInput,
+  rate: DecimalInput | null,
+): { usd: Decimal; uah: Decimal; coversRest: boolean } {
+  const paid = toDecimal(paidUah);
+  const restUah = payoutRestUah(rest, rate);
+  if (restUah !== null && paid.gte(restUah)) return { usd: rest.usd, uah: paid, coversRest: true };
+  if (rest.usd.isZero() || rate === null)
+    return { usd: new Decimal(0), uah: paid, coversRest: false };
+  const usd = Decimal.min(paid.div(toDecimal(rate)).toDecimalPlaces(8), rest.usd);
+  return { usd, uah: paid, coversRest: false };
+}
+
+/**
+ * Act period of the next part of a month's payout (A-083): from the first day no act covers yet to
+ * the payout day moved into the month of work (same day of month, clamped to it); a part that
+ * pays the rest runs to the month's end. Null when the month is already covered.
+ */
+export function nextPartPeriod(
+  month: LocalDate,
+  covered: readonly { from: LocalDate; to: LocalDate }[],
+  paidOn: LocalDate,
+  coversRest: boolean,
+): { from: LocalDate; to: LocalDate } | null {
+  const first = startOfMonth(month);
+  const last = endOfMonth(month);
+  const lastCovered = covered
+    .map((c) => c.to)
+    .reduce<LocalDate | null>((a, b) => (a === null || b > a ? b : a), null);
+  const from = lastCovered === null ? first : addDays(lastCovered, 1);
+  if (from > last) return null;
+  if (coversRest) return { from, to: last };
+  const { year, month: m } = toParts(first);
+  const day = Math.min(toParts(paidOn).day, daysInMonth(year, m));
+  const sameMonthDay = localDate(year, m, day);
+  return { from, to: sameMonthDay < from ? from : sameMonthDay };
 }
