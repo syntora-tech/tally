@@ -19,6 +19,7 @@ export type DossierDoc = {
   url: string | null;
   packageId: string | null;
   packagePages: string | null;
+  historical: boolean;
   contractIds: string[];
   annexIds: string[];
 };
@@ -169,6 +170,7 @@ export const counterpartyDossier = defineService({
           url: document.url,
           packageId: document.packageId,
           packagePages: document.packagePages,
+          historical: document.historical,
         })
         .from(document)
         .where(inArray(document.id, docIds));
@@ -213,7 +215,8 @@ export type InboxReason = 'noLinks' | 'noRecord' | 'noDate' | 'noNumber';
 
 /**
  * Documents to sort out (A-079): not attached to anything, an agreement not attached to its
- * contract/SOW record, or missing the date or number a registry needs.
+ * contract/SOW record, or missing the date or number a registry needs. Historical documents are
+ * kept as they are (A-080).
  */
 export const documentInbox = defineService({
   name: 'documents.inbox',
@@ -231,7 +234,7 @@ export const documentInbox = defineService({
             from public.document_link dl where dl.document_id = "document"."id"), '{}')`,
         })
         .from(document)
-        .where(ne(document.status, 'void'))
+        .where(and(ne(document.status, 'void'), eq(document.historical, false)))
         .orderBy(sql`${document.docDate} desc nulls first`, asc(document.title)),
     );
     const items = rows.flatMap((r) => {
@@ -329,11 +332,13 @@ export const documentChecks = defineService({
         .where(
           and(
             ne(document.status, 'void'),
+            eq(document.historical, false),
             isNull(document.packageId),
             inArray(document.type, DUPLICATE_TYPES),
             sql`(${document.type}, ${document.numberKey}) in (
               select d.type, d.number_key from public.document d
-              where d.status <> 'void' and d.package_id is null and d.number_key is not null
+              where d.status <> 'void' and not d.historical and d.package_id is null
+                and d.number_key is not null
               group by d.type, d.number_key having count(*) > 1)`,
           ),
         )

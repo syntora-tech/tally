@@ -1,0 +1,1 @@
+ALTER TABLE "document" ADD COLUMN "historical" boolean DEFAULT false NOT NULL;

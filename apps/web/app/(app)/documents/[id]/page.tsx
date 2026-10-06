@@ -41,6 +41,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           {d.number && <span>{tc('number', { number: d.number })}</span>}
           {d.docDate && <span>{t('of', { date: fmt.date(d.docDate) })}</span>}
           <span>· {DOC_STATUS_LABELS[d.status]}</span>
+          {d.historical && <Badge variant="secondary">{t('historical')}</Badge>}
           {d.version > 1 && (
             <Badge variant="secondary">{t('version', { version: d.version })}</Badge>
           )}
@@ -169,6 +170,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
                     url: d.url,
                     notes: d.notes,
                     status: d.status,
+                    historical: d.historical,
                   }}
                 />
               </CardContent>

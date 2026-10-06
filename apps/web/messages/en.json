@@ -1126,7 +1126,8 @@
     "checkLinks": "Check the links",
     "submit": "Add document",
     "linkAdded": "Link added",
-    "saved": "Document saved"
+    "saved": "Document saved",
+    "historical": "Historical document (before Tally): not shown in the inbox or checks"
   },
   "documentCard": {
     "of": "of {date}",
@@ -1143,7 +1144,8 @@
     "edit": "Edit",
     "partOf": "Part (pages {pages}) of the signed package",
     "packageParts": "Documents in this package; the signature covers this file:",
-    "pages": "pages {pages}"
+    "pages": "pages {pages}",
+    "historical": "History"
   },
   "ledger": {
     "subtitle": "Accounts, transactions and payment allocation",
@@ -1778,7 +1780,8 @@
     "unfiled": "Not filed under a contract",
     "undated": "Without a date",
     "partOf": "part of a signed package, pages {pages}",
-    "openFile": "Open the file: {title}"
+    "openFile": "Open the file: {title}",
+    "historical": "History"
   },
   "documentsNav": {
     "label": "Documents sections",

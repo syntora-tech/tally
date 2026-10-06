@@ -12,6 +12,7 @@ const doc = (over: Partial<DossierDoc>): DossierDoc => ({
   url: null,
   packageId: null,
   packagePages: null,
+  historical: false,
   contractIds: [],
   annexIds: [],
   ...over,

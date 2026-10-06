@@ -69,6 +69,15 @@ beforeAll(async () => {
         url: 'https://x.test/b',
       },
       { type: 'contract', title: `${tag} loose`, url: 'https://x.test/l' },
+      { type: 'contract', title: `${tag} old`, url: 'https://x.test/o', historical: true },
+      {
+        type: 'invoice',
+        title: `${tag} old inv`,
+        number: `${tag}/1`,
+        docDate: '2025-02-03',
+        url: 'https://x.test/oi',
+        historical: true,
+      },
     ])
     .returning({ id: document.id, title: document.title });
   for (const r of rows) docs[r.title.replace(`${tag} `, '')] = r.id;
@@ -109,6 +118,8 @@ describe('document structure (A-079)', () => {
       'noNumber',
     ]);
     expect(items.find((i) => i.id === docs['SOW 7'])).toBeUndefined();
+    // A-080: history stays as it is.
+    expect(items.find((i) => i.id === docs.old)).toBeUndefined();
   });
 
   it('checks find a FOP without a contract, a contract without a file and repeated numbers', async () => {
@@ -116,6 +127,9 @@ describe('document structure (A-079)', () => {
     expect(c.payeesWithoutContract.map((p) => p.id)).toContain(ids.payee);
     expect(c.contractsWithoutFile.map((x) => x.id)).toContain(ids.contract);
     expect(c.annexesWithoutFile.map((x) => x.id)).not.toContain(ids.annex);
-    expect(c.duplicateNumbers.find((g) => g.number === `${tag}/1`)?.docs).toHaveLength(2);
+    expect(c.duplicateNumbers.find((g) => g.number === `${tag}/1`)?.docs.map((d) => d.id)).toEqual([
+      docs['inv A'],
+      docs['inv B'],
+    ]);
   });
 });

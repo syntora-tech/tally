@@ -17,7 +17,13 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
-import { optionalHttpUrl, optionalLocalDate, optionalText, requiredText } from '../fields';
+import {
+  checkbox,
+  optionalHttpUrl,
+  optionalLocalDate,
+  optionalText,
+  requiredText,
+} from '../fields';
 import { documentLinkInput } from '.';
 import { lookupLinkTargets } from './targets';
 
@@ -73,6 +79,12 @@ export const documentFilters = z.object({
   unlinked: z
     .preprocess((v) => v === 'on' || v === 'true' || v === true, z.boolean())
     .default(false),
+  historical: z
+    .preprocess(
+      (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === true),
+      z.boolean().optional(),
+    )
+    .describe('true = only historical documents, false = only current ones'),
   linkedTo: documentLinkInput.optional().describe('Only documents linked to this record'),
   limit: z.coerce.number().int().min(1).max(500).default(500),
 });
@@ -93,6 +105,7 @@ export const searchDocuments = defineService({
       }
       if (f.type) conditions.push(eq(document.type, f.type));
       if (f.status) conditions.push(eq(document.status, f.status));
+      if (f.historical !== undefined) conditions.push(eq(document.historical, f.historical));
       if (f.linkedTo)
         conditions.push(
           sql`exists (select 1 from ${documentLink} dl where dl.document_id = ${document.id} and dl.entity_type = ${f.linkedTo.entityType} and dl.entity_id = ${f.linkedTo.entityId})`,
@@ -114,6 +127,7 @@ export const searchDocuments = defineService({
           url: document.url,
           packageId: document.packageId,
           packagePages: document.packagePages,
+          historical: document.historical,
         })
         .from(document)
         .where(and(...conditions))
@@ -199,6 +213,7 @@ export const updateDocument = defineService({
     url: optionalHttpUrl,
     notes: optionalText,
     status: z.enum(['draft', 'issued', 'void']).default('issued'),
+    historical: checkbox,
   }),
   handler: async (ctx, { id, ...input }) => {
     const [row] = await inActorScope(ctx, (tx) =>

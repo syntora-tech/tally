@@ -45,6 +45,7 @@ export type DocumentMeta = {
   url: string | null;
   notes: string | null;
   status: string;
+  historical: boolean;
 };
 
 export function EditDocumentForm({ doc }: { doc: DocumentMeta }) {
@@ -83,6 +84,10 @@ export function EditDocumentForm({ doc }: { doc: DocumentMeta }) {
       <FormField label={t('notes')} htmlFor="notes" className="md:col-span-2">
         <Textarea id="notes" name="notes" rows={2} defaultValue={doc.notes ?? ''} />
       </FormField>
+      <label className="flex items-center gap-2 text-sm md:col-span-2">
+        <input type="checkbox" name="historical" defaultChecked={doc.historical} />
+        {t('historical')}
+      </label>
       <Button type="submit" size="sm" disabled={pending} className="self-start">
         {tc('save')}
       </Button>

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   date,
   index,
@@ -82,6 +83,8 @@ export const document = pgTable(
      */
     packageId: uuid().references((): AnyPgColumn => document.id),
     packagePages: text(),
+    /** Kept for history (before Tally's books, A-080): never in the inbox or checks. */
+    historical: boolean().notNull().default(false),
     notes: text(),
   },
   (t) => [

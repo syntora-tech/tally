@@ -538,7 +538,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'search_documents',
     title: 'Document registry',
     description:
-      'Documents (contracts, SOWs, annexes, invoices = ours to clients, bills = issued to us, acts, CVs, NDAs, statements, receipts, signed packages, other), newest first, each with the records it is linked to; a part of a signed package carries packageId and packagePages. Filters: q (number or title), type, status (draft|issued|void; issued = active), unlinked true for documents attached to nothing, linkedTo {entityType, entityId} for the documents of one record, limit (max 500).',
+      'Documents (contracts, SOWs, annexes, invoices = ours to clients, bills = issued to us, acts, CVs, NDAs, statements, receipts, signed packages, other), newest first, each with the records it is linked to; a part of a signed package carries packageId and packagePages. Filters: q (number or title), type, status (draft|issued|void; issued = active), historical (true = only history, false = only current), unlinked true for documents attached to nothing, linkedTo {entityType, entityId} for the documents of one record, limit (max 500).',
     kind: 'read',
     service: searchDocuments,
     present: (rows) =>
@@ -575,7 +575,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'update_documents',
     title: 'Correct documents',
     description:
-      'Edits up to 100 documents by id; only the fields sent change (type, title, number, docDate, url, notes, status; null clears an optional field). Types: invoice = ours to a client, bill = an invoice issued to us by a contractor or supplier; package only comes from split_document. To cancel a document set status void; a document uploaded by mistake is removed with delete_documents. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
+      'Edits up to 100 documents by id; only the fields sent change (type, title, number, docDate, url, notes, status, historical; null clears an optional field). historical true marks a document kept for history (before Tally): it never shows in the inbox or checks. Types: invoice = ours to a client, bill = an invoice issued to us by a contractor or supplier; package only comes from split_document. To cancel a document set status void; a document uploaded by mistake is removed with delete_documents. Files Tally generated or signed copies of invoices/acts are read-only here. All-or-nothing; errors keyed "documents.<index>"; use dryRun first.',
     kind: 'write',
     service: updateDocuments,
   }),

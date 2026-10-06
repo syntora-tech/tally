@@ -343,6 +343,7 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
         sizeBytes: doc.sizeBytes,
         viewUrl: doc.driveFileId && storage ? storage.viewUrl(doc.driveFileId) : null,
         signedAt: doc.signedAt,
+        historical: doc.historical,
         package: card.package,
         parts: card.parts,
         isLatestVersion: current?.id === doc.id,
@@ -641,6 +642,10 @@ const documentChange = z.object({
     .enum(['draft', 'issued', 'void'])
     .optional()
     .describe('issued = active; void marks a document as cancelled instead of deleting it'),
+  historical: z
+    .boolean()
+    .optional()
+    .describe("true = kept for history (before Tally's books): never in the inbox or checks"),
 });
 
 /** Metadata corrections for agents; only the fields sent change (A-071). */
