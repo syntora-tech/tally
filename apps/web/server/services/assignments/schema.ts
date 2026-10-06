@@ -101,6 +101,17 @@ export const addPayVersionInput = payTermsFields.extend({
   validFrom: monthStart,
 });
 
+/** In-place correction of a version (A-077); I10 keeps closed months out of reach. */
+export const updateBillingVersionInput = billingTermsFields.extend({
+  id: z.uuid(),
+  validFrom: monthStart,
+});
+
+export const updatePayVersionInput = payTermsFields.extend({
+  id: z.uuid(),
+  validFrom: monthStart,
+});
+
 /** Agency fee (A-068): USD per hour the person works, paid to the agency payee. Rate 0 ends it. */
 export const addAgencyVersionInput = z.object({
   assignmentId: z.uuid(),

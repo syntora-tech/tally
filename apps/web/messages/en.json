@@ -318,7 +318,10 @@
       "internalNoContract": "An internal assignment has no contract or SOW",
       "clientContract": "Assignments go on client contracts; FOP contracts are for payouts",
       "versionClosed": "{terms}: closed months cannot change; the earliest month is {month}",
-      "versionExists": "{terms}: a version from {month} already exists with other values; versions are never edited, start a later month"
+      "versionExists": "{terms}: a version from {month} already exists with other values; correct it on the assignment page or start a later month",
+      "termsInvoiced": "Invoice {number} is already issued for these months: its rates cannot change",
+      "termsActed": "FOP act {number} is already issued for these months: the pay cannot change",
+      "versionNotFound": "Terms version not found"
     },
     "payees": {
       "iban": "Invalid IBAN format",
@@ -966,7 +969,8 @@
     "agencyDescription": "If an agency placed this person, it gets a USD rate for every hour they work. Each month it becomes a separate payout to the agency, with its own act. A rate of 0 from a month ends the fee",
     "agency": "Agency",
     "ratePerHour": "Per hour",
-    "agencyEnded": "ended"
+    "agencyEnded": "ended",
+    "versionClosed": "Closed"
   },
   "assignmentForm": {
     "person": "Person",
@@ -1005,7 +1009,12 @@
     "addVersion": "Add version",
     "agencyPayee": "Agency (payee)",
     "chooseAgency": "Choose the agency",
-    "ratePerHour": "USD per hour"
+    "ratePerHour": "USD per hour",
+    "versionUpdated": "Terms version updated",
+    "editVersionAria": "Edit the version from {month}",
+    "editBillingTitle": "Client terms version",
+    "editPayTitle": "Person terms version",
+    "editHint": "The correction applies from its month on; drafts of open months are recalculated. Closed months and issued documents stay as they are."
   },
   "payees": {
     "title": "Payout recipients",

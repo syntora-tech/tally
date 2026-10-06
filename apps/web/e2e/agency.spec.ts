@@ -102,6 +102,15 @@ test('A-068: an agency fee per hour becomes its own payout to the agency', async
   await form.getByRole('button', { name: 'Add version' }).click();
   await expect(page.getByRole('row', { name: new RegExp(agency) })).toContainText('4.00');
 
+  // A-077: a version of an open month is corrected in place.
+  await page.getByRole('button', { name: 'Edit the version from' }).first().click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('Hourly rate').fill('48');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Terms version updated')).toBeVisible();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('cell', { name: /^\$?48\.00/ })).toBeVisible();
+
   await page.goto('/periods');
   await page.getByLabel('Month').fill(MONTH);
   await page.getByRole('button', { name: 'Open period' }).click();

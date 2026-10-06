@@ -20,6 +20,7 @@ import { requireRole } from '@/server/request-context';
 import { agencyPayeeOptions, getAssignment } from '@/server/services/assignments';
 import { AddVersionForm } from '../add-version-form';
 import { AgencyVersionForm } from '../agency-version-form';
+import { EditVersionButton } from '../edit-version-button';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('assignment');
@@ -42,7 +43,9 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     agency,
     hours,
     margin,
+    closedEnd,
   } = result.value;
+  const editable = (validFrom: string) => !closedEnd || validFrom > closedEnd;
   const payees = (await agencyPayeeOptions.run(ctx, {})).unwrapOr([]);
   const lastAgency = agency[0]?.terms;
   const nextMonth = addMonths(ctx.today, 1).slice(0, 7);
@@ -148,6 +151,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                   <TableHead>{t('type')}</TableHead>
                   <TableHead>{t('rate')}</TableHead>
                   <TableHead>{t('details')}</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,6 +165,26 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                     <TableCell className="text-muted-foreground">
                       {b.type === 'fixed_monthly' ? PRORATION_LABELS[b.prorationPolicy] : ''}{' '}
                       <Badge variant="outline">{PAYOUT_METHOD_LABELS[b.invoiceChannel]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {editable(b.validFrom) ? (
+                        <EditVersionButton
+                          side="billing"
+                          assignmentId={a.id}
+                          versionId={b.id}
+                          validFrom={b.validFrom}
+                          label={month(b.validFrom)}
+                          values={{
+                            type: b.type,
+                            rate: b.rate,
+                            currency: b.currency,
+                            prorationPolicy: b.prorationPolicy,
+                            invoiceChannel: b.invoiceChannel,
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{t('versionClosed')}</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -193,6 +217,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                   <TableHead>{t('type')}</TableHead>
                   <TableHead>{t('amount')}</TableHead>
                   <TableHead>{t('details')}</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -207,6 +232,27 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                       {PAYOUT_METHOD_LABELS[p.payoutMethod]} ·{' '}
                       {RELEASE_POLICY_LABELS[p.releasePolicy]}
                       {p.graceDays > 0 ? t('graceDays', { days: p.graceDays }) : ''}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {editable(p.validFrom) ? (
+                        <EditVersionButton
+                          side="pay"
+                          assignmentId={a.id}
+                          versionId={p.id}
+                          validFrom={p.validFrom}
+                          label={month(p.validFrom)}
+                          values={{
+                            type: p.type,
+                            amount: p.amount,
+                            currency: p.currency,
+                            payoutMethod: p.payoutMethod,
+                            releasePolicy: p.releasePolicy,
+                            graceDays: p.graceDays,
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{t('versionClosed')}</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

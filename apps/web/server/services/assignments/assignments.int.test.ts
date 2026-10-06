@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import {
   addBillingVersion,
+  updateBillingVersion,
   addPayVersion,
   createAssignment,
   getAssignment,
@@ -151,6 +152,20 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
       amount: '5300',
     });
     expect(res._unsafeUnwrapErr().message).toBe('db.versionExists');
+  });
+
+  it('A-077: a version cannot be moved into a closed period', async () => {
+    const card = (
+      await getAssignment.run(h.ctxFor(owner), { id: assignmentIds[0] ?? '' })
+    )._unsafeUnwrap();
+    const [latest] = card.billing;
+    const res = await updateBillingVersion.run(h.ctxFor(owner), {
+      id: latest?.id,
+      validFrom: '2026-06-01',
+      type: 'fixed_monthly',
+      rate: '6000',
+    });
+    expect(res._unsafeUnwrapErr().code).toBe('closed_period');
   });
 
   it('accepts internal assignments without a contract and billing none', async () => {

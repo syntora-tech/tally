@@ -20,6 +20,7 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { updateBillingVersion, updatePayVersion } from '../assignments';
 import {
   addAdjustment,
   closePeriod,
@@ -154,6 +155,28 @@ const myAct = async () =>
       .from(supplierAct)
       .where(and(eq(supplierAct.payeeId, ids.payee), eq(supplierAct.type, 'monthly')))
   )[0];
+const billingVersion = async (rate: string) => {
+  const [v] = await h.db
+    .select()
+    .from(billingTerms)
+    .where(eq(billingTerms.assignmentId, ids.assignment));
+  return updateBillingVersion.run(ctx(), {
+    id: v?.id ?? '',
+    validFrom: v?.validFrom ?? '',
+    type: 'hourly',
+    rate,
+  });
+};
+const payVersion = async (amount: string) => {
+  const [v] = await h.db.select().from(payTerms).where(eq(payTerms.assignmentId, ids.assignment));
+  return updatePayVersion.run(ctx(), {
+    id: v?.id ?? '',
+    validFrom: v?.validFrom ?? '',
+    type: 'fixed',
+    amount,
+    releasePolicy: 'immediate',
+  });
+};
 const hours = (value: string, payHours?: string) =>
   setHours.run(ctx(), {
     periodId: ids.period,
@@ -174,6 +197,13 @@ describe('documents before the period closes (A-076)', () => {
     expect(await myInvoice()).toMatchObject({ status: 'draft', total: '5000.00000000' });
     expect((await hours('120')).isOk()).toBe(true);
     expect(await myInvoice()).toMatchObject({ status: 'draft', total: '6000.00000000' });
+  });
+
+  it('a corrected client rate rebuilds the draft invoice (A-077)', async () => {
+    expect((await billingVersion('60')).isOk()).toBe(true);
+    expect(await myInvoice()).toMatchObject({ status: 'draft', total: '7200.00000000' });
+    expect((await billingVersion('50')).isOk()).toBe(true);
+    expect(await myInvoice()).toMatchObject({ total: '6000.00000000' });
   });
 
   it('an early act takes the approved rate and follows adjustments', async () => {
@@ -206,6 +236,10 @@ describe('documents before the period closes (A-076)', () => {
       reason: 'early test',
     });
     expect(await myAct()).toMatchObject({ amountUah: '40500.00' });
+    expect((await payVersion('1100')).isOk()).toBe(true);
+    expect(await myAct()).toMatchObject({ amountUah: '44500.00' });
+    expect((await payVersion('1000')).isOk()).toBe(true);
+    expect(await myAct()).toMatchObject({ amountUah: '40500.00' });
   });
 
   it('issued documents freeze the hours and adjustments they cover', async () => {
@@ -233,6 +267,12 @@ describe('documents before the period closes (A-076)', () => {
       reason: 'late',
     });
     expect(adjusted._unsafeUnwrapErr().message).toContain('periods.adjustmentActed');
+    expect((await billingVersion('70'))._unsafeUnwrapErr().message).toContain(
+      'assignments.termsInvoiced',
+    );
+    expect((await payVersion('1200'))._unsafeUnwrapErr().message).toContain(
+      'assignments.termsActed',
+    );
   });
 
   it('closing keeps the issued invoice, takes the act rate and links the issued act', async () => {

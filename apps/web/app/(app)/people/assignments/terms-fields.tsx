@@ -34,17 +34,20 @@ export type PayDefaults = {
 /** Client terms block. `prefix` is `billing.` in the create form and empty in the version form. */
 export function BillingFields({
   prefix,
+  idBase,
   defaults,
   errors,
 }: {
   prefix: string;
+  /** Keeps element ids unique when several forms are on the page. */
+  idBase?: string;
   defaults: BillingDefaults;
   errors: Errors;
 }) {
   const [type, setType] = useState(defaults.type);
   const t = useTranslations('terms');
   const labels = useLabels();
-  const id = (f: string) => `${prefix.replace('.', '-')}${f}`;
+  const id = (f: string) => `${idBase ?? prefix.replace('.', '-')}${f}`;
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <FormField label={t('type')} htmlFor={id('type')} error={errors?.[`${prefix}type`]}>
@@ -113,17 +116,20 @@ export function BillingFields({
 /** Person terms block. */
 export function PayFields({
   prefix,
+  idBase,
   defaults,
   errors,
 }: {
   prefix: string;
+  /** Keeps element ids unique when several forms are on the page. */
+  idBase?: string;
   defaults: PayDefaults;
   errors: Errors;
 }) {
   const [type, setType] = useState(defaults.type);
   const t = useTranslations('terms');
   const labels = useLabels();
-  const id = (f: string) => `${prefix.replace('.', '-')}${f}`;
+  const id = (f: string) => `${idBase ?? prefix.replace('.', '-')}${f}`;
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <FormField label={t('type')} htmlFor={id('type')} error={errors?.[`${prefix}type`]}>

@@ -25,6 +25,7 @@ import {
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
+import { inActorScopeAtomic } from '../atomic';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { annexLabel } from '../contracts/annexes';
@@ -36,7 +37,10 @@ import {
   addPayVersionInput,
   createAssignmentInput,
   updateAssignmentInput,
+  updateBillingVersionInput,
+  updatePayVersionInput,
 } from './schema';
+import { applyTermsChange } from './terms-effects';
 
 type Versioned<T> = T & { validFrom: LocalDate };
 
@@ -174,8 +178,13 @@ export const getAssignment = defineService({
         .innerJoin(period, eq(period.id, timesheet.periodId))
         .where(eq(timesheet.assignmentId, id))
         .orderBy(desc(period.month));
+      const closed = await tx.execute<{ end: string | null }>(
+        sql`select public.last_closed_period_end()::text as end`,
+      );
       return {
         ...row,
+        /** Versions starting after this date can still be corrected (I10). */
+        closedEnd: (closed[0]?.end ?? null) as LocalDate | null,
         billing,
         pay,
         agency,
@@ -260,12 +269,12 @@ export const updateAssignment = defineService({
   },
 });
 
-/** A change of client terms is always a new version; closed periods are guarded by I10. */
+/** A change of client terms is a new version; closed periods are guarded by I10. */
 export const addBillingVersion = defineService({
   name: 'assignments.addBillingVersion',
   input: addBillingVersionInput,
   handler: async (ctx, input) =>
-    inActorScope(ctx, async (tx) => {
+    inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
       const billed = billingCurrency(
         input.currency,
         await contractCurrency(tx, { assignmentId: input.assignmentId }),
@@ -273,13 +282,9 @@ export const addBillingVersion = defineService({
       if ('error' in billed) {
         return err(serviceError('validation_error', billed.error, { currency: [billed.error] }));
       }
-      const [row] = await tx
-        .insert(billingTerms)
-        .values({ ...input, currency: billed.currency })
-        .returning({ id: billingTerms.id });
-      return row
-        ? ok({ id: input.assignmentId })
-        : err(serviceError('internal_error', 'general.saveFailed'));
+      await tx.insert(billingTerms).values({ ...input, currency: billed.currency });
+      const applied = await applyTermsChange(tx, 'billing', input.assignmentId, input.validFrom);
+      return applied.map(() => ({ id: input.assignmentId }));
     }),
 });
 
@@ -291,12 +296,69 @@ export const addPayVersion = defineService({
     if (problem) {
       return err(serviceError('validation_error', problem, { currency: [problem] }));
     }
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx.insert(payTerms).values(input).returning({ id: payTerms.id }),
-    );
-    return row
-      ? ok({ id: input.assignmentId })
-      : err(serviceError('internal_error', 'general.saveFailed'));
+    return inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
+      await tx.insert(payTerms).values(input);
+      const applied = await applyTermsChange(tx, 'pay', input.assignmentId, input.validFrom);
+      return applied.map(() => ({ id: input.assignmentId }));
+    });
+  },
+});
+
+const earlier = (a: string, b: string) => (a < b ? a : b);
+
+/**
+ * Corrects a version of client terms in place (A-077): only months after the last closed period
+ * (I10) and not under an issued invoice; drafts of the affected open months are rebuilt.
+ */
+export const updateBillingVersion = defineService({
+  name: 'assignments.updateBillingVersion',
+  input: updateBillingVersionInput,
+  handler: async (ctx, { id, ...input }) =>
+    inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
+      const [old] = await tx.select().from(billingTerms).where(eq(billingTerms.id, id));
+      if (!old) return err(serviceError('not_found', 'assignments.versionNotFound'));
+      const billed = billingCurrency(
+        input.currency,
+        await contractCurrency(tx, { assignmentId: old.assignmentId }),
+      );
+      if ('error' in billed) {
+        return err(serviceError('validation_error', billed.error, { currency: [billed.error] }));
+      }
+      await tx
+        .update(billingTerms)
+        .set({ ...input, currency: billed.currency })
+        .where(eq(billingTerms.id, id));
+      const applied = await applyTermsChange(
+        tx,
+        'billing',
+        old.assignmentId,
+        earlier(old.validFrom, input.validFrom),
+      );
+      return applied.map(() => ({ id: old.assignmentId }));
+    }),
+});
+
+/** Corrects a version of person terms in place (A-077), like client terms but under issued acts. */
+export const updatePayVersion = defineService({
+  name: 'assignments.updatePayVersion',
+  input: updatePayVersionInput,
+  handler: async (ctx, { id, ...input }) => {
+    const problem = payCurrencyProblem(input);
+    if (problem) {
+      return err(serviceError('validation_error', problem, { currency: [problem] }));
+    }
+    return inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
+      const [old] = await tx.select().from(payTerms).where(eq(payTerms.id, id));
+      if (!old) return err(serviceError('not_found', 'assignments.versionNotFound'));
+      await tx.update(payTerms).set(input).where(eq(payTerms.id, id));
+      const applied = await applyTermsChange(
+        tx,
+        'pay',
+        old.assignmentId,
+        earlier(old.validFrom, input.validFrom),
+      );
+      return applied.map(() => ({ id: old.assignmentId }));
+    });
   },
 });
 
