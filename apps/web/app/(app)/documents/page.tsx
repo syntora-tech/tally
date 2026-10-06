@@ -7,6 +7,7 @@ import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { searchDocuments } from '@/server/services/documents/registry';
 import { DocumentsNav } from './documents-nav';
+import { DocumentsTreeView } from './documents-tree';
 import { DocumentsTable } from './documents-table';
 import { getTranslations } from 'next-intl/server';
 import { getLabels, getLocalizeText, localizeForUser, pageTitle } from '@/server/i18n';
@@ -25,8 +26,11 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Se
     status: first(params.status),
     unlinked: first(params.unlinked),
   };
-  const result = await searchDocuments.run(ctx, filters);
   const canWrite = FINANCE_ROLES.includes(ctx.actor.role);
+  // The tree is the default view; any search or filter switches to the flat list (A-081).
+  const list = params.view === 'list' || Object.values(filters).some(Boolean);
+  if (!list) return <DocumentsTreeView ctx={ctx} canWrite={canWrite} />;
+  const result = await searchDocuments.run(ctx, filters);
   const t = await getTranslations('documents');
   const { DOC_STATUS_LABELS, DOCUMENT_TYPE_LABELS } = await getLabels();
   const localize = await getLocalizeText();
@@ -40,13 +44,14 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Se
         </div>
         {canWrite && <Button render={<Link href="/documents/new" />}>{t('add')}</Button>}
       </div>
-      {canWrite && <DocumentsNav current="registry" />}
+      <DocumentsNav current="list" finance={canWrite} />
 
       <form
         method="get"
         className="grid grid-cols-2 gap-3 rounded-md border p-4 md:grid-cols-5"
         aria-label={t('filters')}
       >
+        <input type="hidden" name="view" value="list" />
         <FormField label={t('q')} htmlFor="f-q" className="col-span-2" hint={t('qHint')}>
           <Input id="f-q" name="q" defaultValue={filters.q} />
         </FormField>
@@ -74,7 +79,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Se
         </label>
         <div className="col-span-2 flex gap-2 md:col-span-5">
           <Button type="submit">{t('search')}</Button>
-          <Button variant="ghost" render={<Link href="/documents" />}>
+          <Button variant="ghost" render={<Link href="/documents?view=list" />}>
             {t('reset')}
           </Button>
         </div>

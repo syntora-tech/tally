@@ -76,6 +76,14 @@ test('A-079: case file, documents to sort out and checks', async ({ page }) => {
   await expect(dossier.getByRole('link', { name: `Invoice ${tag}`, exact: true })).toBeVisible();
 
   await page.goto('/documents');
+  const party = page.getByTestId('tree-party').filter({ hasText: customer });
+  await party.locator('summary').first().click();
+  await expect(party).toContainText(`Contract MSA-${tag}`);
+  await party.getByText('August 2026').click();
+  await party.getByText('Linked to (1)').click();
+  await expect(party.getByRole('link', { name: new RegExp(`MSA-${tag}`) }).last()).toBeVisible();
+  await page.getByRole('link', { name: 'List' }).click();
+  await expect(page).toHaveURL(/view=list/);
   await page.getByRole('link', { name: /To sort out/ }).click();
   await expect(page.getByRole('heading', { name: 'Documents to sort out' })).toBeVisible();
   await page.getByRole('link', { name: 'Checks' }).click();

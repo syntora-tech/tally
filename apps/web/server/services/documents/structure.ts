@@ -4,6 +4,7 @@ import { ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
+import { labelLinks, type LinkChip } from './registry';
 
 /** Documents that belong to a month of work; the rest are the agreements themselves (A-079). */
 export const PERIOD_TYPES: readonly string[] = ['invoice', 'bill', 'act', 'receipt', 'statement'];
@@ -22,6 +23,8 @@ export type DossierDoc = {
   historical: boolean;
   contractIds: string[];
   annexIds: string[];
+  /** All records the document is linked to, for the registry tree (A-081). */
+  links?: LinkChip[];
 };
 
 export type DossierMonth = { month: string | null; docs: DossierDoc[] };
@@ -360,5 +363,141 @@ export const documentChecks = defineService({
       };
     });
     return ok(result);
+  },
+});
+
+export type TreeParty = {
+  kind: 'client' | 'payee';
+  id: string;
+  name: string;
+  count: number;
+  dossier: Dossier;
+};
+
+/**
+ * The whole registry as a tree (A-081): every client and payee with its case file, then the
+ * documents that belong to no counterparty. A document linked to two counterparties shows under
+ * both.
+ */
+export const documentTree = defineService({
+  name: 'documents.tree',
+  input: z.object({}),
+  handler: async (ctx) => {
+    const tree = await inActorScope(ctx, async (tx) => {
+      const [clients, payees, contracts, annexes, rows, links] = await Promise.all([
+        tx
+          .select({
+            id: client.id,
+            name: sql<string>`coalesce(${client.shortName}, ${client.legalName})`,
+          })
+          .from(client),
+        tx
+          .select({
+            id: payee.id,
+            name: sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn}, '')`,
+          })
+          .from(payee),
+        tx
+          .select({
+            id: contract.id,
+            kind: contract.kind,
+            number: contract.number,
+            status: contract.status,
+            signedOn: contract.signedOn,
+            clientId: contract.clientId,
+            payeeId: contract.payeeId,
+          })
+          .from(contract)
+          .orderBy(sql`${contract.signedOn} desc nulls last`, asc(contract.number)),
+        tx
+          .select({
+            id: contractAnnex.id,
+            contractId: contractAnnex.contractId,
+            kind: contractAnnex.kind,
+            number: contractAnnex.number,
+            title: contractAnnex.title,
+            status: contractAnnex.status,
+            validFrom: contractAnnex.validFrom,
+          })
+          .from(contractAnnex)
+          .orderBy(asc(contractAnnex.validFrom), asc(contractAnnex.number)),
+        tx
+          .select({
+            id: document.id,
+            type: document.type,
+            number: document.number,
+            title: document.title,
+            docDate: document.docDate,
+            status: document.status,
+            fileKey: document.driveFileId,
+            url: document.url,
+            packageId: document.packageId,
+            packagePages: document.packagePages,
+            historical: document.historical,
+          })
+          .from(document),
+        tx
+          .select({
+            documentId: documentLink.documentId,
+            entityType: documentLink.entityType,
+            entityId: documentLink.entityId,
+          })
+          .from(documentLink)
+          .orderBy(asc(documentLink.createdAt)),
+      ]);
+      const chips = await labelLinks(tx, links);
+      const linksOf = new Map<string, { raw: (typeof links)[number]; chip: LinkChip }[]>();
+      links.forEach((raw, i) => {
+        const chip = chips[i];
+        if (!chip) return;
+        linksOf.set(raw.documentId, [...(linksOf.get(raw.documentId) ?? []), { raw, chip }]);
+      });
+      const docs: DossierDoc[] = rows.map(({ fileKey, ...r }) => {
+        const own = linksOf.get(r.id) ?? [];
+        return {
+          ...r,
+          hasFile: fileKey !== null,
+          contractIds: own
+            .filter((l) => l.raw.entityType === 'contract')
+            .map((l) => l.raw.entityId),
+          annexIds: own
+            .filter((l) => l.raw.entityType === 'contract_annex')
+            .map((l) => l.raw.entityId),
+          links: own.map((l) => l.chip),
+        };
+      });
+
+      const placed = new Set<string>();
+      const parties: TreeParty[] = [];
+      const add = (kind: 'client' | 'payee', id: string, name: string) => {
+        const own = contracts.filter((c) => (kind === 'client' ? c.clientId : c.payeeId) === id);
+        const cIds = new Set(own.map((c) => c.id));
+        const ownAnnexes = annexes.filter((a) => cIds.has(a.contractId));
+        const aIds = new Set(ownAnnexes.map((a) => a.id));
+        const mine = docs.filter((d) =>
+          (linksOf.get(d.id) ?? []).some(
+            ({ raw }) =>
+              (raw.entityType === kind && raw.entityId === id) ||
+              (raw.entityType === 'contract' && cIds.has(raw.entityId)) ||
+              (raw.entityType === 'contract_annex' && aIds.has(raw.entityId)),
+          ),
+        );
+        if (!own.length && !mine.length) return;
+        for (const d of mine) placed.add(d.id);
+        parties.push({
+          kind,
+          id,
+          name,
+          count: mine.length,
+          dossier: buildDossier(own, ownAnnexes, mine),
+        });
+      };
+      const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+      for (const c of [...clients].sort(byName)) add('client', c.id, c.name);
+      for (const p of [...payees].sort(byName)) add('payee', p.id, p.name);
+      const rest = docs.filter((d) => !placed.has(d.id));
+      return { parties, other: buildDossier([], [], rest).unfiled, otherCount: rest.length };
+    });
+    return ok(tree);
   },
 });

@@ -10,7 +10,7 @@ import {
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
-import { counterpartyDossier, documentChecks, documentInbox } from './structure';
+import { counterpartyDossier, documentChecks, documentInbox, documentTree } from './structure';
 
 const h = intHarness();
 let owner: Awaited<ReturnType<typeof h.user>>;
@@ -131,5 +131,14 @@ describe('document structure (A-079)', () => {
       docs['inv A'],
       docs['inv B'],
     ]);
+  });
+
+  it('the registry tree puts the client with its case file and links (A-081)', async () => {
+    const tree = (await documentTree.run(h.ctxFor(owner), {}))._unsafeUnwrap();
+    const party = tree.parties.find((p) => p.id === ids.client);
+    expect(party).toMatchObject({ kind: 'client', count: 3 });
+    const sow = party?.dossier.contracts[0]?.annexes[0]?.docs[0];
+    expect(sow?.links).toMatchObject([{ entityType: 'contract_annex', entityId: ids.annex }]);
+    expect(tree.parties.some((p) => p.id === ids.payee)).toBe(false);
   });
 });

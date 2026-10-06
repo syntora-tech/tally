@@ -1781,13 +1781,16 @@
     "undated": "Without a date",
     "partOf": "part of a signed package, pages {pages}",
     "openFile": "Open the file: {title}",
-    "historical": "History"
+    "historical": "History",
+    "links": "Linked to ({count})",
+    "openContract": "open contract"
   },
   "documentsNav": {
     "label": "Documents sections",
-    "registry": "Registry",
     "inbox": "To sort out",
-    "checks": "Checks"
+    "checks": "Checks",
+    "structure": "Structure",
+    "list": "List"
   },
   "documentsInbox": {
     "title": "Documents to sort out",
@@ -1828,5 +1831,14 @@
       "title": "Repeated numbers",
       "description": "Invoices, acts and contracts with the same number: a re-issue, a copy or a numbering mistake"
     }
+  },
+  "docTree": {
+    "subtitle": "Every client and payee with its contracts, SOWs and documents by month",
+    "client": "Clients",
+    "payee": "Payees (FOPs and others)",
+    "count": "{count, plural, one {# document} other {# documents}}",
+    "openCard": "open card",
+    "other": "Without a counterparty",
+    "otherHint": "People, trips, statements and unlinked documents"
   }
 }
