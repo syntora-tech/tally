@@ -297,7 +297,14 @@
       "contractOrInternal": "Choose a contract or mark the assignment as internal",
       "endBeforeStart": "The end date is before the start date",
       "notFound": "Assignment not found",
-      "chooseAgency": "Choose the agency payee"
+      "chooseAgency": "Choose the agency payee",
+      "fixedLink": "The person, contract and internal flag of an assignment cannot change: create a new assignment",
+      "newNeedsPerson": "A new assignment needs personId and startsOn",
+      "newNeedsTerms": "A new assignment needs both billing and pay terms",
+      "internalNoContract": "An internal assignment has no contract or SOW",
+      "clientContract": "Assignments go on client contracts; FOP contracts are for payouts",
+      "versionClosed": "{terms}: closed months cannot change; the earliest month is {month}",
+      "versionExists": "{terms}: a version from {month} already exists with other values; versions are never edited, start a later month"
     },
     "payees": {
       "iban": "Invalid IBAN format",

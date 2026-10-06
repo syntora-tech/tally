@@ -68,6 +68,8 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `upsert_contracts`        | write | Creates or partially updates contracts (≤ 50); `documentIds` links registry documents                                                                   |
 | `list_contract_annexes`   | read  | SOWs/annexes inside contracts with their own date rules, documents and assignment count                                                                 |
 | `upsert_contract_annexes` | write | Creates or partially updates SOWs/annexes (≤ 100); each result has the `id` for assignments                                                             |
+| `list_assignments`        | read  | People on contracts/SOWs with the terms in force for a month and every terms version                                                                    |
+| `upsert_assignments`      | write | Creates or partially updates assignments (≤ 100) with the first or next `billing`/`pay` versions                                                        |
 | `upsert_wallets`          | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
 | `upsert_payees`           | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
 | `list_trips`              | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
@@ -83,7 +85,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `unlink_documents`        | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
 | `delete_documents`        | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
 
-A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Billing and pay rates and assignments of people to projects are UI only for now; issuing invoices and acts is UI only, though their files are visible in the document registry.
+A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
 ## 4. Rules for every call
 
@@ -365,6 +367,20 @@ A contract is either with a client (`kind: "client"`, `clientId`) or with a paye
 
 3. **SOW / annex.** `upsert_contract_annexes` with `contractId`, `kind` (`sow` or `annex`), `number` as printed, `title`, `signedOn`, `validFrom`/`validTo`, `status` (`draft`, `active`, `ended`) and `documentIds`. Set `paymentDueRule` or `invoiceDateRule` only when the SOW itself changes them — the SOW then gets an invoice of its own at period close; `null` returns to the contract's rules. Keep the returned `id`: assignments will point to it.
 4. **Link later.** A document found afterwards is attached with `link_documents` and `entityType: "contract_annex"` (or `contract`); `find_link_targets` searches SOWs by number, title, contract number or client.
+
+### 8.9 Assignments — `list_assignments`, `upsert_assignments`
+
+An assignment is one person on one client contract (and optionally one of its SOWs), with two independent versioned terms: `billing` — what the client is charged — and `pay` — what the person gets (A-073). Internal work (CEO/CTO on our own company) is `isInternal: true` with no contract and `billing.type: "none"`.
+
+1. **Look first.** `list_assignments` with `personId`, `contractId`, `annexId` or `activeOn`. The same person on the same contract with another rate, role or SOW is a separate assignment.
+2. **Create.** `personId`, `contractId` (a client contract), `annexId` (a SOW of that contract, from `upsert_contract_annexes`), `roleTitle`, `fte` (`"0.5"`), `startsOn`, `endsOn` if known, and both `billing` and `pay`:
+
+| Block     | Fields                                                                                                                                                                                                                              |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `billing` | `type` `hourly` (rate per hour) · `fixed_monthly` (rate per month, `prorationPolicy` `full_month` · `by_hours` · `trunc_hourly`) · `none`; `currency` = the contract currency; `invoiceChannel` `fiat` · `crypto`                   |
+| `pay`     | `type` `fixed` (monthly amount, already multiplied by FTE) · `hourly` (monthly amount for the full norm H) · `included`; `payoutMethod` `fiat` · `crypto`; `releasePolicy` `on_payment_or_due` (default) · `immediate`; `graceDays` |
+
+Without `validFrom` the first versions start in the start month — or in the first open month when that one is already closed (closed months never change, I10). 3. **Change terms.** Send `id` and `billing`/`pay` with `validFrom` = the first day of the month the new terms start. Versions are never edited: the same month with other values is an error; a repeated identical version comes back as `existing`. Person, contract and `isInternal` cannot change — end the assignment (`endsOn`) and create a new one. 4. **Then hours.** Once assignments have terms, the month's hours are entered in Periods (UI).
 
 ## 9. Report to the owner
 

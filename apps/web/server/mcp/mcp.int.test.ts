@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
   account,
+  assignment,
   auditLog,
   client,
   company,
@@ -106,6 +107,12 @@ afterAll(() =>
       .from(contract)
       .where(like(contract.number, `M ${tag}%`));
     if (testContracts.length) {
+      await db.delete(assignment).where(
+        inArray(
+          assignment.contractId,
+          testContracts.map((c) => c.id),
+        ),
+      );
       await db.delete(contractAnnex).where(
         inArray(
           contractAnnex.contractId,
@@ -163,6 +170,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'list_contracts',
       'get_contract',
       'list_contract_annexes',
+      'list_assignments',
       'find_wallets',
       'list_payees',
       'list_trips',
@@ -176,7 +184,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(36);
+    expect(tools).toHaveLength(38);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
@@ -731,6 +739,122 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(listed.structuredContent?.items).toMatchObject([{ id: contractId, annexes: 1 }]);
     const annexes = await call('list_contract_annexes', { contractId });
     expect(annexes.structuredContent?.items).toMatchObject([{ id: sowId, number: '1' }]);
+  });
+
+  it('assignments: created on a SOW with terms, versions added but never edited (A-073)', async () => {
+    const mcp = await connect(contractsToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const [p] = await h.db
+      .insert(person)
+      .values({ fullName: `M ${tag} Andrii` })
+      .returning();
+    const [c] = await h.db
+      .insert(client)
+      .values({ legalName: `M ${tag} Boosty` })
+      .returning();
+    const [co] = await h.db
+      .insert(company)
+      .values({ nameEn: `M ${tag} Co2`, nameUa: 'К' })
+      .returning();
+    const [ct, other] = await h.db
+      .insert(contract)
+      .values(
+        [`M ${tag} SOW-MSA`, `M ${tag} Other`].map((number) => ({
+          kind: 'client',
+          number,
+          companyId: co?.id ?? '',
+          clientId: c?.id ?? '',
+        })),
+      )
+      .returning();
+    const [sow, foreign] = await h.db
+      .insert(contractAnnex)
+      .values([
+        { contractId: ct?.id ?? '', kind: 'sow', number: '3' },
+        { contractId: other?.id ?? '', kind: 'sow', number: '1' },
+      ])
+      .returning();
+    const item = {
+      personId: p?.id,
+      contractId: ct?.id,
+      annexId: sow?.id,
+      roleTitle: 'Backend',
+      fte: '0.5',
+      startsOn: '2046-01-05',
+      billing: { type: 'hourly', rate: '47' },
+      pay: { type: 'hourly', amount: '3000' },
+    };
+
+    const dry = await call('upsert_assignments', {
+      idempotencyKey: `as-dry-${tag}`,
+      dryRun: true,
+      assignments: [item],
+    });
+    expect(dry.structuredContent).toMatchObject({ results: [{ status: 'created' }] });
+    expect(
+      await h.db
+        .select()
+        .from(assignment)
+        .where(eq(assignment.contractId, ct?.id ?? '')),
+    ).toEqual([]);
+
+    const created = await call('upsert_assignments', {
+      idempotencyKey: `as-${tag}`,
+      assignments: [item],
+    });
+    expect(created.structuredContent).toMatchObject({
+      results: [{ status: 'created', billingVersion: 'added', payVersion: 'added' }],
+    });
+    const id = (created.structuredContent?.results as { id: string }[])[0]?.id ?? '';
+
+    const again = await call('upsert_assignments', {
+      idempotencyKey: `as-again-${tag}`,
+      assignments: [{ ...item, billing: { ...item.billing, rate: '47.00', validFrom: '2046-01' } }],
+    });
+    expect(again.structuredContent).toMatchObject({
+      results: [{ id, status: 'unchanged', billingVersion: 'existing', payVersion: 'existing' }],
+    });
+
+    const edited = await call('upsert_assignments', {
+      idempotencyKey: `as-edit-${tag}`,
+      assignments: [{ id, billing: { type: 'hourly', rate: '50', validFrom: '2046-01-01' } }],
+    });
+    expect(edited.isError).toBe(true);
+    expect(JSON.stringify(edited.structuredContent)).toContain('versions are never edited');
+
+    const wrongSow = await call('upsert_assignments', {
+      idempotencyKey: `as-sow-${tag}`,
+      assignments: [{ id, annexId: foreign?.id }],
+    });
+    expect(JSON.stringify(wrongSow.structuredContent)).toContain('belongs to another contract');
+
+    const raised = await call('upsert_assignments', {
+      idempotencyKey: `as-raise-${tag}`,
+      assignments: [
+        { id, endsOn: '2046-12-31', billing: { type: 'hourly', rate: '50', validFrom: '2046-03' } },
+      ],
+    });
+    expect(raised.structuredContent).toMatchObject({
+      results: [{ status: 'updated', billingVersion: 'added' }],
+    });
+
+    const listed = await call('list_assignments', { contractId: ct?.id, activeOn: '2046-03-15' });
+    expect(listed.structuredContent?.items).toMatchObject([
+      {
+        id,
+        personName: `M ${tag} Andrii`,
+        annexId: sow?.id,
+        annex: 'SOW 3',
+        fte: '0.50',
+        endsOn: '2046-12-31',
+        billing: { validFrom: '2046-03-01', rate: '50.00000000' },
+        pay: { type: 'hourly', amount: '3000.00000000' },
+        billingVersions: [{ validFrom: '2046-01-01' }, { validFrom: '2046-03-01' }],
+      },
+    ]);
+    const card = await call('get_contract', { id: ct?.id });
+    expect(card.structuredContent).toMatchObject({ assignments: [{ id, annexId: sow?.id }] });
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

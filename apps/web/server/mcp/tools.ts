@@ -27,6 +27,12 @@ import {
   updateDocuments,
 } from '../services/documents/agent';
 import { searchDocuments } from '../services/documents/registry';
+import {
+  currentTerms,
+  listAssignments,
+  upsertAssignments,
+  type AgentAssignmentRow,
+} from '../services/assignments/agent';
 import { getContractCard, listContracts, type ContractRow } from '../services/contracts';
 import { listContractAnnexes, type AnnexRow } from '../services/contracts/annexes';
 import { upsertContractAnnexes, upsertContracts } from '../services/contracts/batch';
@@ -121,6 +127,52 @@ function contractSummary(r: ContractRow) {
   };
 }
 
+const billingView = (b: AgentAssignmentRow['billing'][number]) => ({
+  validFrom: b.validFrom,
+  type: b.type,
+  rate: b.rate,
+  currency: b.currency,
+  prorationPolicy: b.prorationPolicy,
+  invoiceChannel: b.invoiceChannel,
+});
+const payView = (p: AgentAssignmentRow['pay'][number]) => ({
+  validFrom: p.validFrom,
+  type: p.type,
+  amount: p.amount,
+  currency: p.currency,
+  payoutMethod: p.payoutMethod,
+  releasePolicy: p.releasePolicy,
+  graceDays: p.graceDays,
+});
+
+function assignmentSummary(r: AgentAssignmentRow) {
+  const a = r.assignment;
+  const now = currentTerms(r);
+  return {
+    id: a.id,
+    personId: a.personId,
+    personName: r.personName,
+    isInternal: a.isInternal,
+    contractId: a.contractId,
+    contractNumber: r.contractNumber,
+    clientId: r.clientId,
+    clientName: r.clientName,
+    annexId: a.annexId,
+    annex: a.annexId ? `${(r.annexKind ?? '').toUpperCase()} ${r.annexNumber ?? ''}` : null,
+    sowRef: a.sowRef,
+    roleTitle: a.roleTitle,
+    fte: a.fte,
+    startsOn: a.startsOn,
+    endsOn: a.endsOn,
+    termsMonth: r.month,
+    billing: now.billing && billingView(now.billing),
+    pay: now.pay && payView(now.pay),
+    agencyRatePerHour: now.agency?.ratePerHour ?? null,
+    billingVersions: r.billing.map(billingView),
+    payVersions: r.pay.map(payView),
+  };
+}
+
 function annexSummary(r: AnnexRow) {
   const a = r.annex;
   return {
@@ -146,10 +198,11 @@ function annexSummary(r: AnnexRow) {
 
 /**
  * Tools v1 for the Ledger, people and clients (spec 13.3, narrowed and written directly per
- * A-054, A-056). Terms, payouts, allocations, issuing documents and deletions other
+ * A-054, A-056). Payouts, allocations, issuing documents and deletions other
  * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
  * payees are allowed since A-062, deleting transactions since A-063, the document registry and
- * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072.
+ * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072,
+ * assignments with their terms since A-073.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -278,6 +331,15 @@ export const TOOLS: readonly ToolDef[] = [
     present: (rows) => rows.map(annexSummary),
   }),
   tool({
+    name: 'list_assignments',
+    title: 'Assignments of people',
+    description:
+      'People on contracts: person, contract, client, SOW/annex (annexId), role, fte, startsOn/endsOn, the terms in force in the month of activeOn (or today) — billing (what the client pays: type hourly|fixed_monthly|none, rate, currency, prorationPolicy, invoiceChannel) and pay (what the person gets: type fixed|hourly|included, amount, currency, payoutMethod, releasePolicy, graceDays) — and every version of both. Filters: personId, contractId, annexId, clientId, activeOn (YYYY-MM-DD: only assignments running that day).',
+    kind: 'read',
+    service: listAssignments,
+    present: (rows) => rows.map(assignmentSummary),
+  }),
+  tool({
     name: 'find_wallets',
     title: 'Find wallet owners',
     description:
@@ -340,6 +402,14 @@ export const TOOLS: readonly ToolDef[] = [
       'SOWs/annexes inside contracts in bulk (max 100). Matched by id, else by contractId + kind + number; only the fields sent change, a missing one is created (contractId, kind sow|annex and number required). Fields: title, signedOn, validFrom, validTo, status draft|active|ended (default active), notes, paymentDueRule and invoiceDateRule (same shapes as upsert_contracts) to replace the contract\'s rules for this SOW — its assignments then get an invoice of their own; null returns to the contract\'s rules. documentIds links documents already in the registry. Each result has the id to use for assignments. All-or-nothing; errors keyed "annexes.<index>"; use dryRun first.',
     kind: 'write',
     service: upsertContractAnnexes,
+  }),
+  tool({
+    name: 'upsert_assignments',
+    title: 'Create or update assignments',
+    description:
+      'Assignments in bulk (max 100). Matched by id, else by personId + contractId + annexId + startsOn. A new one needs personId, startsOn, contractId of a client contract (or isInternal true with no contract) and both billing and pay. Optional: annexId (a SOW of the same contract), roleTitle, fte ("0.5", default "1"), endsOn, sowRef. billing {type hourly|fixed_monthly|none, rate, currency, prorationPolicy full_month|by_hours|trunc_hourly, invoiceChannel fiat|crypto, validFrom?}; pay {type fixed|hourly|included, amount (fixed already includes FTE), currency, payoutMethod fiat|crypto, releasePolicy on_payment_or_due|immediate, graceDays, validFrom?}. Amounts are decimal strings. Without validFrom a version starts in the start month, or the first open month if that one is closed. To change terms send billing/pay with validFrom (first day of a later month, after the last closed period): a new version is added; a version repeating the stored one is "existing", the same month with other values is an error — versions are never edited. Person, contract and isInternal cannot change. All-or-nothing; errors keyed "assignments.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertAssignments,
   }),
   tool({
     name: 'upsert_accounts',

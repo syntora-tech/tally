@@ -40,7 +40,7 @@ export const payTermsFields = z.object({
   graceDays: z.coerce.number().int().min(0).max(60).default(0),
 });
 
-const assignmentCoreShape = {
+export const assignmentCoreShape = {
   sowRef: optionalText,
   roleTitle: optionalText,
   fte: z

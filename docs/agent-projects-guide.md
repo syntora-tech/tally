@@ -17,23 +17,23 @@ Company ─┬─ Client contract (MSA No. …) ── Client
 
 ## 2. Entities
 
-| Entity              | What it is                                                                                                                                                                                             | How it is entered                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **Company**         | Our legal entity: EN/UA details, director, bank. One for the whole system, used by every contract                                                                                                      | Settings → Company details (owner only)                    |
-| **Client**          | Counterparty we invoice: legal name, short name, address, country, bank details, contacts, default currency                                                                                            | MCP `upsert_clients` or UI “Clients”                       |
-| **Client contract** | MSA / Contract with a number and date. Sets the currency, invoice date rule, payment term, template and numbering. **One invoice = one contract × month** (a SOW with its own date rules gets its own) | MCP `upsert_contracts` or UI: client card → “New contract” |
-| **Person**          | Specialist: position, seniority, stack, domains, market rate, availability, location, status                                                                                                           | MCP `upsert_person_profile` or UI “People”                 |
-| **Payee**           | Who legally receives the money: a FOP (name, tax ID, IBAN) or a crypto wallet. **May differ from the person who works**: the CTO's pay goes to another person's FOP                                    | UI only, owner only: “People → Payees”                     |
-| **FOP contract**    | Contract with a FOP payee (`OD-1002` etc.); a monthly act is issued under it                                                                                                                           | MCP `upsert_contracts` or UI: payee card → “New contract”  |
-| **SOW / Annex**     | A SOW or annex inside a contract: number, title, dates, status, its PDF; may replace the contract's payment term or invoice date                                                                       | MCP `upsert_contract_annexes`                              |
-| **Assignment**      | A person on a client contract: contract, SOW/Annex, role, FTE (0 < FTE ≤ 1), start, end. Or internal (CEO/CTO on our own company) — no contract, no billing                                            | UI only: person card → “New assignment”                    |
-| **Client terms**    | Type `hourly` / `fixed_monthly` / `none`, rate, currency, invoice channel (fiat / crypto), partial-month policy                                                                                        | With the assignment; changes via “Add version”             |
-| **Person terms**    | Type `fixed` / `hourly` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                                                                 | With the assignment; changes via “Add version”             |
-| **Agency fee**      | When an agency placed the person: the agency's payee, USD per hour the person works, payout method. Rate 0 from a month ends it                                                                        | Assignment page → “Agency fee” (UI only)                   |
-| **Period**          | Calendar month: hours norm, reference rate, status `open` / `closed`                                                                                                                                   | UI “Periods”                                               |
-| **Timesheet**       | Hours per assignment × month + a “project” note                                                                                                                                                        | UI “Periods” → step 2 (form or CSV)                        |
+| Entity              | What it is                                                                                                                                                                                             | How it is entered                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **Company**         | Our legal entity: EN/UA details, director, bank. One for the whole system, used by every contract                                                                                                      | Settings → Company details (owner only)                                                         |
+| **Client**          | Counterparty we invoice: legal name, short name, address, country, bank details, contacts, default currency                                                                                            | MCP `upsert_clients` or UI “Clients”                                                            |
+| **Client contract** | MSA / Contract with a number and date. Sets the currency, invoice date rule, payment term, template and numbering. **One invoice = one contract × month** (a SOW with its own date rules gets its own) | MCP `upsert_contracts` or UI: client card → “New contract”                                      |
+| **Person**          | Specialist: position, seniority, stack, domains, market rate, availability, location, status                                                                                                           | MCP `upsert_person_profile` or UI “People”                                                      |
+| **Payee**           | Who legally receives the money: a FOP (name, tax ID, IBAN) or a crypto wallet. **May differ from the person who works**: the CTO's pay goes to another person's FOP                                    | UI only, owner only: “People → Payees”                                                          |
+| **FOP contract**    | Contract with a FOP payee (`OD-1002` etc.); a monthly act is issued under it                                                                                                                           | MCP `upsert_contracts` or UI: payee card → “New contract”                                       |
+| **SOW / Annex**     | A SOW or annex inside a contract: number, title, dates, status, its PDF; may replace the contract's payment term or invoice date                                                                       | MCP `upsert_contract_annexes`                                                                   |
+| **Assignment**      | A person on a client contract: contract, SOW/Annex, role, FTE (0 < FTE ≤ 1), start, end. Or internal (CEO/CTO on our own company) — no contract, no billing                                            | MCP `upsert_assignments` or UI: person card → “New assignment”                                  |
+| **Client terms**    | Type `hourly` / `fixed_monthly` / `none`, rate, currency, invoice channel (fiat / crypto), partial-month policy                                                                                        | With the assignment; a new month = a new version (MCP `upsert_assignments` or UI “Add version”) |
+| **Person terms**    | Type `fixed` / `hourly` / `included`, amount, currency, payout method (fiat / crypto), when it can be paid, extra days                                                                                 | With the assignment; a new month = a new version (MCP `upsert_assignments` or UI “Add version”) |
+| **Agency fee**      | When an agency placed the person: the agency's payee, USD per hour the person works, payout method. Rate 0 from a month ends it                                                                        | Assignment page → “Agency fee” (UI only)                                                        |
+| **Period**          | Calendar month: hours norm, reference rate, status `open` / `closed`                                                                                                                                   | UI “Periods”                                                                                    |
+| **Timesheet**       | Hours per assignment × month + a “project” note                                                                                                                                                        | UI “Periods” → step 2 (form or CSV)                                                             |
 
-Over MCP the agent writes **clients, people, contracts and SOWs/annexes** (and the Ledger, payees, documents). Assignments, terms, periods and hours are entered by a person in the UI. The agent prepares the data for them (section 6).
+Over MCP the agent writes **clients, people, contracts, SOWs/annexes and assignments with their terms** (and the Ledger, payees, documents). Agency fees, periods and hours are entered by a person in the UI (section 6).
 
 ## 3. The main rule: separate record or a note
 
@@ -87,20 +87,15 @@ All of a person's assignments in a month roll into **one payout** per method (fi
 3. **SOW / Annex** — `upsert_contract_annexes` under that contract with its PDF in `documentIds`; keep the returned `id` for the assignment.
 4. **Person.** `search_people` → if missing, `upsert_person_profile` (`fullName` required + profile). Watch for other spellings of the name.
 5. **Payee and FOP contract** — the owner in the UI, if the person is paid through a FOP that does not exist yet. The agent neither enters nor asks for payee details.
-6. **Assignment** — a person in the UI: contract, “SOW / Annex”, role, FTE, start and the first “Client” and “Person” terms versions.
+6. **Assignment** — `list_assignments` → if missing, `upsert_assignments`: person, contract, `annexId` of the SOW, role, FTE, start and the first `billing` (client) and `pay` (person) terms. A rate change from a later month is a new version (`validFrom`); a version is never edited.
 7. **Every month** — a person in the UI: “Periods” → month → step 2. Hours and, if needed, “Project / note”. Then calculation and close.
 
 ## 6. What the agent hands to a person for UI steps
 
-Contracts and SOWs are written by the agent itself (section 5). For each new assignment:
+Contracts, SOWs and assignments with their terms are written by the agent itself (section 5). Left for a person in the UI, per assignment when the source has it:
 
 ```
-Person: <fullName>            Contract: <client contract number>
-SOW / Annex: <number and id from upsert_contract_annexes, or empty>   Role: <…>   FTE: <0.5 | 1>
-Start: <YYYY-MM-DD>           End: <YYYY-MM-DD or empty>
-Client: <hourly 47 USD/h | fixed_monthly 5500 USD, full_month|by_hours|trunc_hourly | none>, channel fiat|crypto
-Person: <fixed 2300 USD/month (already with FTE) | hourly 7360 USD/month for the full norm | included>, payout fiat|crypto,
-        when: on_payment_or_due | immediate
+Assignment: <person · contract · SOW>
 Agency: <none | agency payee name, N USD per hour, payout fiat|crypto>
 Projects under this SOW (for timesheet notes): <Mobile app, Admin panel, …>
 ```
@@ -110,7 +105,7 @@ If any of this is missing from the source, do not invent it. Write “to clarify
 ## 7. Checks before reporting
 
 - No duplicate clients or people under another spelling (`list_clients`, `search_people`).
-- Every SOW under an MSA is recorded as the assignment's “SOW / Annex”, not as a separate contract.
+- Every SOW under an MSA is a SOW/annex of that contract (`upsert_contract_annexes`), not a separate contract, and its assignments carry its `annexId`.
 - A person's total FTE on a date is realistic: usually ≤ 1. More only deliberately, with an explanation.
 - `fixed` pay for part-time is already multiplied by FTE.
 - Different projects with the same terms under one SOW are timesheet notes, not separate assignments.
