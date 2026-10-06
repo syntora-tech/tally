@@ -53,6 +53,11 @@ export const assignmentCoreShape = {
   endsOn: optionalLocalDate,
 };
 
+/** SOW/annex of the assignment's contract (A-072); empty = the contract itself. */
+const annexId = z
+  .preprocess(emptyToNull, z.uuid().nullable().optional())
+  .transform((v) => v ?? null);
+
 export const createAssignmentInput = z
   .object({
     personId: z.uuid(),
@@ -60,6 +65,7 @@ export const createAssignmentInput = z
     contractId: z
       .preprocess(emptyToNull, z.uuid().nullable().optional())
       .transform((v) => v ?? null),
+    annexId,
     ...assignmentCoreShape,
     billing: billingTermsFields,
     pay: payTermsFields,
@@ -74,7 +80,7 @@ export const createAssignmentInput = z
   });
 
 export const updateAssignmentInput = z
-  .object({ id: z.uuid(), ...assignmentCoreShape })
+  .object({ id: z.uuid(), annexId, ...assignmentCoreShape })
   .refine((a) => !a.endsOn || a.endsOn >= a.startsOn, {
     message: 'assignments.endBeforeStart',
     path: ['endsOn'],

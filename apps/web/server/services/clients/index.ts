@@ -1,9 +1,18 @@
-import { assignment, client, company, contract, payee, person } from '@tally/db/schema';
+import {
+  assignment,
+  client,
+  company,
+  contract,
+  contractAnnex,
+  payee,
+  person,
+} from '@tally/db/schema';
 import { and, asc, count, desc, eq, gte, isNull, or, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
+import { annexLabel } from '../contracts/annexes';
 import { serviceError } from '../errors';
 import { walletsOf } from '../wallets';
 import { clientInput, contractInput } from './schema';
@@ -78,12 +87,14 @@ export const getClient = defineService({
           personName: person.fullName,
           roleTitle: assignment.roleTitle,
           sowRef: assignment.sowRef,
+          annexLabel,
           contractNumber: contract.number,
           fte: assignment.fte,
         })
         .from(assignment)
         .innerJoin(contract, eq(contract.id, assignment.contractId))
         .innerJoin(person, eq(person.id, assignment.personId))
+        .leftJoin(contractAnnex, eq(contractAnnex.id, assignment.annexId))
         .where(
           and(
             eq(contract.clientId, id),

@@ -35,6 +35,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     clientName,
     clientId,
     contractNumber,
+    annexLabel,
     billing,
     pay,
     agency,
@@ -79,8 +80,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             )}
           </h1>
           <p className="text-muted-foreground">
-            {[a.roleTitle, a.sowRef, contractNumber].filter(Boolean).join(' · ')} · FTE {a.fte} ·{' '}
-            {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
+            {[a.roleTitle, annexLabel ?? a.sowRef, contractNumber].filter(Boolean).join(' · ')} ·
+            FTE {a.fte} · {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
           </p>
         </div>
         <Button variant="outline" render={<Link href={`/people/assignments/${a.id}/edit`} />}>

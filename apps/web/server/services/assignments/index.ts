@@ -5,6 +5,7 @@ import {
   billingTerms,
   client,
   contract,
+  contractAnnex,
   payee,
   payTerms,
   period,
@@ -26,6 +27,7 @@ import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
+import { annexLabel } from '../contracts/annexes';
 import { serviceError } from '../errors';
 import {
   addAgencyVersionInput,
@@ -103,6 +105,7 @@ const assignmentSelect = {
   assignment,
   personName: person.fullName,
   contractNumber: contract.number,
+  annexLabel,
   clientId: client.id,
   clientName: clientLabel,
 };
@@ -119,6 +122,7 @@ export const listPersonAssignments = defineService({
         .innerJoin(person, eq(person.id, assignment.personId))
         .leftJoin(contract, eq(contract.id, assignment.contractId))
         .leftJoin(client, eq(client.id, contract.clientId))
+        .leftJoin(contractAnnex, eq(contractAnnex.id, assignment.annexId))
         .where(eq(assignment.personId, personId))
         .orderBy(desc(assignment.startsOn));
       const terms = await loadTerms(
@@ -147,6 +151,7 @@ export const getAssignment = defineService({
         .innerJoin(person, eq(person.id, assignment.personId))
         .leftJoin(contract, eq(contract.id, assignment.contractId))
         .leftJoin(client, eq(client.id, contract.clientId))
+        .leftJoin(contractAnnex, eq(contractAnnex.id, assignment.annexId))
         .where(eq(assignment.id, id));
       if (!row) return null;
       const { billing, pay, agency: agencyVersions } = await loadTerms(tx, [id]);

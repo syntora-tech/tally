@@ -4,6 +4,7 @@ import {
   client,
   company,
   contract,
+  contractAnnex,
   payTerms,
   period,
   person,
@@ -17,6 +18,7 @@ import {
   createAssignment,
   getAssignment,
   listPersonAssignments,
+  updateAssignment,
 } from '.';
 
 // "Today" is in July 2026 so margin uses the July norm of 184 hours (spec 9.2).
@@ -25,6 +27,7 @@ let owner: Awaited<ReturnType<typeof h.user>>;
 let viewer: Awaited<ReturnType<typeof h.user>>;
 const ids = { company: '', client: '', contract: '', person: '', periods: [] as string[] };
 const assignmentIds: string[] = [];
+const sowContracts: string[] = [];
 
 beforeAll(async () => {
   owner = await h.user('owner');
@@ -45,6 +48,7 @@ beforeAll(async () => {
   ids.client = cl?.id ?? '';
   ids.contract = ct?.id ?? '';
   ids.person = p?.id ?? '';
+  sowContracts.push(ids.contract);
 });
 
 afterAll(() =>
@@ -56,6 +60,8 @@ afterAll(() =>
       await db.delete(assignment).where(inArray(assignment.id, assignmentIds));
     }
     await db.delete(person).where(eq(person.id, ids.person));
+    await db.delete(contractAnnex).where(inArray(contractAnnex.contractId, sowContracts));
+    await db.delete(contract).where(inArray(contract.id, sowContracts.slice(1)));
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(client).where(eq(client.id, ids.client));
     await db.delete(company).where(eq(company.id, ids.company));
@@ -188,5 +194,37 @@ describe('assignments with two-sided terms (spec 6.3)', () => {
     expect(
       (await listPersonAssignments.run(h.ctxFor(viewer), { personId: ids.person }))._unsafeUnwrap(),
     ).toEqual([]);
+  });
+
+  it('A-072: an assignment is put on a SOW of its contract, never of another one', async () => {
+    const id = assignmentIds[0] ?? '';
+    const [other] = await h.db
+      .insert(contract)
+      .values({ kind: 'client', number: 'Other SOW', companyId: ids.company, clientId: ids.client })
+      .returning();
+    sowContracts.push(other?.id ?? '');
+    const [sow, foreign] = await h.db
+      .insert(contractAnnex)
+      .values([
+        { contractId: ids.contract, kind: 'sow', number: '2' },
+        { contractId: other?.id ?? '', kind: 'sow', number: '9' },
+      ])
+      .returning();
+    const form = { id, startsOn: '2026-07-01', fte: '1', roleTitle: 'Senior Backend Developer' };
+
+    expect(
+      (await updateAssignment.run(h.ctxFor(owner), { ...form, annexId: sow?.id })).isOk(),
+    ).toBe(true);
+    const card = (await getAssignment.run(h.ctxFor(owner), { id }))._unsafeUnwrap();
+    expect(card.annexLabel).toBe('SOW 2');
+
+    const wrong = await updateAssignment.run(h.ctxFor(owner), { ...form, annexId: foreign?.id });
+    expect(wrong._unsafeUnwrapErr().message).toBe('db.annexContract');
+
+    expect((await updateAssignment.run(h.ctxFor(owner), { ...form, annexId: '' })).isOk()).toBe(
+      true,
+    );
+    const cleared = (await getAssignment.run(h.ctxFor(owner), { id }))._unsafeUnwrap();
+    expect(cleared.annexLabel).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ export type AssignmentCore = {
   personId: string;
   isInternal: boolean;
   contractId: string | null;
+  annexId: string | null;
   sowRef: string | null;
   roleTitle: string | null;
   fte: string;
@@ -27,19 +28,23 @@ type Props = {
   assignment: AssignmentCore;
   personName: string;
   contracts: { value: string; label: string }[];
+  /** SOWs/annexes of those contracts; the form shows the ones of the chosen contract. */
+  annexes: { value: string; label: string; contractId: string }[];
 };
 
 /**
  * New assignment: core fields plus the client / person terms blocks (spec 6.3). In edit mode only
  * the core fields are editable; terms change through new versions on the assignment page.
  */
-export function AssignmentForm({ assignment, personName, contracts }: Props) {
+export function AssignmentForm({ assignment, personName, contracts, annexes }: Props) {
   const [state, action, pending] = useActionState<AssignmentFormState, FormData>(
     saveAssignment,
     null,
   );
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   const [internal, setInternal] = useState(assignment.isInternal);
+  const [contractId, setContractId] = useState(assignment.contractId ?? '');
+  const contractAnnexes = annexes.filter((a) => a.contractId === contractId);
   const editing = Boolean(assignment.id);
   const t = useTranslations('assignmentForm');
   const tc = useTranslations('common');
@@ -84,7 +89,10 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
             <NativeSelect
               id="contractId"
               name="contractId"
-              defaultValue={assignment.contractId ?? ''}
+              value={contractId}
+              onChange={(e) => {
+                setContractId(e.target.value);
+              }}
               placeholder={t('chooseContract')}
               options={contracts}
             />
@@ -98,14 +106,31 @@ export function AssignmentForm({ assignment, personName, contracts }: Props) {
             placeholder="Senior Backend Developer"
           />
         </FormField>
-        <FormField label="SOW / Annex" htmlFor="sowRef" error={errors?.sowRef}>
-          <Input
-            id="sowRef"
-            name="sowRef"
-            defaultValue={assignment.sowRef ?? ''}
-            placeholder="SOW #1"
-          />
-        </FormField>
+        {!internal && (
+          <FormField
+            label={t('sowRef')}
+            htmlFor="annexId"
+            error={errors?.annexId}
+            hint={
+              assignment.sowRef && !assignment.annexId
+                ? t('legacySow', { sow: assignment.sowRef })
+                : contractId && contractAnnexes.length === 0
+                  ? t('noSows')
+                  : undefined
+            }
+          >
+            <NativeSelect
+              id="annexId"
+              name="annexId"
+              key={contractId}
+              defaultValue={contractId === assignment.contractId ? (assignment.annexId ?? '') : ''}
+              placeholder={t('wholeContract')}
+              options={contractAnnexes}
+              disabled={!contractId}
+            />
+          </FormField>
+        )}
+        {assignment.sowRef && <input type="hidden" name="sowRef" value={assignment.sowRef} />}
         <FormField label="FTE" htmlFor="fte" error={errors?.fte}>
           <Input id="fte" name="fte" inputMode="decimal" defaultValue={assignment.fte} />
         </FormField>

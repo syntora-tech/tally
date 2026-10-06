@@ -142,7 +142,9 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
                           {a.personName}
                         </Link>
                         <span className="text-muted-foreground">
-                          {[a.roleTitle, a.sowRef, a.contractNumber].filter(Boolean).join(' · ')}
+                          {[a.roleTitle, a.annexLabel ?? a.sowRef, a.contractNumber]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </span>
                         <Badge variant="outline">FTE {a.fte}</Badge>
                       </li>

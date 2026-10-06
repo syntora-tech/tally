@@ -37,7 +37,7 @@ export async function AssignmentsCard({
           <p className="text-sm text-muted-foreground">{t('empty')}</p>
         ) : (
           <ul className="flex flex-col gap-3 text-sm">
-            {rows.map(({ assignment: a, clientName, contractNumber, margin }) => {
+            {rows.map(({ assignment: a, clientName, contractNumber, annexLabel, margin }) => {
               const active = isAssignmentActive(
                 { startsOn: a.startsOn as LocalDate, endsOn: a.endsOn as LocalDate | null },
                 ctx.today,
@@ -52,7 +52,9 @@ export async function AssignmentsCard({
                       {a.isInternal ? t('internal') : clientName}
                     </Link>
                     <span className="text-muted-foreground">
-                      {[a.roleTitle, a.sowRef, contractNumber].filter(Boolean).join(' · ')}
+                      {[a.roleTitle, annexLabel ?? a.sowRef, contractNumber]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </span>
                     <Badge variant={active ? 'default' : 'secondary'}>
                       {active ? t('active') : t('inactive')}

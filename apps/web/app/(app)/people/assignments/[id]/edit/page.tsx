@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getAssignment } from '@/server/services/assignments';
+import { annexOptions } from '@/server/services/contracts/annexes';
 import { AssignmentForm } from '../../assignment-form';
 import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
@@ -15,6 +16,9 @@ export default async function EditAssignmentPage({ params }: { params: Promise<{
   const result = await getAssignment.run(ctx, { id });
   if (result.isErr()) notFound();
   const { assignment: a, personName } = result.value;
+  const annexes = a.contractId
+    ? (await annexOptions.run(ctx, { contractId: a.contractId })).unwrapOr([])
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -22,11 +26,13 @@ export default async function EditAssignmentPage({ params }: { params: Promise<{
       <AssignmentForm
         personName={personName}
         contracts={[]}
+        annexes={annexes}
         assignment={{
           id: a.id,
           personId: a.personId,
           isInternal: a.isInternal,
           contractId: a.contractId,
+          annexId: a.annexId,
           sowRef: a.sowRef,
           roleTitle: a.roleTitle,
           fte: a.fte,

@@ -15,6 +15,11 @@ import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 
 export const ANNEX_KINDS = ['sow', 'annex'] as const;
+
+/** «SOW 3» for a joined `contract_annex` row; null when the join found none. */
+export const annexLabel = sql<
+  string | null
+>`upper(${contractAnnex.kind}) || ' ' || ${contractAnnex.number}`;
 export const ANNEX_STATUSES = ['draft', 'active', 'ended'] as const;
 
 export type AttachedDocument = {
@@ -101,5 +106,30 @@ export const getContractAnnex = defineService({
   handler: async (ctx, { id }) => {
     const [row] = await inActorScope(ctx, (tx) => loadAnnexes(tx, eq(contractAnnex.id, id)));
     return row ? ok(row) : err(serviceError('not_found', 'contracts.annexNotFound'));
+  },
+});
+
+/** SOWs/annexes of active client contracts for the assignment form, grouped by contract. */
+export const annexOptions = defineService({
+  name: 'contracts.annexes.options',
+  input: z.object({ contractId: z.uuid().optional() }),
+  handler: async (ctx, { contractId }) => {
+    const rows = await inActorScope(ctx, (tx) =>
+      tx
+        .select({
+          value: contractAnnex.id,
+          contractId: contractAnnex.contractId,
+          label: sql<string>`${annexLabel} || coalesce(' · ' || ${contractAnnex.title}, '')`,
+        })
+        .from(contractAnnex)
+        .innerJoin(contract, eq(contract.id, contractAnnex.contractId))
+        .where(
+          contractId
+            ? eq(contractAnnex.contractId, contractId)
+            : and(eq(contract.kind, 'client'), eq(contract.status, 'active')),
+        )
+        .orderBy(asc(contractAnnex.kind), asc(contractAnnex.number)),
+    );
+    return ok(rows);
   },
 });
