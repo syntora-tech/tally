@@ -5,13 +5,18 @@ import { getDb } from '@/server/db/client';
 import { runJobsOnce } from '@/server/jobs';
 import { syncNbuRates } from '@/server/services/fx';
 import { refreshPayability } from '@/server/services/payroll/payability';
+import { syncAllPlannedPayments } from '@/server/services/planned/sync';
 import { getToday } from '@/server/today';
 
 // Handlers are registered by the stages that introduce them (tmp-cleanup comes later).
 const HANDLERS: Record<string, () => Promise<unknown>> = {
   jobs: runJobsOnce,
   'nbu-rates': () => syncNbuRates(getDb(), getToday()),
-  payability: () => refreshPayability(getDb(), getToday()),
+  // Planned payments ride the same daily run (A-082).
+  payability: async () => ({
+    payability: await refreshPayability(getDb(), getToday()),
+    planned: await syncAllPlannedPayments(getDb(), getToday()),
+  }),
 };
 
 export async function POST(request: NextRequest, ctx: RouteContext<'/api/cron/[name]'>) {

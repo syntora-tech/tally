@@ -1,4 +1,4 @@
-import { category, plannedExpense } from '@tally/db/schema';
+import { category, plannedExpense, plannedPayment } from '@tally/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
@@ -22,7 +22,10 @@ beforeAll(async () => {
 
 afterAll(() =>
   h.cleanup(async (db) => {
-    if (ids.length) await db.delete(plannedExpense).where(inArray(plannedExpense.id, ids));
+    if (ids.length) {
+      await db.delete(plannedPayment).where(inArray(plannedPayment.plannedExpenseId, ids));
+      await db.delete(plannedExpense).where(inArray(plannedExpense.id, ids));
+    }
   }),
 );
 

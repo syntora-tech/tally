@@ -214,7 +214,8 @@
       "networkRequired": "Choose the network of this address",
       "walletAddress": "This is not a valid address for the chosen network",
       "writeOffReason": "Enter the reason for the write-off",
-      "description": "Enter a description"
+      "description": "Enter a description",
+      "percentRange": "A percent from 0 to 100"
     },
     "general": {
       "checkInput": "Check the entered data",
@@ -469,7 +470,22 @@
       "anchorMonth": "Choose the month of the payment",
       "dueDay": "A day of the month from 1 to 31",
       "endsBeforeStart": "The end month is before the start month",
-      "notFound": "Planned expense not found"
+      "notFound": "Planned expense not found",
+      "percentRange": "A rate above 0 and at most 100 %",
+      "oneRest": "Only one part can take the rest of the amount",
+      "hasPaid": "Some payments of this plan are already paid: stop it with an end month instead",
+      "chargeTarget": "A charge belongs either to a planned expense or to a person",
+      "withheldOnPlanned": "Only a planned expense with a gross amount can withhold a charge",
+      "chargeNotFound": "Charge not found",
+      "paymentNotFound": "Planned payment not found",
+      "notDue": "Only a payment still to be paid can change",
+      "notSkipped": "This payment is not skipped",
+      "skipReason": "Say why the payment is skipped",
+      "accountCurrency": "The payment is in {currency}: pay it from an account in {currency}",
+      "chooseAccountInCurrency": "Choose an account in the payment currency",
+      "transactionMismatch": "Choose an expense with money not yet linked",
+      "chooseFreeExpense": "An expense with money not yet linked",
+      "paymentNotLinked": "No expenses are linked to this payment"
     },
     "trips": {
       "notFound": "Trip not found",

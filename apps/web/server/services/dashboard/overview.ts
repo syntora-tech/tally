@@ -1,5 +1,4 @@
-import type { DbTransaction } from '@tally/db';
-import { client, contract, contractAnnex, fxRate, invoice, plannedExpense } from '@tally/db/schema';
+import { client, contract, contractAnnex, invoice, plannedExpense } from '@tally/db/schema';
 import {
   addDays,
   addMonths,
@@ -9,7 +8,6 @@ import {
   plannedExpenseDates,
   startOfMonth,
   toDecimal,
-  usdConverter,
   Decimal,
   type ActDateRule,
   type DecimalInput,
@@ -21,18 +19,14 @@ import { ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
+import { loadUsdConverter } from '../fx';
 import { listAccounts } from '../ledger';
 import { listPayroll } from '../payroll';
 import { loadCalendar } from '../periods';
 
 const CALENDAR_DAYS = 30;
 
-export async function loadUsdConverter(tx: DbTransaction) {
-  const rates = await tx
-    .select({ onDate: fxRate.onDate, base: fxRate.base, quote: fxRate.quote, rate: fxRate.rate })
-    .from(fxRate);
-  return usdConverter(rates.map((r) => ({ ...r, onDate: r.onDate as LocalDate })));
-}
+export { loadUsdConverter };
 
 const clientLabel = sql<string>`coalesce(${client.shortName}, ${client.legalName})`;
 

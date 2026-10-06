@@ -1,6 +1,13 @@
 import type { Db, DbTransaction } from '@tally/db';
 import { fxRate, posting, transaction } from '@tally/db/schema';
-import { addDays, suggestPayoutRate, type FxCandidates, type LocalDate } from '@tally/domain';
+import {
+  addDays,
+  convertVia,
+  suggestPayoutRate,
+  usdConverter,
+  type FxCandidates,
+  type LocalDate,
+} from '@tally/domain';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -10,6 +17,26 @@ import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import { currencyCode, decimalString, localDateString } from '../fields';
+
+/** Latest stored rate of every pair as a USD converter (6.1, A-069). */
+export async function loadUsdConverter(tx: DbTransaction) {
+  const rates = await tx
+    .select({ onDate: fxRate.onDate, base: fxRate.base, quote: fxRate.quote, rate: fxRate.rate })
+    .from(fxRate);
+  return usdConverter(rates.map((r) => ({ ...r, onDate: r.onDate as LocalDate })));
+}
+
+/**
+ * Converter with the NBU rates known on a date (the latest one up to it per currency): payout
+ * taxes in UAH are counted at the rate of the payout day (A-082).
+ */
+export async function nbuConverterOn(tx: DbTransaction, onDate: LocalDate) {
+  const rates = await tx
+    .select({ onDate: fxRate.onDate, base: fxRate.base, quote: fxRate.quote, rate: fxRate.rate })
+    .from(fxRate)
+    .where(and(eq(fxRate.source, 'nbu'), lte(fxRate.onDate, onDate)));
+  return convertVia(usdConverter(rates.map((r) => ({ ...r, onDate: r.onDate as LocalDate }))));
+}
 
 /** Currencies whose NBU rate the daily cron keeps (5.4, 10.4). */
 export const NBU_CURRENCIES = ['USD', 'EUR'] as const;

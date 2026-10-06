@@ -36,6 +36,7 @@ import { serviceError, msg } from '../errors';
 import { decimalString, localDateString, optionalText } from '../fields';
 import { bookTransaction, type TransactionInput } from '../ledger';
 import { loadCalendar } from '../periods';
+import { chargePayout } from '../planned/payout-charges';
 import { refreshPayability } from './payability';
 
 const USD_LIKE = ['USD', 'USDT', 'USDC'];
@@ -278,6 +279,9 @@ export const payItemInput = z
     description: optionalText,
     /** Paying more than the payable part is an advance: owner only, with a reason (5.3 rule 6). */
     overrideReason: optionalText,
+    /** Bank fee of a new payout (the payee's tariff is suggested, A-082). */
+    feeAmount: z.preprocess(emptyToUndefined, decimalString.optional()),
+    feeAccountId: z.preprocess(emptyToUndefined, z.uuid().optional()),
   })
   .superRefine((v, issues) => {
     if (v.transactionId) return;
@@ -368,10 +372,12 @@ export const payItem = defineService({
       const advanceNote = input.overrideReason && `Advance: ${input.overrideReason}`;
       let transactionId: string;
       let currency: string;
+      let paidOn = input.occurredOn ?? ctx.today;
       if (input.transactionId) {
         const [main] = await tx
           .select({
             type: transaction.type,
+            occurredOn: transaction.occurredOn,
             description: transaction.description,
             personId: transaction.personId,
             clientId: transaction.clientId,
@@ -407,6 +413,7 @@ export const payItem = defineService({
         }
         transactionId = input.transactionId;
         currency = fiat ? 'UAH' : main.currency;
+        paidOn = main.occurredOn as LocalDate;
       } else {
         const [acc] = await tx
           .select()
@@ -440,7 +447,10 @@ export const payItem = defineService({
           counterpartyAddress: null,
           from: { accountId: acc.id, amount: input.amount },
           to: undefined,
-          fee: undefined,
+          fee:
+            input.feeAmount && toDecimal(input.feeAmount).gt(0)
+              ? { accountId: input.feeAccountId ?? acc.id, amount: input.feeAmount }
+              : undefined,
         };
         const booked = await bookTransaction(tx, payout, {
           personId: item.item.personId,
@@ -450,12 +460,19 @@ export const payItem = defineService({
         transactionId = booked.id;
         currency = fiat ? 'UAH' : acc.currency;
       }
-      await tx.insert(allocation).values({
-        transactionId,
-        payrollItemId: item.item.id,
-        amount: input.amount,
-        currency,
-      });
+      const [paid] = await tx
+        .insert(allocation)
+        .values({ transactionId, payrollItemId: item.item.id, amount: input.amount, currency })
+        .returning({ id: allocation.id });
+      if (paid && item.item.personId) {
+        await chargePayout(tx, {
+          allocationId: paid.id,
+          personId: item.item.personId,
+          amount: input.amount,
+          currency,
+          occurredOn: paidOn,
+        });
+      }
       const act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
       return ok({ id: item.item.id, transactionId, actId: act?.id ?? null });
     }),

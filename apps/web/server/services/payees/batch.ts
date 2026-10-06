@@ -24,6 +24,11 @@ const payeePatch = z.object({
   bankName: text('Bank name'),
   walletAddress: text('Payout wallet address (kind crypto)'),
   walletNetwork: text(`Payout wallet network: ${CRYPTO_NETWORK_HINT}`),
+  feeFixed: text('Bank fee per payout, fixed part, decimal string (A-082)'),
+  feePercent: text('Bank fee per payout, percent of the amount, 0–100'),
+  feeCurrency: text(
+    'Currency the bank charges the fee in, e.g. UAH for a USD SWIFT; null = payout currency',
+  ),
   personId: z
     .uuid()
     .nullable()

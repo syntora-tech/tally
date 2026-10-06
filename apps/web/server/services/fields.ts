@@ -122,3 +122,15 @@ export function canonicalAddress(
     ? { address: normalized.value }
     : { issue: { path: [keys.address], message: 'field.walletAddress' } };
 }
+
+/** Bank tariff "fixed + %" (A-082); the currency is the one the bank charges in. */
+export const transferFeeFields = {
+  feeFixed: optionalDecimal,
+  feePercent: optionalDecimal.refine(
+    (v) => v === null || parseDecimal(v)._unsafeUnwrap().lte(100),
+    'field.percentRange',
+  ),
+  feeCurrency: z
+    .preprocess(emptyToNull, currencyCode.nullable().optional())
+    .transform((v) => v ?? null),
+};

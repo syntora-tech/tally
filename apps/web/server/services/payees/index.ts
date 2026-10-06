@@ -5,7 +5,13 @@ import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
-import { normalizeAddressIn, optionalLocalDate, optionalNetwork, optionalText } from '../fields';
+import {
+  normalizeAddressIn,
+  optionalLocalDate,
+  optionalNetwork,
+  optionalText,
+  transferFeeFields,
+} from '../fields';
 
 export const PAYEE_KINDS = ['fop', 'crypto', 'other'] as const;
 
@@ -56,6 +62,7 @@ export const payeeInput = z
     walletAddress: optionalText,
     walletNetwork: optionalNetwork,
     personId: optionalUuid,
+    ...transferFeeFields,
   })
   .refine((p) => p.legalNameUa ?? p.legalNameEn, {
     message: 'payees.name',
@@ -85,6 +92,9 @@ export const listPayees = defineService({
           walletAddress: payee.walletAddress,
           personId: payee.personId,
           personName: person.fullName,
+          feeFixed: payee.feeFixed,
+          feePercent: payee.feePercent,
+          feeCurrency: payee.feeCurrency,
         })
         .from(payee)
         .leftJoin(person, eq(person.id, payee.personId))
