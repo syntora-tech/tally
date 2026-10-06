@@ -1,6 +1,6 @@
 'use client';
 
-import { parseDecimal, payrollTotalUah } from '@tally/domain';
+import { parseDecimal, payrollTotalUah, transferFee, type TransferFee } from '@tally/domain';
 import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -40,6 +40,10 @@ export type PayDialogProps = {
   /** Unallocated payout expenses already in the Ledger (statement rows), best matches first. */
   candidates: { id: string; label: string; remaining: string }[];
   isOwner: boolean;
+  /** The payee's bank tariff; its fee is suggested for a new payment (A-082). */
+  fee: TransferFee | null;
+  /** Every account, for a fee charged in another currency (e.g. UAH for a USD SWIFT). */
+  feeAccounts: { id: string; label: string; currency: string }[];
 };
 
 /**
@@ -83,6 +87,21 @@ export function PayDialog(p: PayDialogProps) {
       ? picked.remaining
       : itemAmount;
   const [open, setOpen] = useState(false);
+  const [amountInput, setAmountInput] = useState<string | null>(null);
+  const payCurrency = p.fiat ? 'UAH' : 'USD';
+  const amountNow = parseDecimal((amountInput ?? amountDefault).replace(',', '.'));
+  const usdUah = parseDecimal(p.currentRate ?? p.suggestion?.rate ?? '');
+  const suggestedFee =
+    p.fee && amountNow.isOk()
+      ? transferFee(p.fee, amountNow.value, payCurrency, (a, from, to) =>
+          from === 'USD' && to === 'UAH' && usdUah.isOk()
+            ? a.times(usdUah.value)
+            : from === 'UAH' && to === 'USD' && usdUah.isOk() && usdUah.value.gt(0)
+              ? a.div(usdUah.value)
+              : null,
+        )
+      : null;
+  const feeCurrency = suggestedFee?.currency ?? payCurrency;
 
   if (!open) {
     return (
@@ -199,8 +218,43 @@ export function PayDialog(p: PayDialogProps) {
             key={amountDefault}
             defaultValue={amountDefault}
             className="w-36"
+            onChange={(e) => {
+              setAmountInput(e.target.value);
+            }}
           />
         </FormField>
+        {paidFrom === 'new' && (
+          <>
+            <FormField
+              label={t('fee', { currency: feeCurrency })}
+              htmlFor={`fee-${p.itemId}`}
+              error={error?.fieldErrors?.feeAmount}
+            >
+              <Input
+                id={`fee-${p.itemId}`}
+                name="feeAmount"
+                inputMode="decimal"
+                key={suggestedFee?.amount.toFixed(2) ?? 'none'}
+                defaultValue={suggestedFee?.amount.toFixed(2) ?? ''}
+                className="w-28"
+              />
+            </FormField>
+            <FormField label={t('feeAccount')} htmlFor={`fee-acc-${p.itemId}`}>
+              <NativeSelect
+                id={`fee-acc-${p.itemId}`}
+                name="feeAccountId"
+                key={feeCurrency}
+                defaultValue={
+                  feeCurrency === payCurrency
+                    ? ''
+                    : (p.feeAccounts.find((a) => a.currency === feeCurrency)?.id ?? '')
+                }
+                placeholder={t('feeSameAccount')}
+                options={p.feeAccounts.map((a) => ({ value: a.id, label: a.label }))}
+              />
+            </FormField>
+          </>
+        )}
         {paidFrom === 'new' && (
           <FormField label={t('category')} htmlFor={`cat-${p.itemId}`}>
             <NativeSelect

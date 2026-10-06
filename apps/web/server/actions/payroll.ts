@@ -22,6 +22,7 @@ export async function payItemAction(
     ...input,
     amount: decimalField(input.amount),
     rate: decimalField(input.rate),
+    feeAmount: decimalField(input.feeAmount),
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { NetworkSelect } from '@/components/network-select';
+import { TransferFeeFields, type TransferFeeValues } from '@/components/transfer-fee-fields';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +27,7 @@ export type PayeeFormValues = {
   walletAddress: string | null;
   walletNetwork: string | null;
   personId: string | null;
-};
+} & Partial<TransferFeeValues>;
 
 type Props = {
   payee?: PayeeFormValues;
@@ -116,6 +117,22 @@ export function PayeeForm({ payee, people, defaultPersonId }: Props) {
           placeholder="—"
         />
       </FormField>
+      <p className="text-sm font-medium md:col-span-2">{t('fee')}</p>
+      <div className="grid grid-cols-3 gap-3 md:col-span-2">
+        <TransferFeeFields
+          idPrefix="payee"
+          errors={errors}
+          value={
+            payee
+              ? {
+                  feeFixed: payee.feeFixed ?? null,
+                  feePercent: payee.feePercent ?? null,
+                  feeCurrency: payee.feeCurrency ?? null,
+                }
+              : null
+          }
+        />
+      </div>
       <div className="flex gap-2 md:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending ? tc('saving') : tc('save')}

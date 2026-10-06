@@ -34,6 +34,9 @@ export default async function EditPayeePage({ params }: { params: Promise<{ id: 
           walletAddress: payee.walletAddress,
           walletNetwork: payee.walletNetwork,
           personId: payee.personId,
+          feeFixed: payee.feeFixed,
+          feePercent: payee.feePercent,
+          feeCurrency: payee.feeCurrency,
         }}
       />
     </div>

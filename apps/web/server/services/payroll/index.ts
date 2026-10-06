@@ -62,6 +62,11 @@ export const listPayroll = defineService({
           personName: person.fullName,
           payeeName: sql<string | null>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`,
           payeeKind: payee.kind,
+          payeeFee: {
+            feeFixed: payee.feeFixed,
+            feePercent: payee.feePercent,
+            feeCurrency: payee.feeCurrency,
+          },
           month: period.month,
         })
         .from(payrollItem)

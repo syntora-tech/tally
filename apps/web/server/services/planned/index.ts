@@ -159,19 +159,64 @@ export const listPlannedExpenses = defineService({
   },
 });
 
+/**
+ * Removes the payments of parts or charges about to go (A-082). Paid ones are money on record, so
+ * the part or charge then stays and should be stopped instead.
+ */
+async function dropPaymentsOf(
+  tx: DbTransaction,
+  column: typeof plannedPayment.partId | typeof plannedPayment.chargeId,
+  ids: readonly string[],
+) {
+  if (ids.length === 0) return ok(null);
+  const paid = await tx
+    .select({ id: plannedPayment.id })
+    .from(plannedPayment)
+    .where(and(inArray(column, [...ids]), eq(plannedPayment.status, 'paid')))
+    .limit(1);
+  if (paid.length) {
+    return err(
+      serviceError(
+        'conflict',
+        column === plannedPayment.partId ? 'planned.partHasPaid' : 'planned.chargeHasPaid',
+      ),
+    );
+  }
+  await tx
+    .delete(plannedPayment)
+    .where(and(inArray(column, [...ids]), isNotNull(plannedPayment.parentId)));
+  await tx.delete(plannedPayment).where(inArray(column, [...ids]));
+  return ok(null);
+}
+
 type PartInput = z.output<typeof plannedPartInput>;
 type ChargeInput = z.output<typeof plannedChargeInput>;
 
 async function replaceParts(tx: DbTransaction, expenseId: string, parts: readonly PartInput[]) {
   const keep = parts.flatMap((p) => (p.id ? [p.id] : []));
-  await tx
-    .delete(plannedExpensePart)
+  const gone = await tx
+    .select({ id: plannedExpensePart.id })
+    .from(plannedExpensePart)
     .where(
       and(
         eq(plannedExpensePart.plannedExpenseId, expenseId),
         keep.length ? notInArray(plannedExpensePart.id, keep) : undefined,
       ),
     );
+  const dropped = await dropPaymentsOf(
+    tx,
+    plannedPayment.partId,
+    gone.map((g) => g.id),
+  );
+  if (dropped.isErr()) return dropped;
+  if (gone.length) {
+    await tx.delete(plannedExpensePart).where(
+      inArray(
+        plannedExpensePart.id,
+        gone.map((g) => g.id),
+      ),
+    );
+  }
   // Free the single "rest" slot before an existing part becomes the rest.
   for (const { id, ...values } of parts) {
     if (id && values.amount !== null) {
@@ -195,6 +240,7 @@ async function replaceParts(tx: DbTransaction, expenseId: string, parts: readonl
       await tx.insert(plannedExpensePart).values({ ...values, plannedExpenseId: expenseId });
     }
   }
+  return ok(null);
 }
 
 async function replaceCharges(
@@ -203,14 +249,29 @@ async function replaceCharges(
   charges: readonly ChargeInput[],
 ) {
   const keep = charges.flatMap((c) => (c.id ? [c.id] : []));
-  await tx
-    .delete(paymentCharge)
+  const gone = await tx
+    .select({ id: paymentCharge.id })
+    .from(paymentCharge)
     .where(
       and(
         eq(paymentCharge.plannedExpenseId, expenseId),
         keep.length ? notInArray(paymentCharge.id, keep) : undefined,
       ),
     );
+  const dropped = await dropPaymentsOf(
+    tx,
+    plannedPayment.chargeId,
+    gone.map((g) => g.id),
+  );
+  if (dropped.isErr()) return dropped;
+  if (gone.length) {
+    await tx.delete(paymentCharge).where(
+      inArray(
+        paymentCharge.id,
+        gone.map((g) => g.id),
+      ),
+    );
+  }
   for (const { id, ...values } of charges) {
     if (id) {
       await tx
@@ -221,6 +282,7 @@ async function replaceCharges(
       await tx.insert(paymentCharge).values({ ...values, plannedExpenseId: expenseId });
     }
   }
+  return ok(null);
 }
 
 export async function savePlannedExpenseIn(
@@ -236,8 +298,14 @@ export async function savePlannedExpenseIn(
         .returning({ id: plannedExpense.id })
     : await tx.insert(plannedExpense).values(values).returning({ id: plannedExpense.id });
   if (!row) return err(serviceError('not_found', 'planned.notFound'));
-  if (parts) await replaceParts(tx, row.id, parts);
-  if (charges) await replaceCharges(tx, row.id, charges);
+  if (parts) {
+    const replaced = await replaceParts(tx, row.id, parts);
+    if (replaced.isErr()) return err(replaced.error);
+  }
+  if (charges) {
+    const replaced = await replaceCharges(tx, row.id, charges);
+    if (replaced.isErr()) return err(replaced.error);
+  }
   await syncPlannedPayments(tx, today, [row.id]);
   return ok(row);
 }
@@ -321,6 +389,8 @@ export const deletePlannedPart = defineService({
   input: z.object({ id: z.uuid() }),
   handler: async (ctx, { id }) =>
     inActorScope(ctx, async (tx) => {
+      const dropped = await dropPaymentsOf(tx, plannedPayment.partId, [id]);
+      if (dropped.isErr()) return err(dropped.error);
       const [row] = await tx
         .delete(plannedExpensePart)
         .where(eq(plannedExpensePart.id, id))
@@ -377,6 +447,8 @@ export const deletePaymentCharge = defineService({
   input: z.object({ id: z.uuid() }),
   handler: async (ctx, { id }) =>
     inActorScope(ctx, async (tx) => {
+      const dropped = await dropPaymentsOf(tx, plannedPayment.chargeId, [id]);
+      if (dropped.isErr()) return err(dropped.error);
       const [row] = await tx
         .delete(paymentCharge)
         .where(eq(paymentCharge.id, id))

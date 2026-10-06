@@ -19,6 +19,10 @@ test.afterAll(async () => {
       where p.transaction_id = t.id and a.id = p.account_id and a.name in (${usd}, ${uah})
     `);
     await db.execute(sql`delete from public.account where name in (${usd}, ${uah})`);
+    await db.execute(sql`
+      delete from public.planned_payment where planned_expense_id in
+        (select id from public.planned_expense where name = ${planned})
+    `);
     await db.execute(sql`delete from public.planned_expense where name = ${planned}`);
   } finally {
     await client.end();
@@ -78,6 +82,7 @@ test('planned expenses: a yearly cost with its next date (A-067)', async ({ page
   await signIn(page, E2E_OWNER_EMAIL);
   await page.goto('/ledger');
   await page.getByRole('link', { name: 'Planned expenses' }).click();
+  await page.getByRole('link', { name: 'Plans' }).click();
   await page.locator('#pe-new-name').fill(planned);
   await page.locator('#pe-new-category').selectOption({ label: 'Software / Tools' });
   await page.locator('#pe-new-amount').fill('40');
@@ -85,7 +90,7 @@ test('planned expenses: a yearly cost with its next date (A-067)', async ({ page
   await page.locator('#pe-new-frequency').selectOption('yearly');
   await page.locator('#pe-new-anchor').selectOption({ label: 'March' });
   await page.locator('#pe-new-day').fill('15');
-  await page.getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add' }).first().click();
   await expect(page.getByText('Planned expense added')).toBeVisible();
   const card = page.getByTestId('planned-expense').filter({ hasText: planned });
   await expect(card).toContainText('yearly in March, day 15');

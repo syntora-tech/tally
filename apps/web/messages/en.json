@@ -485,7 +485,9 @@
       "chooseAccountInCurrency": "Choose an account in the payment currency",
       "transactionMismatch": "Choose an expense with money not yet linked",
       "chooseFreeExpense": "An expense with money not yet linked",
-      "paymentNotLinked": "No expenses are linked to this payment"
+      "paymentNotLinked": "No expenses are linked to this payment",
+      "partHasPaid": "This part already has paid payments: change its amount instead of deleting it",
+      "chargeHasPaid": "This charge already has paid payments: stop it with an end month instead"
     },
     "trips": {
       "notFound": "Trip not found",
@@ -1071,7 +1073,8 @@
       "bank": "Bank",
       "address": "Address",
       "wallet": "Wallet address",
-      "network": "Network"
+      "network": "Network",
+      "fee": "Bank fee per payout (suggested in “Pay”)"
     },
     "card": {
       "newContract": "New contract",
@@ -1086,7 +1089,8 @@
       "wallet": "Wallet",
       "contracts": "FOP contracts",
       "noContracts": "No contracts yet",
-      "of": " of {date}"
+      "of": " of {date}",
+      "fee": "Bank fee"
     }
   },
   "documents": {
@@ -1569,7 +1573,10 @@
     "sourceExisting": "Existing Ledger transaction",
     "transaction": "Transaction",
     "chooseTransaction": "Choose a transaction",
-    "noCandidates": "No unallocated Contractors / Payroll expenses in this currency since the start of the month"
+    "noCandidates": "No unallocated Contractors / Payroll expenses in this currency since the start of the month",
+    "fee": "Bank fee, {currency}",
+    "feeAccount": "Fee from",
+    "feeSameAccount": "The paying account"
   },
   "acts": {
     "back": "← Payroll",
@@ -1754,7 +1761,7 @@
   },
   "planned": {
     "title": "Planned expenses",
-    "subtitle": "Recurring company costs beyond payroll: accountant, subscriptions, bank service, taxes. The forecast and the payout calendar count them; they create no transactions",
+    "subtitle": "Recurring company costs beyond contractor payouts: accountant, the director's salary and its taxes, subscriptions, bank service. Each month they become payments to mark paid; the forecast and the payout calendar count them",
     "new": "New planned expense",
     "name": "Name",
     "category": "Category",
@@ -1780,7 +1787,24 @@
     "scheduleQuarterly": "quarterly from {month}, day {day}",
     "scheduleYearly": "yearly in {month}, day {day}",
     "next": "next {date}",
-    "noNext": "no upcoming dates"
+    "noNext": "no upcoming dates",
+    "tab": "Plans",
+    "amountHint": "Gross for a salary; parts below may split it",
+    "person": "Person (whose cost)",
+    "counterparty": "Recipient",
+    "feeIs": "fee {fee}",
+    "parts": "Parts within the month",
+    "partsHint": "E.g. the advance by the 22nd and the rest by the 7th of the next month. Without parts the whole amount is due on the day above.",
+    "partName": "Part",
+    "partNamePlaceholder": "Advance",
+    "partAmount": "Amount",
+    "rest": "the rest",
+    "monthOffset": "Paid in",
+    "sameMonth": "the same month",
+    "nextMonth": "the next month",
+    "partSaved": "Part saved",
+    "partDeleted": "Part deleted",
+    "confirmDeletePart": "Delete this part? Unpaid payments of it are removed."
   },
   "dossier": {
     "title": "Case file",
@@ -1857,5 +1881,78 @@
     "openCard": "open card",
     "other": "Without a counterparty",
     "otherHint": "People, trips, statements and unlinked documents"
+  },
+  "transferFee": {
+    "fixed": "Fee, fixed",
+    "percent": "Fee, %",
+    "currency": "Fee currency",
+    "currencyHint": "Empty = the payment's currency"
+  },
+  "plannedPayments": {
+    "tab": "Payments",
+    "window": "Last month, this month and the next one. Mark a payment paid by linking an expense from a statement or booking a new one with its bank fee.",
+    "empty": "Nothing to pay: add plans on the “Plans” tab",
+    "dueOn": "Due",
+    "payment": "Payment",
+    "toPay": "To pay",
+    "feeColumn": "Bank fee",
+    "statusColumn": "Status",
+    "status": {
+      "due": "To pay",
+      "overdue": "Overdue",
+      "paid": "Paid",
+      "skipped": "Skipped"
+    },
+    "grossOf": "of gross {amount}",
+    "setByHand": "amount set by hand",
+    "pay": "Paid…",
+    "setGross": "Gross",
+    "setAmount": "Amount",
+    "skip": "Skip",
+    "unskip": "Bring back",
+    "unskipped": "Payment is due again",
+    "unlink": "Unlink",
+    "unlinked": "Expenses unlinked",
+    "reset": "Back to the plan",
+    "amountSaved": "Amount saved",
+    "gross": "Gross, {currency}",
+    "amount": "Amount, {currency}",
+    "skipReason": "Why skipped",
+    "skipped": "Payment skipped",
+    "paid": "Payment marked paid",
+    "source": "Paid by",
+    "sourceExisting": "An expense already in the Ledger",
+    "sourceNew": "A new expense",
+    "transaction": "Expense",
+    "chooseTransaction": "Choose an expense",
+    "noCandidates": "No expenses with unlinked money in this currency",
+    "account": "Account",
+    "chooseAccount": "Choose an account",
+    "date": "Date",
+    "fee": "Bank fee, {currency}",
+    "feeAccount": "Fee from",
+    "record": "Record"
+  },
+  "charges": {
+    "title": "Taxes and levies",
+    "plannedHint": "Withheld ones (PIT, military levy) come out of the gross; on-top ones (social contribution) are paid besides it. Each is paid the same day as its part.",
+    "personTitle": "Taxes on payouts",
+    "personHint": "Charged on every payout to this person, on top of it, in the chosen currency at the NBU rate of the payout day; they appear in Ledger → Planned payments.",
+    "name": "Name",
+    "namePlaceholder": "PIT",
+    "mode": "How",
+    "withheld": "Withheld from gross",
+    "onTop": "On top",
+    "rate": "Rate, %",
+    "category": "Category",
+    "chooseCategory": "Choose a category",
+    "currency": "Currency",
+    "currencyHint": "Empty = the payment's currency",
+    "counterparty": "Paid to",
+    "startsOn": "From month",
+    "endsOn": "To month",
+    "saved": "Charge saved",
+    "deleted": "Charge deleted",
+    "confirmDelete": "Delete this charge? Its unpaid payments are removed; paid ones stay."
   }
 }

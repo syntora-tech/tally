@@ -266,6 +266,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         remaining={i.remaining}
                         isOwner={isOwner}
                         candidates={candidatesFor(i)}
+                        fee={i.payeeFee}
+                        feeAccounts={accountRows}
                         accounts={accountRows
                           .filter((a) =>
                             fiat ? a.currency === 'UAH' : USD_LIKE.includes(a.currency),

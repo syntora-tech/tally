@@ -4,6 +4,7 @@ import { AuditHistory } from '@/components/audit-history';
 import { CounterpartyDossier } from '@/components/counterparty-dossier';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { feeLabel } from '@/lib/fee-label';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listPayeeContracts } from '@/server/services/clients';
@@ -82,6 +83,7 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
               <Row label={t('address')} value={p.addressUa} />
               <Row label="IBAN" value={p.iban} />
               <Row label={t('bank')} value={p.bankName} />
+              <Row label={t('fee')} value={feeLabel(p, fmt, p.feeCurrency ?? 'UAH')} />
               <Row
                 label={t('wallet')}
                 value={[p.walletAddress, p.walletNetwork].filter(Boolean).join(' · ') || null}
