@@ -620,7 +620,8 @@
       "pay": "Pay",
       "agency": "Agency",
       "margin": "Margin",
-      "total": "Total"
+      "total": "Total",
+      "charges": "Payout taxes"
     },
     "forecast": "Forecast for six months",
     "forecastDescription": "By accrual: active assignments at the norm × FTE under their current terms, agency fees and planned expenses. Cash starts from today’s treasury.",
@@ -632,7 +633,8 @@
       "agency": "Agency",
       "planned": "Planned",
       "net": "Net",
-      "cash": "Cash at month end"
+      "cash": "Cash at month end",
+      "charges": "Payout taxes & fees"
     }
   },
   "trips": {

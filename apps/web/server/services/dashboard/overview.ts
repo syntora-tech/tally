@@ -1,11 +1,10 @@
-import { client, contract, contractAnnex, invoice, plannedExpense } from '@tally/db/schema';
+import { client, contract, contractAnnex, invoice, plannedPayment } from '@tally/db/schema';
 import {
   addDays,
   addMonths,
   defaultActDate,
   defaultInvoiceDate,
   diffDays,
-  plannedExpenseDates,
   startOfMonth,
   toDecimal,
   Decimal,
@@ -14,7 +13,7 @@ import {
   type InvoiceDateRule,
   type LocalDate,
 } from '@tally/domain';
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import { ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -23,6 +22,7 @@ import { loadUsdConverter } from '../fx';
 import { listAccounts } from '../ledger';
 import { listPayroll } from '../payroll';
 import { loadCalendar } from '../periods';
+import { syncPlannedPayments } from '../planned/sync';
 
 const CALENDAR_DAYS = 30;
 
@@ -72,7 +72,22 @@ export const dashboardOverview = defineService({
         .innerJoin(client, eq(client.id, invoice.clientId))
         .where(inArray(invoice.status, ['issued', 'partially_paid', 'written_off']))
         .orderBy(invoice.dueDate);
-      const planned = await tx.select().from(plannedExpense);
+      // Finance roles bring the planned payments up to date first (A-082); viewers only read.
+      if (ctx.actor.kind === 'user' && ctx.actor.role !== 'viewer') {
+        await syncPlannedPayments(tx, today);
+      }
+      const planned = await tx
+        .select({
+          id: plannedPayment.id,
+          name: plannedPayment.name,
+          dueOn: plannedPayment.dueOn,
+          amount: plannedPayment.amount,
+          currency: plannedPayment.currency,
+          feeAmount: plannedPayment.feeAmount,
+          feeCurrency: plannedPayment.feeCurrency,
+        })
+        .from(plannedPayment)
+        .where(and(eq(plannedPayment.status, 'due'), lte(plannedPayment.dueOn, until)));
       const contracts = await tx
         .select({
           id: contract.id,
@@ -181,22 +196,16 @@ export const dashboardOverview = defineService({
         });
       }
     }
-    for (const e of data.planned) {
-      const terms = {
-        ...e,
-        startsOn: e.startsOn as LocalDate,
-        endsOn: e.endsOn as LocalDate | null,
-      };
-      for (const on of plannedExpenseDates(terms, today, 2)) {
-        if (on < today || on > until) continue;
-        events.push({
-          on,
-          kind: 'planned',
-          label: e.name,
-          usd: usd(e.amount, e.currency)?.neg().toFixed(2) ?? null,
-          href: '/ledger/planned',
-        });
-      }
+    for (const p of data.planned) {
+      const amount = usd(p.amount, p.currency);
+      const fee = p.feeAmount ? usd(p.feeAmount, p.feeCurrency ?? p.currency) : new Decimal(0);
+      events.push({
+        on: (p.dueOn < today ? today : p.dueOn) as LocalDate,
+        kind: 'planned',
+        label: p.name,
+        usd: amount && fee ? amount.plus(fee).neg().toFixed(2) : null,
+        href: '/ledger/planned',
+      });
     }
     const thisMonth = startOfMonth(today);
     for (const month of [addMonths(thisMonth, -1), thisMonth]) {

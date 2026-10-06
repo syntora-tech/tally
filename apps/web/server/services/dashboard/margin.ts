@@ -11,11 +11,15 @@ import {
   payrollLine,
   payTerms,
   period,
+  payee,
+  paymentCharge,
   person,
   plannedExpense,
+  plannedExpensePart,
   timesheet,
 } from '@tally/db/schema';
 import {
+  activeInMonth,
   addMonths,
   forecastMonths,
   startOfMonth,
@@ -23,15 +27,24 @@ import {
   Decimal,
   type LocalDate,
 } from '@tally/domain';
-import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { loadCalendar } from '../periods';
+import { chargeOf, ruleOf } from '../planned/sync';
 import { loadUsdConverter } from './overview';
 
-type Row = { id: string | null; name: string; revenue: Decimal; pay: Decimal; agency: Decimal };
+type Row = {
+  id: string | null;
+  name: string;
+  revenue: Decimal;
+  pay: Decimal;
+  agency: Decimal;
+  /** Taxes on the person's payouts by their rates (A-082). */
+  charges: Decimal;
+};
 
 const view = (rows: Map<string, Row>) =>
   [...rows.values()]
@@ -41,13 +54,15 @@ const view = (rows: Map<string, Row>) =>
       revenueUsd: r.revenue.toFixed(2),
       payUsd: r.pay.toFixed(2),
       agencyUsd: r.agency.toFixed(2),
-      marginUsd: r.revenue.minus(r.pay).minus(r.agency).toFixed(2),
+      chargesUsd: r.charges.toFixed(2),
+      marginUsd: r.revenue.minus(r.pay).minus(r.agency).minus(r.charges).toFixed(2),
     }))
     .sort((a, b) => toDecimal(b.marginUsd).comparedTo(toDecimal(a.marginUsd)));
 
 /**
  * Margin of a closed month by accrual (6.1): invoices of the period minus the payroll accrued for
- * it (agency fees apart), by client and by person, in USD. Adjustments count for the person only.
+ * it (agency fees apart) and the taxes on it by the person's charge rates (A-082), by client and
+ * by person, in USD. Adjustments count for the person only.
  */
 export const monthMargin = defineService({
   name: 'dashboard.monthMargin',
@@ -115,7 +130,11 @@ export const monthMargin = defineService({
             .from(person)
             .where(inArray(person.id, [...new Set(adjustments.map((a) => a.personId))]))
         : [];
-      return { closed, current, toUsd, billed, accrued, adjustments, owners, people };
+      const charges = await tx
+        .select()
+        .from(paymentCharge)
+        .where(isNotNull(paymentCharge.personId));
+      return { closed, current, toUsd, billed, accrued, adjustments, owners, people, charges };
     });
     if (!data) return ok(null);
     const unconverted = new Set<string>();
@@ -132,7 +151,13 @@ export const monthMargin = defineService({
       revenue: new Decimal(0),
       pay: new Decimal(0),
       agency: new Decimal(0),
+      charges: new Decimal(0),
     });
+    const month = data.current.month as LocalDate;
+    const chargeRate = (personId: string) =>
+      data.charges
+        .filter((c) => c.personId === personId && activeInMonth(chargeOf(c), month))
+        .reduce((sum, c) => sum.plus(toDecimal(c.ratePercent).div(100)), new Decimal(0));
     const rowsFor = (assignmentId: string) => {
       const o = data.owners.find((x) => x.id === assignmentId);
       if (!o) return [];
@@ -150,12 +175,20 @@ export const monthMargin = defineService({
         if (a.agencyFee) r.agency = r.agency.plus(usd(a.amount, a.currency));
         else r.pay = r.pay.plus(usd(a.amount, a.currency));
       }
+      const personId = data.owners.find((o) => o.id === a.assignmentId)?.personId;
+      if (!a.agencyFee && personId) {
+        const tax = usd(a.amount, a.currency).times(chargeRate(personId));
+        for (const r of rowsFor(a.assignmentId)) r.charges = r.charges.plus(tax);
+      }
     }
     for (const adj of data.adjustments) {
       const name = data.people.find((p) => p.id === adj.personId)?.name ?? '';
       if (!byPerson.has(adj.personId)) byPerson.set(adj.personId, zero(adj.personId, name));
       const r = byPerson.get(adj.personId);
-      if (r) r.pay = r.pay.plus(usd(adj.amount, adj.currency));
+      if (r) {
+        r.pay = r.pay.plus(usd(adj.amount, adj.currency));
+        r.charges = r.charges.plus(usd(adj.amount, adj.currency).times(chargeRate(adj.personId)));
+      }
     }
     const people = view(byPerson);
     const total = people.reduce(
@@ -163,12 +196,14 @@ export const monthMargin = defineService({
         revenueUsd: s.revenueUsd.plus(r.revenueUsd),
         payUsd: s.payUsd.plus(r.payUsd),
         agencyUsd: s.agencyUsd.plus(r.agencyUsd),
+        chargesUsd: s.chargesUsd.plus(r.chargesUsd),
         marginUsd: s.marginUsd.plus(r.marginUsd),
       }),
       {
         revenueUsd: new Decimal(0),
         payUsd: new Decimal(0),
         agencyUsd: new Decimal(0),
+        chargesUsd: new Decimal(0),
         marginUsd: new Decimal(0),
       },
     );
@@ -181,6 +216,7 @@ export const monthMargin = defineService({
         revenueUsd: total.revenueUsd.toFixed(2),
         payUsd: total.payUsd.toFixed(2),
         agencyUsd: total.agencyUsd.toFixed(2),
+        chargesUsd: total.chargesUsd.toFixed(2),
         marginUsd: total.marginUsd.toFixed(2),
       },
       unconverted: [...unconverted].sort(),
@@ -196,12 +232,35 @@ export const sixMonthForecast = defineService({
     const first = startOfMonth(ctx.today);
     const months = Array.from({ length: 6 }, (_, i) => addMonths(first, i));
     const result = await inActorScope(ctx, async (tx) => {
-      const [assignments, billing, pay, agency, planned, periods, cal, toUsd] = await Promise.all([
+      const [
+        assignments,
+        billing,
+        pay,
+        agency,
+        planned,
+        parts,
+        charges,
+        people,
+        periods,
+        cal,
+        toUsd,
+      ] = await Promise.all([
         tx.select().from(assignment),
         tx.select().from(billingTerms),
         tx.select().from(payTerms),
         tx.select().from(agencyTerms),
         tx.select().from(plannedExpense),
+        tx.select().from(plannedExpensePart),
+        tx.select().from(paymentCharge),
+        tx
+          .select({
+            personId: person.id,
+            feeFixed: payee.feeFixed,
+            feePercent: payee.feePercent,
+            feeCurrency: payee.feeCurrency,
+          })
+          .from(person)
+          .leftJoin(payee, eq(payee.id, person.defaultPayeeId)),
         tx
           .select({ month: period.month, workHours: period.workHours })
           .from(period)
@@ -222,6 +281,7 @@ export const sixMonthForecast = defineService({
         })),
         assignments.map((a) => ({
           assignmentId: a.id,
+          personId: a.personId,
           fte: a.fte,
           startsOn: a.startsOn as LocalDate,
           endsOn: a.endsOn as LocalDate | null,
@@ -230,11 +290,16 @@ export const sixMonthForecast = defineService({
           agency: of(agency, a.id),
         })),
         planned.map((e) => ({
-          ...e,
-          startsOn: e.startsOn as LocalDate,
-          endsOn: e.endsOn as LocalDate | null,
+          ...ruleOf(e),
+          parts: parts.filter((p) => p.plannedExpenseId === e.id),
+          charges: charges.filter((c) => c.plannedExpenseId === e.id).map(chargeOf),
         })),
         toUsd,
+        people.map((p) => ({
+          personId: p.personId,
+          charges: charges.filter((c) => c.personId === p.personId).map(chargeOf),
+          fee: p,
+        })),
       );
     });
     return ok(result);

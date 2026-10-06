@@ -17,6 +17,7 @@ import {
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { monthMargin } from '../dashboard/margin';
 import { createTransaction } from '../ledger';
 import { payItem } from '../payroll';
 import { deletePlannedExpense, savePaymentCharge, savePlannedExpense } from '.';
@@ -281,6 +282,7 @@ describe('planned payments (A-082)', () => {
   it('charges 20 % in UAH at the NBU rate on every payout to a person, with the payee fee', async () => {
     const charge = await savePaymentCharge.run(h.ctxFor(finance), {
       ...tax('Tax 20 %', 'on_top', '20'),
+      startsOn: '2042-07',
       currency: 'UAH',
       personId: ids.payroll,
     });
@@ -293,6 +295,16 @@ describe('planned payments (A-082)', () => {
         })
       )._unsafeUnwrapErr().fieldErrors?.mode,
     ).toBeDefined();
+
+    await h.db.update(period).set({ status: 'closed' }).where(eq(period.id, ids.period));
+    const margin = (
+      await monthMargin.run(h.ctxFor(finance), { periodId: ids.period })
+    )._unsafeUnwrap();
+    expect(margin?.byPerson.find((r) => r.id === ids.payroll)).toMatchObject({
+      payUsd: '3000.00',
+      chargesUsd: '600.00',
+      marginUsd: '-3600.00',
+    });
 
     const paid = await payItem.run(h.ctxFor(finance), {
       itemId: ids.item,

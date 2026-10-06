@@ -266,6 +266,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                     <TableHead className="text-right">{t('margin.revenue')}</TableHead>
                     <TableHead className="text-right">{t('margin.pay')}</TableHead>
                     <TableHead className="text-right">{t('margin.agency')}</TableHead>
+                    <TableHead className="text-right">{t('margin.charges')}</TableHead>
                     <TableHead className="text-right">{t('margin.margin')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -293,6 +294,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                       <TableCell className="text-right tabular-nums">
                         {fmt.amount(r.agencyUsd)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt.amount(r.chargesUsd)}
+                      </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {fmt.amount(r.marginUsd)}
                       </TableCell>
@@ -308,6 +312,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmt.amount(m.total.agencyUsd)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmt.amount(m.total.chargesUsd)}
                     </TableCell>
                     <TableCell
                       className="text-right font-semibold tabular-nums"
@@ -342,6 +349,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                 <TableHead className="text-right">{t('forecastCol.payroll')}</TableHead>
                 <TableHead className="text-right">{t('forecastCol.agency')}</TableHead>
                 <TableHead className="text-right">{t('forecastCol.planned')}</TableHead>
+                <TableHead className="text-right">{t('forecastCol.charges')}</TableHead>
                 <TableHead className="text-right">{t('forecastCol.net')}</TableHead>
                 <TableHead className="text-right">{t('forecastCol.cash')}</TableHead>
               </TableRow>
@@ -361,6 +369,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {fmt.amount(r.plannedUsd)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmt.amount(r.chargesUsd)}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {fmt.amount(r.netUsd)}
