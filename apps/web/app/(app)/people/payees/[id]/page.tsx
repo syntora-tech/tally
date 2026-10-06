@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
-import { LinkedDocuments } from '@/components/linked-documents';
+import { CounterpartyDossier } from '@/components/counterparty-dossier';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
@@ -124,7 +124,7 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
               )}
             </CardContent>
           </Card>
-          <LinkedDocuments ctx={ctx} entityType="payee" entityId={p.id} canAdd />
+          <CounterpartyDossier ctx={ctx} party="payee" id={p.id} canAdd />
           <AuditHistory ctx={ctx} tableName="payee" rowId={p.id} />
         </div>
       </div>

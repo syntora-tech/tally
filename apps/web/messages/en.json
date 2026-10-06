@@ -546,7 +546,9 @@
     "planned": "Planned expenses",
     "newTrip": "New trip",
     "editTrip": "Edit trip",
-    "trip": "Trip"
+    "trip": "Trip",
+    "documentsInbox": "Documents to sort out",
+    "documentChecks": "Document checks"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -1760,5 +1762,68 @@
     "scheduleYearly": "yearly in {month}, day {day}",
     "next": "next {date}",
     "noNext": "no upcoming dates"
+  },
+  "dossier": {
+    "title": "Case file",
+    "description": "Contracts, their SOWs and annexes, and invoices, bills and acts by month",
+    "empty": "No contracts or documents yet",
+    "contract": "Contract {number}",
+    "sow": "SOW {number}",
+    "annex": "Annex {number}",
+    "annexStatus": {
+      "draft": "draft",
+      "ended": "ended"
+    },
+    "noFile": "No signed file attached",
+    "unfiled": "Not filed under a contract",
+    "undated": "Without a date",
+    "partOf": "part of a signed package, pages {pages}",
+    "openFile": "Open the file: {title}"
+  },
+  "documentsNav": {
+    "label": "Documents sections",
+    "registry": "Registry",
+    "inbox": "To sort out",
+    "checks": "Checks"
+  },
+  "documentsInbox": {
+    "title": "Documents to sort out",
+    "subtitle": "Attach them to their records and fill in what the registry needs",
+    "empty": "Nothing to sort out",
+    "col": {
+      "document": "Document",
+      "type": "Type",
+      "date": "Date",
+      "fix": "What to fix"
+    },
+    "reason": {
+      "noLinks": "Not linked to anything",
+      "noRecord": "Not on its contract/SOW record",
+      "noDate": "No date",
+      "noNumber": "No number"
+    }
+  },
+  "documentChecks": {
+    "title": "Document checks",
+    "subtitle": "Gaps between contracts, payees and their documents",
+    "allGood": "All good",
+    "sow": "SOW {number}",
+    "annex": "Annex {number}",
+    "payees": {
+      "title": "FOPs without a FOP contract",
+      "description": "A FOP act cannot be issued until the contract is added"
+    },
+    "contracts": {
+      "title": "Contracts without a file",
+      "description": "Attach the signed contract (or the package that holds it)"
+    },
+    "annexes": {
+      "title": "SOWs and annexes without a file",
+      "description": "Attach the signed SOW/annex"
+    },
+    "duplicates": {
+      "title": "Repeated numbers",
+      "description": "Invoices, acts and contracts with the same number: a re-issue, a copy or a numbering mistake"
+    }
   }
 }

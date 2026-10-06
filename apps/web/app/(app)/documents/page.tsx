@@ -6,6 +6,7 @@ import { toOptions } from '@/lib/labels';
 import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { searchDocuments } from '@/server/services/documents/registry';
+import { DocumentsNav } from './documents-nav';
 import { DocumentsTable } from './documents-table';
 import { getTranslations } from 'next-intl/server';
 import { getLabels, getLocalizeText, localizeForUser, pageTitle } from '@/server/i18n';
@@ -39,6 +40,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Se
         </div>
         {canWrite && <Button render={<Link href="/documents/new" />}>{t('add')}</Button>}
       </div>
+      {canWrite && <DocumentsNav current="registry" />}
 
       <form
         method="get"
