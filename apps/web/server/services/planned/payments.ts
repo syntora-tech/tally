@@ -101,108 +101,115 @@ async function lockPayment(tx: DbTransaction, id: string) {
   return row ?? null;
 }
 
+export const setAmountInput = z.object({
+  id: z.uuid(),
+  amount: decimalString.refine((v) => toDecimal(v).gte(0), 'field.nonNegative'),
+});
+
 /**
  * Sets this month's amount by hand (A-082): for an instalment the gross (its net and charges are
  * recomputed), for anything else the amount itself. Rule edits leave it alone afterwards.
  */
+export async function setPlannedAmountIn(
+  tx: DbTransaction,
+  input: z.output<typeof setAmountInput>,
+) {
+  const row = await lockPayment(tx, input.id);
+  if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
+  if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
+  const isInstalment = row.plannedExpenseId !== null && row.chargeId === null;
+  if (!isInstalment) {
+    await tx
+      .update(plannedPayment)
+      .set({ amount: toDecimal(input.amount).toFixed(2), amountOverridden: true })
+      .where(eq(plannedPayment.id, row.id));
+    return ok({ id: row.id, amount: toDecimal(input.amount).toFixed(2) });
+  }
+  const convert = convertVia(await loadUsdConverter(tx));
+  const gross = toDecimal(input.amount).toFixed(8);
+  const instalment = await syncChargesOfInstalment(tx, { ...row, gross }, convert);
+  const net = (instalment?.net ?? toDecimal(input.amount)).toFixed(2);
+  await tx
+    .update(plannedPayment)
+    .set({ gross, amount: net, amountOverridden: true })
+    .where(eq(plannedPayment.id, row.id));
+  return ok({ id: row.id, amount: net });
+}
+
 export const setPlannedAmount = defineService({
   name: 'planned.payments.amount',
-  input: z.object({
-    id: z.uuid(),
-    amount: decimalString.refine((v) => toDecimal(v).gte(0), 'field.nonNegative'),
-  }),
-  handler: async (ctx, input) =>
-    inActorScope(ctx, async (tx) => {
-      const row = await lockPayment(tx, input.id);
-      if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
-      if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
-      const isInstalment = row.plannedExpenseId !== null && row.chargeId === null;
-      if (!isInstalment) {
-        await tx
-          .update(plannedPayment)
-          .set({ amount: toDecimal(input.amount).toFixed(2), amountOverridden: true })
-          .where(eq(plannedPayment.id, row.id));
-        return ok({ id: row.id, amount: toDecimal(input.amount).toFixed(2) });
-      }
-      const convert = convertVia(await loadUsdConverter(tx));
-      const gross = toDecimal(input.amount).toFixed(8);
-      const instalment = await syncChargesOfInstalment(tx, { ...row, gross }, convert);
-      const net = (instalment?.net ?? toDecimal(input.amount)).toFixed(2);
-      await tx
-        .update(plannedPayment)
-        .set({ gross, amount: net, amountOverridden: true })
-        .where(eq(plannedPayment.id, row.id));
-      return ok({ id: row.id, amount: net });
-    }),
+  input: setAmountInput,
+  handler: async (ctx, input) => inActorScope(ctx, (tx) => setPlannedAmountIn(tx, input)),
 });
 
 /** Back to the amounts of the rule (A-082). */
+export async function resetPlannedAmountIn(tx: DbTransaction, today: LocalDate, id: string) {
+  const row = await lockPayment(tx, id);
+  if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
+  if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
+  await tx.update(plannedPayment).set({ amountOverridden: false }).where(eq(plannedPayment.id, id));
+  if (row.chargeId === null) {
+    await tx
+      .update(plannedPayment)
+      .set({ amountOverridden: false })
+      .where(and(eq(plannedPayment.parentId, id), eq(plannedPayment.status, 'due')));
+  }
+  if (row.plannedExpenseId && row.month >= startOfMonth(today)) {
+    await syncPlannedPayments(tx, today, [row.plannedExpenseId]);
+  }
+  return ok({ id });
+}
+
 export const resetPlannedAmount = defineService({
   name: 'planned.payments.reset',
   input: z.object({ id: z.uuid() }),
   handler: async (ctx, { id }) =>
-    inActorScope(ctx, async (tx) => {
-      const row = await lockPayment(tx, id);
-      if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
-      if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
-      await tx
-        .update(plannedPayment)
-        .set({ amountOverridden: false })
-        .where(eq(plannedPayment.id, id));
-      if (row.chargeId === null) {
-        await tx
-          .update(plannedPayment)
-          .set({ amountOverridden: false })
-          .where(and(eq(plannedPayment.parentId, id), eq(plannedPayment.status, 'due')));
-      }
-      if (row.plannedExpenseId && row.month >= startOfMonth(ctx.today)) {
-        await syncPlannedPayments(tx, ctx.today, [row.plannedExpenseId]);
-      }
-      return ok({ id });
-    }),
+    inActorScope(ctx, (tx) => resetPlannedAmountIn(tx, ctx.today, id)),
 });
+
+/** Skipping an instalment skips its unpaid charges too: no salary, no tax on it. */
+export async function skipPlannedIn(tx: DbTransaction, id: string, reason: string) {
+  const row = await lockPayment(tx, id);
+  if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
+  if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
+  await tx
+    .update(plannedPayment)
+    .set({ status: 'skipped', skipReason: reason })
+    .where(
+      and(
+        eq(plannedPayment.status, 'due'),
+        sql`(${plannedPayment.id} = ${id} or ${plannedPayment.parentId} = ${id})`,
+      ),
+    );
+  return ok({ id });
+}
 
 export const skipPlannedPayment = defineService({
   name: 'planned.payments.skip',
   input: z.object({ id: z.uuid(), reason: requiredText('planned.skipReason') }),
-  handler: async (ctx, { id, reason }) =>
-    inActorScope(ctx, async (tx) => {
-      const row = await lockPayment(tx, id);
-      if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
-      if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
-      // Skipping an instalment skips its unpaid charges: no salary, no tax on it.
-      await tx
-        .update(plannedPayment)
-        .set({ status: 'skipped', skipReason: reason })
-        .where(
-          and(
-            eq(plannedPayment.status, 'due'),
-            sql`(${plannedPayment.id} = ${id} or ${plannedPayment.parentId} = ${id})`,
-          ),
-        );
-      return ok({ id });
-    }),
+  handler: async (ctx, { id, reason }) => inActorScope(ctx, (tx) => skipPlannedIn(tx, id, reason)),
 });
+
+export async function unskipPlannedIn(tx: DbTransaction, id: string) {
+  const row = await lockPayment(tx, id);
+  if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
+  if (row.status !== 'skipped') return err(serviceError('conflict', 'planned.notSkipped'));
+  await tx
+    .update(plannedPayment)
+    .set({ status: 'due', skipReason: null })
+    .where(
+      and(
+        eq(plannedPayment.status, 'skipped'),
+        sql`(${plannedPayment.id} = ${id} or ${plannedPayment.parentId} = ${id})`,
+      ),
+    );
+  return ok({ id });
+}
 
 export const unskipPlannedPayment = defineService({
   name: 'planned.payments.unskip',
   input: z.object({ id: z.uuid() }),
-  handler: async (ctx, { id }) =>
-    inActorScope(ctx, async (tx) => {
-      const row = await lockPayment(tx, id);
-      if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
-      if (row.status !== 'skipped') return err(serviceError('conflict', 'planned.notSkipped'));
-      await tx
-        .update(plannedPayment)
-        .set({ status: 'due', skipReason: null })
-        .where(
-          and(
-            eq(plannedPayment.status, 'skipped'),
-            sql`(${plannedPayment.id} = ${id} or ${plannedPayment.parentId} = ${id})`,
-          ),
-        );
-      return ok({ id });
-    }),
+  handler: async (ctx, { id }) => inActorScope(ctx, (tx) => unskipPlannedIn(tx, id)),
 });
 
 const mainPosting = (tx: DbTransaction, transactionId: string) =>
@@ -324,23 +331,29 @@ export const markPlannedPaid = defineService({
 });
 
 /** Unlinks Ledger expenses from a payment (all when none given); the expenses stay. */
+export async function unlinkPlannedIn(
+  tx: DbTransaction,
+  id: string,
+  transactionIds?: readonly string[],
+) {
+  const removed = await tx
+    .delete(allocation)
+    .where(
+      and(
+        eq(allocation.plannedPaymentId, id),
+        transactionIds?.length ? inArray(allocation.transactionId, [...transactionIds]) : undefined,
+      ),
+    )
+    .returning({ id: allocation.id });
+  if (removed.length === 0) return err(serviceError('not_found', 'planned.paymentNotLinked'));
+  return ok({ id, unlinked: removed.length });
+}
+
 export const unlinkPlannedPayment = defineService({
   name: 'planned.payments.unlink',
   input: z.object({ id: z.uuid(), transactionIds: z.array(z.uuid()).optional() }),
   handler: async (ctx, { id, transactionIds }) =>
-    inActorScope(ctx, async (tx) => {
-      const removed = await tx
-        .delete(allocation)
-        .where(
-          and(
-            eq(allocation.plannedPaymentId, id),
-            transactionIds?.length ? inArray(allocation.transactionId, transactionIds) : undefined,
-          ),
-        )
-        .returning({ id: allocation.id });
-      if (removed.length === 0) return err(serviceError('not_found', 'planned.paymentNotLinked'));
-      return ok({ id, unlinked: removed.length });
-    }),
+    inActorScope(ctx, (tx) => unlinkPlannedIn(tx, id, transactionIds)),
 });
 
 /** Expenses of a currency with money not allocated yet, for "Paid" from a statement row. */

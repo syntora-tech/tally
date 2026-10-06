@@ -85,6 +85,12 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `link_documents`          | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
 | `unlink_documents`        | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
 | `delete_documents`        | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
+| `list_planned_expenses`   | read  | Recurring company costs with their parts in the month, taxes (withheld / on top), bank fee tariff and next date                                         |
+| `list_payout_charges`     | read  | Taxes charged on every payout to a person (on top, e.g. 20 % in UAH)                                                                                    |
+| `list_planned_payments`   | read  | Payments to make by due date: instalments, their taxes and payout taxes, with status, expected bank fee and the Ledger expenses that paid them          |
+| `upsert_planned_expenses` | write | Creates or partially updates planned expenses (≤ 50) with their `parts` and `charges`                                                                   |
+| `upsert_payout_charges`   | write | Creates or partially updates taxes on a person's payouts (≤ 50); stop one with `endsOn`                                                                 |
+| `update_planned_payments` | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
@@ -307,17 +313,18 @@ The same EVM address used on several EVM networks is entered once per network. B
 
 A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a crypto wallet (`crypto`) or `other`. It is not always the same human as the person — someone can be paid through a relative's FOP.
 
-| Field                            | Format                                                     |
-| -------------------------------- | ---------------------------------------------------------- |
-| `id` or `taxId`                  | Match key; without both a new payee is created             |
-| `kind`                           | `fop` (default for new), `crypto`, `other`                 |
-| `legalNameUa` / `legalNameEn`    | At least one; e.g. `ФОП Іваненко Іван Іванович`            |
-| `taxId`                          | ІПН / ЄДРПОУ, 8–12 digits                                  |
-| `edrRecord`, `edrDate`           | EDR record and its date `YYYY-MM-DD` (used in FOP acts)    |
-| `addressUa`, `iban`, `bankName`  | Requisites for acts; IBAN may contain spaces               |
-| `walletAddress`, `walletNetwork` | Payout wallet of a `crypto` payee (required for that kind) |
-| `personId`                       | The person this payee pays; `null` unlinks                 |
-| `makeDefault`                    | `true` makes it the person's default payee for new payouts |
+| Field                                   | Format                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id` or `taxId`                         | Match key; without both a new payee is created                                                                                                       |
+| `kind`                                  | `fop` (default for new), `crypto`, `other`                                                                                                           |
+| `legalNameUa` / `legalNameEn`           | At least one; e.g. `ФОП Іваненко Іван Іванович`                                                                                                      |
+| `taxId`                                 | ІПН / ЄДРПОУ, 8–12 digits                                                                                                                            |
+| `edrRecord`, `edrDate`                  | EDR record and its date `YYYY-MM-DD` (used in FOP acts)                                                                                              |
+| `addressUa`, `iban`, `bankName`         | Requisites for acts; IBAN may contain spaces                                                                                                         |
+| `walletAddress`, `walletNetwork`        | Payout wallet of a `crypto` payee (required for that kind)                                                                                           |
+| `personId`                              | The person this payee pays; `null` unlinks                                                                                                           |
+| `makeDefault`                           | `true` makes it the person's default payee for new payouts                                                                                           |
+| `feeFixed`, `feePercent`, `feeCurrency` | Bank tariff of a payout to this payee: fixed + % of the amount, in `feeCurrency` (e.g. `UAH` for a USD SWIFT); suggested as the fee in "Pay" (A-082) |
 
 ### 8.5 Corrections — `update_transactions`
 
@@ -386,6 +393,19 @@ An assignment is one person on one client contract (and optionally one of its SO
 
 Without `validFrom` the first versions start in the start month — or in the first open month when that one is already closed (closed months never change, I10). 3. **Change terms.** Send `id` and `billing`/`pay` with `validFrom` = the first day of the month the new terms start. Versions are never edited: the same month with other values is an error; a repeated identical version comes back as `existing`. Person, contract and `isInternal` cannot change — end the assignment (`endsOn`) and create a new one. 4. **Then hours.** Once assignments have terms, the month's hours are entered in Periods (UI).
 
+### 8.10 Planned payments — `list_planned_expenses`, `upsert_planned_expenses`, `list_planned_payments`, `update_planned_payments`
+
+Recurring company costs that are not contractor payouts — the accountant, the director's salary and its taxes, bank service, subscriptions — are **planned expenses** (A-067, A-082). Every month each one becomes **planned payments** that are marked paid by linking Ledger expenses; the forecast, the payout calendar and the margin count them.
+
+1. **The plan.** `upsert_planned_expenses` with `name`, `categoryId`, `amount` (per period; for a salary the monthly gross), `currency`, `startsOn` (`YYYY-MM`), `frequency` and `dueDay`, plus `personId` (whose cost it is), `counterparty` and the bank fee tariff (`feeFixed`, `feePercent`, `feeCurrency`). Stop a plan with `endsOn`; do not delete it.
+2. **Parts.** `parts` splits the month: `[{name: "Advance", amount: "5500", dueDay: 22}, {name: "Rest", amount: null, dueDay: 7, monthOffset: 1}]` — `amount: null` takes the rest, `monthOffset: 1` is paid in the next month. Without parts the whole amount is due on `dueDay`.
+3. **Taxes.** `charges` on the plan: `withheld` ones (ПДФО 18 %, військовий збір 5 %) come out of the gross and lower what the person gets; `on_top` ones (ЄСВ 22 %) are paid besides it. Each is paid the same day as its part, with its own `counterparty` and fee (5 UAH per tax transfer at PrivatBank). The director's salary for the second half of August 2026 checks out: gross 5 901.68 → ПДФО 1 062.30, ВЗ 295.08, net 4 544.30, ЄСВ 1 298.37.
+4. **Taxes on payouts.** `upsert_payout_charges` for a person (e.g. Andrii Skoropupov: 20 % on top, `currency: "UAH"`): every later payout to that person in Payroll gets a planned payment for the tax, at the NBU rate of the payout day.
+5. **Statement rows.** After entering a PrivatBank statement (section 7), find the matching due payments with `list_planned_payments` (`status: "due"`) and link them: `update_planned_payments` `{id, action: "pay", transactionIds: [...]}`. The expense must be in the payment currency; its money not linked yet is linked — the actual amount may differ from the plan. The salary transfer, ПДФО, ВЗ and ЄСВ are separate rows and separate payments.
+6. **This month's amount.** The second half of the salary changes every month: `{id, action: "set_amount", amount: "<gross>"}` on the instalment recomputes its net and taxes. `skip` needs a `reason` and skips the unpaid taxes of that instalment too; `unskip` brings it back; `unlink` undoes a wrong link.
+
+Paid payments are fixed. A part or a tax with paid payments cannot be removed — stop it with `endsOn`.
+
 ## 9. Report to the owner
 
 At the end, report briefly:
@@ -393,6 +413,7 @@ At the end, report briefly:
 - how many were created and how many `duplicate`, per tool;
 - the reconciliation table;
 - for statements: rows left without a party, and the payments and payouts waiting for allocation in the UI (7.5);
+- planned payments linked to statement rows, and those still due or overdue (8.10);
 - rows with currency mismatches and roundings;
 - everything skipped, with the reason.
 

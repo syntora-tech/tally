@@ -19,9 +19,10 @@ import {
   mcpClientPolicy,
   payee,
   person,
+  plannedExpense,
   transaction,
 } from '@tally/db/schema';
-import { and, eq, inArray, like } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { PDFDocument } from 'pdf-lib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../test/int-helpers';
@@ -40,6 +41,7 @@ let readOnlyToken = '';
 // Write calls are rate-limited per client; the contract tests run on a client of their own.
 let contractsToken = '';
 let packagesToken = '';
+let plannedToken = '';
 const clientIds: string[] = [];
 let storageRoot = '';
 let storage: LocalStorage;
@@ -98,6 +100,11 @@ beforeAll(async () => {
   packagesToken = packages.token;
   clientIds.push(packages.clientId);
   clientIds.push(contracts.clientId);
+  const planned = (
+    await createMcpClient.run(ctx, { clientName: `int ${tag} planned`, profile: 'assistant' })
+  )._unsafeUnwrap();
+  plannedToken = planned.token;
+  clientIds.push(planned.clientId);
 });
 
 afterAll(() =>
@@ -129,6 +136,36 @@ afterAll(() =>
     }
     await db.delete(contract).where(like(contract.number, `M ${tag}%`));
     await db.delete(company).where(like(company.nameEn, `M ${tag}%`));
+    // Unlinked first: a paid planned payment cannot be deleted (TL064).
+    const plannedTx = await db.execute<{ id: string }>(sql`
+      select a.transaction_id as id from public.allocation a
+        join public.planned_payment pp on pp.id = a.planned_payment_id
+        join public.planned_expense pe on pe.id = pp.planned_expense_id
+       where pe.name like ${`M ${tag}%`}
+    `);
+    await db.execute(sql`
+      delete from public.allocation where planned_payment_id in (
+        select pp.id from public.planned_payment pp
+          join public.planned_expense pe on pe.id = pp.planned_expense_id
+         where pe.name like ${`M ${tag}%`})
+    `);
+    const plannedTxIds = [...plannedTx].map((r) => r.id);
+    if (plannedTxIds.length) {
+      await db.delete(transaction).where(inArray(transaction.id, plannedTxIds));
+    }
+    await db.execute(sql`
+      delete from public.planned_payment where parent_id is not null and planned_expense_id in
+        (select id from public.planned_expense where name like ${`M ${tag}%`})
+    `);
+    await db.execute(sql`
+      delete from public.planned_payment where planned_expense_id in
+        (select id from public.planned_expense where name like ${`M ${tag}%`})
+    `);
+    await db.delete(plannedExpense).where(like(plannedExpense.name, `M ${tag}%`));
+    await db.execute(sql`
+      delete from public.payment_charge where person_id in
+        (select id from public.person where full_name like ${`M ${tag}%`})
+    `);
     await db.delete(transaction).where(like(transaction.externalRef, `mcp:${tag}:%`));
     await db.delete(account).where(like(account.name, `M ${tag}%`));
     await db.delete(payee).where(like(payee.legalNameUa, `ФОП M ${tag}%`));
@@ -185,13 +222,16 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'search_documents',
       'get_document',
       'find_link_targets',
+      'list_planned_expenses',
+      'list_payout_charges',
+      'list_planned_payments',
     ]);
   });
 
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(39);
+    expect(tools).toHaveLength(45);
     for (const name of ['delete_transactions', 'unlink_documents', 'delete_documents']) {
       const del = tools.find((t) => t.name === name);
       expect(del?.annotations).toMatchObject({ destructiveHint: true });
@@ -958,6 +998,107 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     ]);
     const card = await call('get_contract', { id: ct?.id });
     expect(card.structuredContent).toMatchObject({ assignments: [{ id, annexId: sow?.id }] });
+  });
+
+  it('planned payments: a salary with taxes set up, listed, skipped and paid (A-082)', async () => {
+    const mcp = await connect(plannedToken);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await mcp.callTool({ name, arguments: args })) as ToolResult;
+    const cats = await h.db.execute<{ id: string; name: string }>(
+      sql`select id, name from public.category where tx_type = 'expense' and name in ('Payroll', 'Taxes')`,
+    );
+    const cat = (n: string) => [...cats].find((c) => c.name === n)?.id;
+    const [acc] = await h.db
+      .insert(account)
+      .values({ name: `M ${tag} UAH`, kind: 'bank', currency: 'UAH', openingDate: '2046-01-01' })
+      .returning();
+    const [abroad] = await h.db
+      .insert(person)
+      .values({ fullName: `M ${tag} Abroad` })
+      .returning();
+    const tax = (name: string, mode: string, ratePercent: string) => ({
+      name,
+      mode,
+      ratePercent,
+      categoryId: cat('Taxes'),
+      startsOn: '2046-02',
+      feeFixed: '5',
+    });
+    const plan = {
+      name: `M ${tag} Director salary`,
+      categoryId: cat('Payroll'),
+      amount: '11401.68',
+      currency: 'UAH',
+      startsOn: '2046-02',
+      parts: [
+        { name: 'Advance', amount: '5500', dueDay: 22 },
+        { name: 'Rest', amount: null, dueDay: 7, monthOffset: 1 },
+      ],
+      charges: [
+        tax('PIT', 'withheld', '18'),
+        tax('Levy', 'withheld', '5'),
+        tax('ESV', 'on_top', '22'),
+      ],
+    };
+    const dry = await call('upsert_planned_expenses', {
+      idempotencyKey: `pl-dry-${tag}`,
+      dryRun: true,
+      items: [plan],
+    });
+    expect(dry.isError).toBeFalsy();
+    expect(
+      await h.db
+        .select()
+        .from(plannedExpense)
+        .where(like(plannedExpense.name, `M ${tag}%`)),
+    ).toHaveLength(0);
+    const saved = await call('upsert_planned_expenses', {
+      idempotencyKey: `pl-save-${tag}`,
+      items: [plan],
+    });
+    expect(saved.structuredContent).toMatchObject({ items: [{ status: 'created' }] });
+
+    const listed = await call('list_planned_payments', { from: '2046-02-01', to: '2046-03-31' });
+    const items = listed.structuredContent?.items as {
+      id: string;
+      name: string;
+      dueOn: string;
+      amount: string;
+      parentId: string | null;
+      status: string;
+    }[];
+    const advance = items.find((i) => i.name === 'Advance' && i.dueOn === '2046-02-22');
+    expect(advance?.amount).toBe('4235.00000000');
+    expect(items.filter((i) => i.parentId === advance?.id)).toHaveLength(3);
+    const rest = items.find((i) => i.name === 'Rest' && i.dueOn === '2046-03-07');
+
+    const done = await call('update_planned_payments', {
+      idempotencyKey: `pl-upd-${tag}`,
+      payments: [
+        { id: advance?.id, action: 'pay', accountId: acc?.id, occurredOn: '2046-02-20' },
+        { id: rest?.id, action: 'set_amount', amount: '6000' },
+      ],
+    });
+    expect(done.isError).toBeFalsy();
+    const bad = await call('update_planned_payments', {
+      idempotencyKey: `pl-bad-${tag}`,
+      payments: [{ id: advance?.id, action: 'skip', reason: 'Too late' }],
+    });
+    expect(bad.isError).toBe(true);
+    const after = await call('list_planned_payments', { from: '2046-02-01', to: '2046-03-31' });
+    const rows = after.structuredContent?.items as typeof items;
+    expect(rows.find((i) => i.id === advance?.id)?.status).toBe('paid');
+    expect(rows.find((i) => i.id === rest?.id)?.amount).toBe('4620.00000000');
+
+    const charge = await call('upsert_payout_charges', {
+      idempotencyKey: `pl-ch-${tag}`,
+      charges: [{ ...tax('Tax 20 %', 'on_top', '20'), personId: abroad?.id, currency: 'UAH' }],
+    });
+    expect(charge.isError).toBeFalsy();
+    const charges = await call('list_payout_charges', { personIds: [abroad?.id] });
+    expect(charges.structuredContent?.items).toMatchObject([
+      { name: 'Tax 20 %', mode: 'on_top', ratePercent: '20.0000', currency: 'UAH' },
+    ]);
   });
 
   it('a revoked client gets 403 with a still valid token', async () => {

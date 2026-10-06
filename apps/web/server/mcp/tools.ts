@@ -39,6 +39,13 @@ import { upsertContractAnnexes, upsertContracts } from '../services/contracts/ba
 import { getTrip, listTrips } from '../services/trips';
 import { tripBatchServices, upsertTrips } from '../services/trips/batch';
 import { findWallets, upsertWallets } from '../services/wallets';
+import { listPersonCharges, listPlannedExpenses } from '../services/planned';
+import {
+  updatePlannedPayments,
+  upsertPayoutCharges,
+  upsertPlannedExpenses,
+} from '../services/planned/agent';
+import { listPlannedPayments } from '../services/planned/payments';
 
 export type ToolKind = 'read' | 'write';
 
@@ -202,7 +209,8 @@ function annexSummary(r: AnnexRow) {
  * than unallocated transactions are deliberately absent from MCP (13.3 «не виставляються»);
  * payees are allowed since A-062, deleting transactions since A-063, the document registry and
  * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072,
- * assignments with their terms since A-073.
+ * assignments with their terms since A-073, planned payments with their taxes and marking them
+ * paid since A-082.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -612,6 +620,84 @@ export const TOOLS: readonly ToolDef[] = [
     kind: 'write',
     destructive: true,
     service: unlinkDocuments,
+  }),
+  tool({
+    name: 'list_planned_expenses',
+    title: 'Planned expenses',
+    description:
+      'Recurring company costs (accountant, director salary, bank service, subscriptions) with their parts within the month (e.g. advance by the 22nd, the rest by the 7th of the next month), taxes (withheld from the gross or on top), bank fee tariff (fixed + %) and next date. Each month they become planned payments (list_planned_payments).',
+    kind: 'read',
+    service: listPlannedExpenses,
+    present: (rows) =>
+      rows.map((r) => ({
+        ...r.expense,
+        categoryName: r.categoryName,
+        personName: r.personName,
+        nextOn: r.nextOn,
+        parts: r.parts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          amount: p.amount,
+          dueDay: p.dueDay,
+          monthOffset: p.monthOffset,
+        })),
+        charges: r.charges.map((c) => ({ ...c.charge, categoryName: c.categoryName })),
+      })),
+  }),
+  tool({
+    name: 'list_payout_charges',
+    title: 'Taxes on payouts to people',
+    description:
+      'Taxes charged on every payout to a person (on top, e.g. 20 % in UAH at the NBU rate of the payout day). Filter by personIds. Each payout then gets a planned payment for the tax.',
+    kind: 'read',
+    service: listPersonCharges,
+    present: (rows) =>
+      rows.map((r) => ({ ...r.charge, categoryName: r.categoryName, personName: r.personName })),
+  }),
+  tool({
+    name: 'list_planned_payments',
+    title: 'Planned payments to make',
+    description:
+      'Payments of planned expenses and taxes on payouts, by due date (from/to YYYY-MM-DD, default last month to the end of the next one; status due|paid|skipped). A charge has parentId = its instalment, or sourceAllocationId = the payout it taxes. gross is the base of the charges; amount is what to pay; feeAmount/feeCurrency the expected bank fee; overdue = due before today. transactions lists the Ledger expenses that paid it.',
+    kind: 'read',
+    service: listPlannedPayments,
+    present: (rows) =>
+      rows.map((r) => ({
+        ...r.payment,
+        categoryName: r.categoryName,
+        personName: r.personName,
+        overdue: r.overdue,
+        transactions: r.transactions.map((t) => ({
+          id: t.transactionId,
+          occurredOn: t.occurredOn,
+          amount: t.amount,
+          currency: t.currency,
+        })),
+      })),
+  }),
+  tool({
+    name: 'upsert_planned_expenses',
+    title: 'Create or update planned expenses',
+    description:
+      'Planned expenses in bulk (max 50), matched by id; only the fields sent change. A new one needs name, categoryId, amount, currency, startsOn (YYYY-MM). frequency monthly|quarterly|yearly (+ anchorMonth), dueDay, endsOn (stop a plan with it), personId (whose cost), counterparty, fee tariff (feeFixed, feePercent, feeCurrency). parts replaces the instalments when sent: [{name, amount (null = the rest), dueDay, monthOffset 0|1}]. charges replaces its taxes when sent: [{name, mode withheld|on_top, ratePercent, categoryId, currency?, counterparty?, startsOn, endsOn?, fee…}]; keep ids of existing ones. Director salary example: amount = monthly gross, parts Advance 5500 day 22 + Rest (null) day 7 monthOffset 1, charges PIT 18 withheld, military levy 5 withheld, ESV 22 on_top, each fee 5 UAH. Unpaid payments of this month on follow the change. All-or-nothing; errors keyed "items.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertPlannedExpenses,
+  }),
+  tool({
+    name: 'upsert_payout_charges',
+    title: 'Set taxes on payouts to a person',
+    description:
+      'Taxes on every payout to a person (max 50), always on top of the payout, matched by id. A new one needs personId, name, ratePercent, categoryId (Taxes), startsOn (YYYY-MM); currency (e.g. UAH: converted at the NBU rate of the payout day), counterparty, endsOn (stop it), fee tariff. Each later payout creates a planned payment for it. All-or-nothing; errors keyed "charges.<index>"; use dryRun first.',
+    kind: 'write',
+    service: upsertPayoutCharges,
+  }),
+  tool({
+    name: 'update_planned_payments',
+    title: 'Mark planned payments paid, skipped or corrected',
+    description:
+      'Up to 100 actions on planned payments (ids from list_planned_payments): pay {transactionIds of expenses already in the Ledger, e.g. statement rows in the same currency; their unlinked money is linked} or {accountId, occurredOn, amount?, feeAmount?, feeAccountId?} to book a new expense; unlink {transactionIds?}; skip {reason} (an instalment skips its unpaid taxes too); unskip; set_amount {amount: for a salary instalment the gross — net and taxes follow — else the amount}; reset_amount. Paid payments are fixed. All-or-nothing; errors keyed "payments.<index>"; use dryRun first.',
+    kind: 'write',
+    service: updatePlannedPayments,
   }),
 ];
 

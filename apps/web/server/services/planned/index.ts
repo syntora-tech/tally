@@ -405,41 +405,44 @@ export const deletePlannedPart = defineService({
  * A charge on a planned expense or on every payout of a person (A-082): withheld charges exist
  * only on planned expenses, since only they have a gross amount.
  */
+export const paymentChargeInput = plannedChargeInput
+  .extend({ plannedExpenseId: optionalId, personId: optionalId })
+  .superRefine((v, issues) => {
+    endsAfterStart(v, issues);
+    if (Boolean(v.plannedExpenseId) === Boolean(v.personId)) {
+      issues.addIssue({ code: 'custom', path: ['personId'], message: 'planned.chargeTarget' });
+    }
+    if (v.personId && v.mode === 'withheld') {
+      issues.addIssue({ code: 'custom', path: ['mode'], message: 'planned.withheldOnPlanned' });
+    }
+  });
+
+export async function savePaymentChargeIn(
+  tx: DbTransaction,
+  today: LocalDate,
+  { id, plannedExpenseId, personId, ...values }: z.output<typeof paymentChargeInput>,
+) {
+  const target = { plannedExpenseId: plannedExpenseId ?? null, personId: personId ?? null };
+  const [row] = id
+    ? await tx
+        .update(paymentCharge)
+        .set({ ...values, ...target })
+        .where(eq(paymentCharge.id, id))
+        .returning({ id: paymentCharge.id })
+    : await tx
+        .insert(paymentCharge)
+        .values({ ...values, ...target })
+        .returning({ id: paymentCharge.id });
+  if (!row) return err(serviceError('not_found', 'planned.chargeNotFound'));
+  if (target.plannedExpenseId) await syncPlannedPayments(tx, today, [target.plannedExpenseId]);
+  return ok(row);
+}
+
 export const savePaymentCharge = defineService({
   name: 'planned.charges.save',
-  input: plannedChargeInput
-    .extend({ plannedExpenseId: optionalId, personId: optionalId })
-    .superRefine((v, issues) => {
-      endsAfterStart(v, issues);
-      if (Boolean(v.plannedExpenseId) === Boolean(v.personId)) {
-        issues.addIssue({ code: 'custom', path: ['personId'], message: 'planned.chargeTarget' });
-      }
-      if (v.personId && v.mode === 'withheld') {
-        issues.addIssue({ code: 'custom', path: ['mode'], message: 'planned.withheldOnPlanned' });
-      }
-    }),
-  handler: async (ctx, { id, plannedExpenseId, personId, ...values }) =>
-    inActorScope(ctx, async (tx) => {
-      const target = {
-        plannedExpenseId: plannedExpenseId ?? null,
-        personId: personId ?? null,
-      };
-      const [row] = id
-        ? await tx
-            .update(paymentCharge)
-            .set({ ...values, ...target })
-            .where(eq(paymentCharge.id, id))
-            .returning({ id: paymentCharge.id })
-        : await tx
-            .insert(paymentCharge)
-            .values({ ...values, ...target })
-            .returning({ id: paymentCharge.id });
-      if (!row) return err(serviceError('not_found', 'planned.chargeNotFound'));
-      if (target.plannedExpenseId) {
-        await syncPlannedPayments(tx, ctx.today, [target.plannedExpenseId]);
-      }
-      return ok(row);
-    }),
+  input: paymentChargeInput,
+  handler: async (ctx, input) =>
+    inActorScope(ctx, (tx) => savePaymentChargeIn(tx, ctx.today, input)),
 });
 
 export const deletePaymentCharge = defineService({
