@@ -21,6 +21,8 @@ import {
 import {
   effectiveVersion,
   payoutDeadline,
+  payoutRest,
+  payoutRestUah,
   payrollTotalUah,
   sum,
   toDecimal,
@@ -29,7 +31,13 @@ import {
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
-import { ensureMonthlyActDraft, issuedMonthlyAct, syncMonthlyActDraft } from '../acts';
+import {
+  ensureMonthlyActDraft,
+  monthlyActsOf,
+  partsOf,
+  splitActForPayment,
+  syncMonthlyActDraft,
+} from '../acts';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError, msg } from '../errors';
@@ -55,10 +63,6 @@ export const listPayroll = defineService({
       const items = await tx
         .select({
           item: payrollItem,
-          // The monthly act of the item: an issued one freezes the rate (A-076).
-          actId: supplierAct.id,
-          actStatus: supplierAct.status,
-          actNumber: supplierAct.number,
           personName: person.fullName,
           payeeName: sql<string | null>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`,
           payeeKind: payee.kind,
@@ -73,19 +77,25 @@ export const listPayroll = defineService({
         .leftJoin(person, eq(person.id, payrollItem.personId))
         .innerJoin(period, eq(period.id, payrollItem.periodId))
         .leftJoin(payee, eq(payee.id, payrollItem.payeeId))
-        .leftJoin(
-          supplierAct,
-          and(
-            eq(supplierAct.payrollItemId, payrollItem.id),
-            eq(supplierAct.type, 'monthly'),
-            ne(supplierAct.status, 'void'),
-          ),
-        )
         .where(periodId ? eq(payrollItem.periodId, periodId) : undefined)
         .orderBy(desc(period.month), asc(payrollItem.kind), asc(person.fullName));
       const itemIds = items.map((i) => i.item.id);
       const cal = await loadCalendar(tx);
-      if (itemIds.length === 0) return { items: [], lines: [], adjustments: [], terms: [], cal };
+      if (itemIds.length === 0) {
+        return { items: [], lines: [], adjustments: [], terms: [], acts: [], cal };
+      }
+      // Monthly acts of the items: one, or one per part when the month is paid in parts (A-083).
+      const acts = await tx
+        .select()
+        .from(supplierAct)
+        .where(
+          and(
+            inArray(supplierAct.payrollItemId, itemIds),
+            eq(supplierAct.type, 'monthly'),
+            ne(supplierAct.status, 'void'),
+          ),
+        )
+        .orderBy(asc(supplierAct.periodFrom));
       const lines = await tx
         .select({
           line: payrollLine,
@@ -122,7 +132,7 @@ export const listPayroll = defineService({
             lines.map((l) => l.line.assignmentId),
           ),
         );
-      return { items, lines, adjustments, terms, cal };
+      return { items, lines, adjustments, terms, acts, cal };
     });
 
     const rows = data.items.map(({ item, ...rest }) => {
@@ -152,6 +162,9 @@ export const listPayroll = defineService({
           a.personId === item.personId &&
           a.payoutMethod === item.payoutMethod,
       );
+      const acts = data.acts.filter((a) => a.payrollItemId === item.id);
+      // The act that follows the rest of the payout; an issued one freezes the rate (A-076).
+      const restAct = acts.find((a) => a.amountUsd === null) ?? acts.at(-1);
       const currency = item.payoutMethod === 'fiat' ? 'UAH' : 'USD';
       const total = item.payoutMethod === 'fiat' ? item.totalUah : item.totalUsd;
       const remaining = total === null ? null : toDecimal(total).minus(item.paidAmount).toFixed(2);
@@ -160,6 +173,20 @@ export const listPayroll = defineService({
       return {
         item,
         ...rest,
+        actId: restAct?.id ?? null,
+        actStatus: restAct?.status ?? null,
+        actNumber: restAct?.number ?? null,
+        acts: acts.map((a) => ({
+          id: a.id,
+          number: a.number,
+          status: a.status,
+          periodFrom: a.periodFrom,
+          periodTo: a.periodTo,
+          actDate: a.actDate,
+          amountUah: a.amountUah,
+          amountUsd: a.amountUsd,
+          fxRate: a.fxRate,
+        })),
         lines,
         adjustments,
         currency,
@@ -216,10 +243,13 @@ async function applyRate(
   if (item.payoutMethod !== 'fiat') {
     return err(serviceError('validation_error', 'payroll.rateUahOnly'));
   }
-  if (!toDecimal(item.paidAmount).isZero()) {
+  // Paid parts keep their own rates (A-083); a new rate is only for the rest of the month.
+  const acts = await monthlyActsOf(tx, item.id);
+  const parts = partsOf(acts);
+  if (toDecimal(item.paidAmount).gt(sum(parts.map((p) => p.uah)))) {
     return err(serviceError('conflict', 'payroll.rateLocked'));
   }
-  const issued = await issuedMonthlyAct(tx, [item.id]);
+  const issued = acts.find((a) => a.amountUsd === null && a.status === 'issued');
   if (issued) {
     return err(
       serviceError('conflict', msg('payroll.rateActIssued', { number: issued.number ?? '' })),
@@ -242,7 +272,13 @@ async function applyRate(
           ),
         )
     : [];
-  const totalUah = payrollTotalUah(lines, adjustments, input.rate);
+  const totalUah = parts.length
+    ? ok(
+        sum(parts.map((p) => p.uah)).plus(
+          payoutRestUah(payoutRest(lines, adjustments, parts), input.rate) ?? 0,
+        ),
+      )
+    : payrollTotalUah(lines, adjustments, input.rate);
   if (totalUah.isErr()) {
     if (totalUah.error.code === 'rate_required') {
       return err(serviceError('validation_error', 'payroll.rateFirst'));
@@ -287,6 +323,9 @@ export const payItemInput = z
     /** Bank fee of a new payout (the payee's tariff is suggested, A-082). */
     feeAmount: z.preprocess(emptyToUndefined, decimalString.optional()),
     feeAccountId: z.preprocess(emptyToUndefined, z.uuid().optional()),
+    /** Act period of a part payment; by default from the first uncovered day to the payout day (A-083). */
+    actFrom: z.preprocess(emptyToUndefined, localDateString.optional()),
+    actTo: z.preprocess(emptyToUndefined, localDateString.optional()),
   })
   .superRefine((v, issues) => {
     if (v.transactionId) return;
@@ -478,7 +517,30 @@ export const payItem = defineService({
           occurredOn: paidOn,
         });
       }
-      const act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
+      let act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
+      if (act) {
+        const split = await splitActForPayment(tx, {
+          itemId: item.item.id,
+          paidUah: input.amount,
+          paidOn,
+          lines,
+          adjustments: item.item.personId
+            ? await tx
+                .select({ amount: adjustment.amount, currency: adjustment.currency })
+                .from(adjustment)
+                .where(
+                  and(
+                    eq(adjustment.periodId, item.item.periodId),
+                    eq(adjustment.personId, item.item.personId),
+                    eq(adjustment.payoutMethod, item.item.payoutMethod),
+                  ),
+                )
+            : [],
+          period: input.actFrom && input.actTo ? { from: input.actFrom, to: input.actTo } : null,
+        });
+        if (split.isErr()) return err(split.error);
+        if (split.value) act = { id: split.value.partActId };
+      }
       return ok({ id: item.item.id, transactionId, actId: act?.id ?? null });
     }),
 });

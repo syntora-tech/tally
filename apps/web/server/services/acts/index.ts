@@ -1,15 +1,33 @@
 import type { DbTransaction } from '@tally/db';
-import { company, contract, payee, payrollItem, period, supplierAct } from '@tally/db/schema';
 import {
+  company,
+  contract,
+  payee,
+  payrollItem,
+  period,
+  supplierAct,
+  type SupplierAct,
+} from '@tally/db/schema';
+import {
+  addDays,
   addMonths,
   defaultActDate,
+  Decimal,
   endOfMonth,
+  nextPartPeriod,
+  payoutPartOf,
+  payoutRest,
   startOfMonth,
   sum,
+  toDecimal,
   type ActDateRule,
+  type AdjustmentInput,
   type LocalDate,
+  type PayLineInput,
+  type PayoutPart,
+  type WorkCalendar,
 } from '@tally/domain';
-import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { enqueueJob, type NewJob } from '../../jobs/queue';
@@ -80,24 +98,183 @@ export async function ensureMonthlyActDraft(tx: DbTransaction, itemId: string) {
   return act ?? null;
 }
 
-/** A monthly act still in draft follows its payroll item's total_uah (A-076). */
+/** Non-void monthly acts of a payout by period: one, or one per part (A-083). */
+export function monthlyActsOf(tx: DbTransaction, itemId: string) {
+  return tx
+    .select()
+    .from(supplierAct)
+    .where(
+      and(
+        eq(supplierAct.payrollItemId, itemId),
+        eq(supplierAct.type, 'monthly'),
+        ne(supplierAct.status, 'void'),
+      ),
+    )
+    .orderBy(asc(supplierAct.periodFrom));
+}
+
+/** Parts of a payout paid on their own (acts with a USD share), as the domain sees them. */
+export const partsOf = (acts: readonly SupplierAct[]): PayoutPart[] =>
+  acts
+    .filter((a) => a.amountUsd !== null)
+    .map((a) => ({ usd: a.amountUsd ?? '0', uah: a.amountUah, rate: a.fxRate }));
+
+/**
+ * The act of the rest still in draft follows the payout: total_uah less the parts already split
+ * off (A-076, A-083). With a single act that is the whole total.
+ */
 export async function syncMonthlyActDraft(tx: DbTransaction, itemId: string) {
   const [item] = await tx
     .select({ totalUah: payrollItem.totalUah })
     .from(payrollItem)
     .where(eq(payrollItem.id, itemId));
   if (!item?.totalUah) return;
+  const acts = await monthlyActsOf(tx, itemId);
+  const parts = sum(acts.filter((a) => a.amountUsd !== null).map((a) => a.amountUah));
+  const rest = Decimal.max(toDecimal(item.totalUah).minus(parts), 0).toFixed(2);
   await tx
     .update(supplierAct)
-    .set({ amountUah: item.totalUah })
+    .set({ amountUah: rest })
     .where(
       and(
         eq(supplierAct.payrollItemId, itemId),
         eq(supplierAct.type, 'monthly'),
         eq(supplierAct.status, 'draft'),
+        isNull(supplierAct.amountUsd),
       ),
     );
 }
+
+/** The act date of a part: its last working day, as for a whole month (D9). */
+function partActDate(cal: WorkCalendar, to: LocalDate, from: LocalDate) {
+  const day = cal.previousWorkingDayOnOrBefore(to);
+  return day < from ? to : day;
+}
+
+/**
+ * A payment of part of a month (A-083) splits the act of the rest: the paid part keeps the act
+ * with its USD share, rate and period up to the payout day; a new draft takes the rest of the
+ * month. A payment of the whole rest leaves the act as it is. Nothing happens once the act of the
+ * rest is issued — it was signed for the whole month.
+ */
+export async function splitActForPayment(
+  tx: DbTransaction,
+  input: {
+    itemId: string;
+    paidUah: string;
+    paidOn: LocalDate;
+    lines: readonly PayLineInput[];
+    adjustments: readonly AdjustmentInput[];
+    period?: { from: LocalDate; to: LocalDate } | null;
+  },
+) {
+  const [item] = await tx
+    .select({ item: payrollItem, month: period.month })
+    .from(payrollItem)
+    .innerJoin(period, eq(period.id, payrollItem.periodId))
+    .where(eq(payrollItem.id, input.itemId));
+  if (!item) return ok(null);
+  const acts = await monthlyActsOf(tx, input.itemId);
+  const restAct = acts.find((a) => a.amountUsd === null);
+  if (restAct?.status !== 'draft') return ok(null);
+  const parts = acts.filter((a) => a.amountUsd !== null);
+  const rest = payoutRest(input.lines, input.adjustments, partsOf(acts));
+  const part = payoutPartOf(rest, input.paidUah, item.item.payoutFxRate);
+  if (part.coversRest) return ok(null);
+  const month = item.month as LocalDate;
+  const range =
+    input.period ??
+    nextPartPeriod(
+      month,
+      parts.map((a) => ({
+        from: (a.periodFrom ?? month) as LocalDate,
+        to: (a.periodTo ?? month) as LocalDate,
+      })),
+      input.paidOn,
+      false,
+    );
+  const end = endOfMonth(month);
+  if (!range || range.to >= end) {
+    return err(serviceError('validation_error', 'payroll.noDaysForRest'));
+  }
+  const cal = await loadCalendar(tx);
+  await tx
+    .update(supplierAct)
+    .set({
+      amountUsd: part.usd.toFixed(8),
+      amountUah: part.uah.toFixed(2),
+      fxRate: item.item.payoutFxRate,
+      fxSource: item.item.payoutFxRate ? item.item.fxSource : null,
+      periodFrom: range.from,
+      periodTo: range.to,
+      actDate: partActDate(cal, range.to, range.from),
+    })
+    .where(eq(supplierAct.id, restAct.id));
+  const [next] = await tx
+    .insert(supplierAct)
+    .values({
+      contractId: restAct.contractId,
+      payeeId: restAct.payeeId,
+      payrollItemId: input.itemId,
+      type: 'monthly',
+      actDate: restAct.actDate,
+      periodFrom: addDays(range.to, 1),
+      periodTo: end,
+      amountUah: '0',
+    })
+    .returning({ id: supplierAct.id });
+  await syncMonthlyActDraft(tx, input.itemId);
+  return ok({ partActId: restAct.id, restActId: next?.id ?? null });
+}
+
+/**
+ * Joins two neighbouring draft acts of one payout into one act and one period (A-083). With the
+ * act of the rest it becomes the rest; two parts add up, at their average rate.
+ */
+export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: string) {
+  const rows = await tx
+    .select()
+    .from(supplierAct)
+    .where(inArray(supplierAct.id, [firstId, secondId]))
+    .for('update');
+  const [a, b] = rows.sort((x, y) => (x.periodFrom ?? '').localeCompare(y.periodFrom ?? ''));
+  if (!a || !b || a.id === b.id) return err(serviceError('not_found', 'acts.notFound'));
+  if (
+    a.payrollItemId === null ||
+    a.payrollItemId !== b.payrollItemId ||
+    a.status !== 'draft' ||
+    b.status !== 'draft' ||
+    !a.periodTo ||
+    !b.periodFrom ||
+    addDays(a.periodTo as LocalDate, 1) !== b.periodFrom
+  ) {
+    return err(serviceError('validation_error', 'acts.mergeAdjacentDrafts'));
+  }
+  const toRest = a.amountUsd === null || b.amountUsd === null;
+  const usd = toDecimal(a.amountUsd ?? '0').plus(b.amountUsd ?? '0');
+  const uah = toDecimal(a.amountUah).plus(b.amountUah);
+  await tx.delete(supplierAct).where(eq(supplierAct.id, b.id));
+  await tx
+    .update(supplierAct)
+    .set({
+      periodTo: b.periodTo,
+      actDate: b.actDate,
+      amountUah: uah.toFixed(2),
+      amountUsd: toRest ? null : usd.toFixed(8),
+      fxRate: toRest || usd.isZero() ? null : uah.div(usd).toFixed(6),
+      fxSource: toRest || usd.isZero() ? null : 'manual',
+    })
+    .where(eq(supplierAct.id, a.id));
+  await syncMonthlyActDraft(tx, a.payrollItemId);
+  return ok({ id: a.id });
+}
+
+export const mergeActs = defineService({
+  name: 'acts.merge',
+  input: z.object({ firstId: z.uuid(), secondId: z.uuid() }),
+  handler: async (ctx, { firstId, secondId }) =>
+    inActorScope(ctx, (tx) => mergeActsIn(tx, firstId, secondId)),
+});
 
 /** The issued (not void) monthly act of a payroll item, if any: it freezes the item's money. */
 export async function issuedMonthlyAct(tx: DbTransaction, itemIds: string[]) {

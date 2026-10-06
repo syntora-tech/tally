@@ -375,7 +375,8 @@
       "alreadyIssued": "The act is already issued",
       "noSequence": "The contract has no act numbering (Settings)",
       "voidState": "Only an issued act can be voided",
-      "linkIssuedOnly": "A link is added only to an issued act"
+      "linkIssuedOnly": "A link is added only to an issued act",
+      "mergeAdjacentDrafts": "Only two neighbouring draft acts of one payout can be merged"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -424,7 +425,8 @@
       "noCategory": "No category {category}",
       "transactionMismatch": "This transaction is not a payout expense in the payout currency",
       "chooseUahExpense": "Choose an expense from a UAH account",
-      "chooseUsdExpense": "Choose an expense from a USD/USDT/USDC account"
+      "chooseUsdExpense": "Choose an expense from a USD/USDT/USDC account",
+      "noDaysForRest": "No days of the month are left for the rest of the payout: shorten this act period"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
