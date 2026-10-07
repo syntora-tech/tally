@@ -48,7 +48,8 @@ import {
   upsertPlannedExpenses,
 } from '../services/planned/agent';
 import { listPlannedPayments } from '../services/planned/payments';
-import { mergePayoutActs } from '../services/acts';
+import { getAct, mergePayoutActs } from '../services/acts';
+import { deleteDraftAct } from '../services/acts/delete';
 import { listPayroll } from '../services/payroll';
 
 export type ToolKind = 'read' | 'write';
@@ -218,6 +219,23 @@ function annexSummary(r: AnnexRow) {
  * (paying stays in the UI).
  */
 export const TOOLS: readonly ToolDef[] = [
+  tool({
+    name: 'get_act',
+    title: 'Read a FOP act',
+    kind: 'read',
+    description:
+      'One FOP act by id: status, number, contract, payee, amount, service period, payout links and file references. Read before deleting a mistaken draft.',
+    service: getAct,
+  }),
+  tool({
+    name: 'delete_draft_act',
+    title: 'Delete a mistaken draft act',
+    kind: 'write',
+    destructive: true,
+    description:
+      'Owner only, on an explicit request to delete this act. Permanently deletes one standalone unnumbered draft, retaining the audited old row and reason. Refuses issued or signed acts, files, registry-document links, payroll and reimbursement links. Read get_act and identify the exact counterparty and period first. Always run dryRun first and show what will be deleted. Issued acts must be voided in the UI; their numbers remain reserved.',
+    service: deleteDraftAct,
+  }),
   tool({
     name: 'list_invoices',
     title: 'List invoices',
