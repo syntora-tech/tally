@@ -491,6 +491,20 @@
       "when": 1791387993311,
       "tag": "20261007154633_legacy_act_numbers",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791388051899,
+      "tag": "20261007154731_act_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791388077221,
+      "tag": "20261007154757_act_assignments_invariants",
+      "breakpoints": true
     }
   ]
 }

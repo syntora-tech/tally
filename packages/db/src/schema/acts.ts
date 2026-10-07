@@ -58,6 +58,11 @@ export const supplierAct = pgTable(
      */
     rateLocked: boolean().notNull().default(false),
     /**
+     * Assignments (the person's work) whose pay goes into this act (A-089), chosen before or after
+     * the close; their payroll lines follow at the close. Null on the act of the rest.
+     */
+    assignmentIds: uuid().array(),
+    /**
      * USD→UAH rate approved for a monthly act made before its period closed (A-076); the payout
      * takes it at close. Null for acts made from a payout, which carries the rate itself.
      */

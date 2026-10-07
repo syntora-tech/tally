@@ -1,0 +1,1 @@
+ALTER TABLE "supplier_act" ADD COLUMN "assignment_ids" uuid[];
