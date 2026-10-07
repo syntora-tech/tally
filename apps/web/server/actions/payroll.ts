@@ -1,5 +1,6 @@
 'use server';
 
+import { addDays, parseLocalDate } from '@tally/domain';
 import { localizeForUser } from '../i18n';
 import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
@@ -74,12 +75,24 @@ export async function splitActAction(
   formData: FormData,
 ): Promise<PayrollFormState> {
   const ctx = await requireUserContext();
+  // The form gives one boundary day and the side of it the new act takes.
+  const field = (k: string) => {
+    const v = formData.get(k);
+    return typeof v === 'string' ? v : '';
+  };
+  const boundary = parseLocalDate(field('boundary'));
+  const first = field('side') !== 'second';
+  const range = boundary.isOk()
+    ? first
+      ? { periodFrom: field('actFrom'), periodTo: boundary.value }
+      : { periodFrom: addDays(boundary.value, 1), periodTo: field('actTo') }
+    : { periodFrom: '', periodTo: '' };
   const result = await splitActByActivity.run(ctx, {
-    actId: formData.get('actId'),
+    actId: field('actId'),
     lineIds: formData.getAll('lineIds'),
     adjustmentIds: formData.getAll('adjustmentIds'),
-    periodFrom: formData.get('periodFrom'),
-    periodTo: formData.get('periodTo'),
+    amountUsd: field('amountUsd'),
+    ...range,
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');

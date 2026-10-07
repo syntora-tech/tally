@@ -37,7 +37,7 @@ import { enqueueJob, type NewJob } from '../../jobs/queue';
 import { inActorScopeAtomic } from '../atomic';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { msg, serviceError } from '../errors';
 import {
   decimalString,
   httpUrl,
@@ -175,8 +175,11 @@ export async function syncMonthlyActDraft(tx: DbTransaction, itemId: string) {
   for (const act of acts) {
     if (act.status !== 'draft' || act.rateLocked || act.amountUsd === null) continue;
     const own = [...data.lines, ...data.adjustments].filter((x) => x.supplierActId === act.id);
-    if (own.length === 0) continue;
-    const usd = sum(own.filter((x) => x.currency !== 'UAH').map((x) => x.amount));
+    // An act split off by amount has no activities of its own: its USD share stays as chosen.
+    const usd =
+      own.length === 0
+        ? toDecimal(act.amountUsd)
+        : sum(own.filter((x) => x.currency !== 'UAH').map((x) => x.amount));
     const uah = sum(own.filter((x) => x.currency === 'UAH').map((x) => x.amount));
     const rate = usd.isZero() ? null : item.payoutFxRate;
     const amountUah = rate === null ? uah : roundHalfUp(usd.times(rate)).plus(uah);
@@ -314,6 +317,15 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
   }
   const toRest = a.amountUsd === null || b.amountUsd === null;
   const locked = a.rateLocked || b.rateLocked;
+  if (!toRest && !locked) {
+    // An act of activities follows them alone, so it cannot absorb an act split off by amount.
+    const data = await activitiesOf(tx, a.payrollItemId);
+    const owns = (id: string) =>
+      [...(data?.lines ?? []), ...(data?.adjustments ?? [])].some((x) => x.supplierActId === id);
+    if (owns(a.id) !== owns(b.id)) {
+      return err(serviceError('validation_error', 'acts.mergeAmountWithActivities'));
+    }
+  }
   const usd = toDecimal(a.amountUsd ?? '0').plus(b.amountUsd ?? '0');
   const uah = toDecimal(a.amountUah).plus(b.amountUah);
   // Activities move first: deleting the second act would send them to the rest (A-085).
@@ -345,6 +357,14 @@ export const splitActInput = z.object({
   /** Lines (activities) and adjustments that go into the new act. */
   lineIds: z.array(z.uuid()).default([]),
   adjustmentIds: z.array(z.uuid()).default([]),
+  /** Or a USD share of this act for the new one, e.g. with a single activity (A-086). */
+  amountUsd: z.preprocess(
+    (v) => (typeof v === 'string' ? v.replace(',', '.').trim() || undefined : v),
+    decimalString
+      .refine((v) => toDecimal(v).gt(0), 'field.positive')
+      .optional()
+      .describe('USD share for the new act instead of activities'),
+  ),
   /** The new act's period: at the start or the end of the act being split. */
   periodFrom: localDateString,
   periodTo: localDateString,
@@ -377,11 +397,29 @@ export async function splitActByActivityIn(
     isRest ? x.supplierActId === null : x.supplierActId === act.id;
   const members = [...data.lines, ...data.adjustments].filter(inAct);
   const chosen = new Set([...input.lineIds, ...input.adjustmentIds]);
-  if (chosen.size === 0 || [...chosen].some((id) => !members.some((m) => m.id === id))) {
-    return err(serviceError('validation_error', 'acts.splitChooseActivities'));
+  const byAmount = input.amountUsd !== undefined;
+  if (byAmount && chosen.size > 0) {
+    return err(serviceError('validation_error', 'acts.splitAmountOrActivities'));
   }
-  if (members.every((m) => chosen.has(m.id))) {
-    return err(serviceError('validation_error', 'acts.splitKeepSome'));
+  if (byAmount) {
+    if (!isRest && members.length > 0) {
+      return err(serviceError('validation_error', 'acts.splitAmountFromActivities'));
+    }
+    const acts = await monthlyActsOf(tx, act.payrollItemId);
+    const available = isRest
+      ? payoutRest(data.lines, data.adjustments, partsOf(acts)).usd
+      : toDecimal(act.amountUsd ?? '0');
+    if (toDecimal(input.amountUsd ?? '0').gte(available)) {
+      const tooBig = msg('acts.splitAmountTooBig', { max: available.toFixed(2) });
+      return err(serviceError('validation_error', tooBig, { amountUsd: [tooBig] }));
+    }
+  } else {
+    if (chosen.size === 0 || [...chosen].some((id) => !members.some((m) => m.id === id))) {
+      return err(serviceError('validation_error', 'acts.splitChooseActivities'));
+    }
+    if (members.every((m) => chosen.has(m.id))) {
+      return err(serviceError('validation_error', 'acts.splitKeepSome'));
+    }
   }
   const from = (act.periodFrom ?? input.periodFrom) as LocalDate;
   const to = (act.periodTo ?? input.periodTo) as LocalDate;
@@ -416,10 +454,20 @@ export async function splitActByActivityIn(
       periodFrom: input.periodFrom,
       periodTo: input.periodTo,
       amountUah: '0',
-      amountUsd: '0',
+      amountUsd: toDecimal(input.amountUsd ?? '0').toFixed(8),
     })
     .returning({ id: supplierAct.id });
   if (!created) return err(serviceError('internal_error', 'general.createFailed'));
+  if (byAmount && !isRest) {
+    await tx
+      .update(supplierAct)
+      .set({
+        amountUsd: toDecimal(act.amountUsd ?? '0')
+          .minus(input.amountUsd ?? '0')
+          .toFixed(8),
+      })
+      .where(eq(supplierAct.id, act.id));
+  }
   if (input.lineIds.length) {
     await tx
       .update(payrollLine)

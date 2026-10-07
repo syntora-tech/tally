@@ -21,6 +21,7 @@ import {
 import {
   addAdjustmentAction,
   closePeriodAction,
+  deletePeriodAction,
   draftEarlyActAction,
   draftEarlyInvoiceAction,
   removeAdjustmentAction,
@@ -240,6 +241,31 @@ export function CloseForm({ periodId }: { periodId: string }) {
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? t('closing') : t('close')}
       </Button>
+    </form>
+  );
+}
+
+/** Deletes an open period opened by mistake; the service refuses one with anything in it. */
+export function DeletePeriodForm({ periodId }: { periodId: string }) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    deletePeriodAction,
+    null,
+  );
+  const t = useTranslations('periodForms');
+  const error = state && !state.ok ? state.error : null;
+  return (
+    <form
+      action={action}
+      className="flex flex-col items-end gap-2"
+      onSubmit={(e) => {
+        if (!confirm(t('deleteConfirm'))) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="periodId" value={periodId} />
+      <Button type="submit" variant="ghost" className="text-destructive" disabled={pending}>
+        {t('delete')}
+      </Button>
+      <ErrorAlert message={error?.message} />
     </form>
   );
 }

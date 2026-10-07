@@ -9,6 +9,7 @@ import { requireUserContext } from '../request-context';
 import {
   addAdjustment,
   closePeriod,
+  deletePeriod,
   draftEarlyAct,
   draftEarlyInvoice,
   importHours,
@@ -32,6 +33,17 @@ export async function openPeriodAction(
   const result = await openPeriod.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   redirect(`/periods/${result.value.id}`);
+}
+
+export async function deletePeriodAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const result = await deletePeriod.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/periods');
+  redirect('/periods');
 }
 
 export async function updatePeriodAction(

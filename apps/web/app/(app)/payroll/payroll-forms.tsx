@@ -1,6 +1,14 @@
 'use client';
 
-import { parseDecimal, payrollTotalUah, transferFee, type TransferFee } from '@tally/domain';
+import {
+  addDays,
+  diffDays,
+  parseDecimal,
+  payrollTotalUah,
+  transferFee,
+  type LocalDate,
+  type TransferFee,
+} from '@tally/domain';
 import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -438,85 +446,113 @@ export function MergeActsButton({ firstId, secondId }: { firstId: string; second
 }
 
 /**
- * Splits a draft act by activity (A-085): tick the lines and adjustments for a new act and its
- * period at the start or the end of this one; the amounts follow from the activities.
+ * Splits a draft act in two at a chosen day (A-085, A-086): what goes into the new act is either
+ * ticked activities or a USD share; the new act takes the days before or after the boundary.
  */
 export function SplitActForm({
   actId,
   periodFrom,
   periodTo,
   activities,
+  byAmount,
 }: {
   actId: string;
   periodFrom: string;
   periodTo: string;
   activities: { id: string; kind: 'line' | 'adjustment'; label: string }[];
+  byAmount: boolean;
 }) {
   const [state, action, pending] = useActionState<PayrollFormState, FormData>(splitActAction, null);
   const t = useTranslations('payDialog');
   const tc = useTranslations('common');
+  const fmt = useFormat();
   const error = useResult(state, t('split'));
-  const [open, setOpen] = useState(false);
+  // Open since a given result; a later successful split closes the form.
+  const [openedAt, setOpenedAt] = useState<{ state: PayrollFormState } | null>(null);
+  const open = openedAt !== null && !(state !== openedAt.state && state?.ok);
+  const [boundary, setBoundary] = useState<string>(() => midDay(periodFrom, periodTo));
+  const byActivity = activities.length > 1;
   if (!open) {
     return (
       <Button
         size="sm"
         variant="ghost"
         onClick={() => {
-          setOpen(true);
+          setOpenedAt({ state });
         }}
       >
-        {t('splitByActivity')}
+        {t('splitAct')}
       </Button>
     );
   }
+  const after = boundary ? nextDay(boundary) : '';
   return (
     <form action={action} className="flex w-full flex-col gap-3 rounded-md border p-3">
       <input type="hidden" name="actId" value={actId} />
+      <input type="hidden" name="actFrom" value={periodFrom} />
+      <input type="hidden" name="actTo" value={periodTo} />
       <p className="text-xs text-muted-foreground">{t('splitHint')}</p>
-      <fieldset className="flex flex-col gap-1">
-        {activities.map((a) => (
-          <label key={a.id} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name={a.kind === 'line' ? 'lineIds' : 'adjustmentIds'}
-              value={a.id}
-            />
-            {a.label}
-          </label>
-        ))}
-      </fieldset>
       <div className="flex flex-wrap items-end gap-3">
         <FormField
-          label={t('actFrom')}
-          htmlFor={`split-from-${actId}`}
-          error={error?.fieldErrors?.periodFrom}
+          label={t('splitBoundary')}
+          htmlFor={`split-boundary-${actId}`}
+          error={error?.fieldErrors?.periodTo ?? error?.fieldErrors?.periodFrom}
         >
           <Input
-            id={`split-from-${actId}`}
-            name="periodFrom"
+            id={`split-boundary-${actId}`}
+            name="boundary"
             type="date"
-            defaultValue={periodFrom}
+            value={boundary}
             min={periodFrom}
-            max={periodTo}
+            max={prevDay(periodTo)}
+            onChange={(e) => {
+              setBoundary(e.target.value);
+            }}
             className="w-40"
           />
         </FormField>
-        <FormField
-          label={t('actTo')}
-          htmlFor={`split-to-${actId}`}
-          error={error?.fieldErrors?.periodTo}
-        >
-          <Input
-            id={`split-to-${actId}`}
-            name="periodTo"
-            type="date"
-            min={periodFrom}
-            max={periodTo}
-            className="w-40"
-          />
-        </FormField>
+        <fieldset className="flex flex-col gap-1 text-sm">
+          <legend className="mb-1 text-xs text-muted-foreground">{t('splitSide')}</legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="side" value="first" defaultChecked />
+            {boundary ? `${fmt.date(periodFrom)}–${fmt.date(boundary)}` : t('splitFirst')}
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="side" value="second" />
+            {after ? `${fmt.date(after)}–${fmt.date(periodTo)}` : t('splitSecond')}
+          </label>
+        </fieldset>
       </div>
+      {byActivity && (
+        <fieldset className="flex flex-col gap-1">
+          <legend className="mb-1 text-xs text-muted-foreground">{t('splitActivities')}</legend>
+          {activities.map((a) => (
+            <label key={a.id} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name={a.kind === 'line' ? 'lineIds' : 'adjustmentIds'}
+                value={a.id}
+              />
+              {a.label}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {byAmount && (
+        <FormField
+          label={byActivity ? t('splitOrAmount') : t('splitAmount')}
+          htmlFor={`split-amount-${actId}`}
+          error={error?.fieldErrors?.amountUsd}
+        >
+          <Input
+            id={`split-amount-${actId}`}
+            name="amountUsd"
+            inputMode="decimal"
+            placeholder="1000"
+            className="w-40"
+          />
+        </FormField>
+      )}
       {error && !error.fieldErrors && <p className="text-sm text-destructive">{error.message}</p>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={pending}>
@@ -527,7 +563,7 @@ export function SplitActForm({
           size="sm"
           variant="ghost"
           onClick={() => {
-            setOpen(false);
+            setOpenedAt(null);
           }}
         >
           {tc('cancel')}
@@ -536,3 +572,10 @@ export function SplitActForm({
     </form>
   );
 }
+
+const nextDay = (day: string) => addDays(day as LocalDate, 1);
+const prevDay = (day: string) => addDays(day as LocalDate, -1);
+
+/** The middle of a period, e.g. the 15th of a whole month. */
+const midDay = (from: string, to: string) =>
+  addDays(from as LocalDate, Math.floor(diffDays(from as LocalDate, to as LocalDate) / 2));

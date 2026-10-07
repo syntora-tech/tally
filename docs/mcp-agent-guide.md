@@ -411,7 +411,11 @@ Paid payments are fixed. A part or a tax with paid payments cannot be removed �
 
 ### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`
 
-Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged. A month can also be split by activity (A-085): `split_payout_act` with the `lineIds`/`adjustmentIds` of one act (from `get_payroll_queue`) and the new act's period at its start or end; amounts follow from the activities, nothing is typed in.
+Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged. A month can also be split by activity (A-085): `split_payout_act` with the `lineIds`/`adjustmentIds` of one act (from `get_payroll_queue`) and the new act's period at its start or end; amounts follow from the activities, nothing is typed in. With a single activity, pass `amountUsd` instead (A-086): e.g. 4 000 of a 5 000 $ line for 01–16 and the rest for 17–30; it must be less than the USD left in the act, and its UAH follows the payout rate until it is paid.
+
+### 8.12 Periods — `delete_period`
+
+A month-end period opened by mistake is deleted with `delete_period` by `month` (YYYY-MM-01) or `periodId`, `dryRun` first. Only an open period with nothing in it (no hours, adjustments, invoices or payroll) can go; anything else is refused.
 
 ## 9. Report to the owner
 

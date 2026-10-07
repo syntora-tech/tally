@@ -284,7 +284,10 @@
       "payHoursWithoutHours": "Person hours need the client hours of that row too",
       "noHours": "No hours to save",
       "chooseCsv": "Choose a CSV file",
-      "rateCurrency": "The rate currency of {person} ({rateCurrency}) does not match the currency of contract {contract} ({contractCurrency})"
+      "rateCurrency": "The rate currency of {person} ({rateCurrency}) does not match the currency of contract {contract} ({contractCurrency})",
+      "deleteClosed": "Only an open period can be deleted",
+      "deleteNotEmpty": "The period already has hours, adjustments, invoices or payouts — it cannot be deleted",
+      "deleteWhich": "Give either the period id or its month"
     },
     "ledger": {
       "currencyLocked": "The currency of an account with postings cannot change",
@@ -381,7 +384,11 @@
       "splitDraftOnly": "Only an unpaid draft act can be split",
       "splitChooseActivities": "Choose activities of this act for the new one",
       "splitKeepSome": "Leave at least one activity in this act",
-      "splitAtEdge": "The new act's period must start or end with this act's period and leave it some days"
+      "splitAtEdge": "The new act's period must start or end with this act's period and leave it some days",
+      "splitAmountOrActivities": "Choose either activities or a USD amount, not both",
+      "splitAmountFromActivities": "An act of activities is split by activity, not by amount",
+      "splitAmountTooBig": "The new act must leave something in this one: at most {max} USD, less than that",
+      "mergeAmountWithActivities": "An act of activities cannot be merged with an act split off by amount; merge them into the rest instead"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -1395,7 +1402,9 @@
     "currency": "Currency",
     "payout": "Payout",
     "reason": "Reason",
-    "adjustmentRemoved": "Adjustment removed"
+    "adjustmentRemoved": "Adjustment removed",
+    "delete": "Delete period",
+    "deleteConfirm": "Delete this empty period?"
   },
   "invoices": {
     "title": "Invoices",
@@ -1594,11 +1603,18 @@
     "actPeriodHint": "For a part of the month. Empty: from the first day without an act to the payout day; paying the whole rest keeps the act to the month's end.",
     "partOf": "part {usd} at {rate}",
     "split": "Act split",
-    "splitByActivity": "Split by activity",
-    "splitHint": "Tick what goes into a new act and its period at the start or the end of this one; the rest stays here. Amounts follow from the activities.",
+    "splitHint": "Choose the boundary day and which side of it the new act takes, then what goes into it: activities or a USD share. The rest stays in this act; amounts in UAH follow at the payout rate.",
     "splitSubmit": "Split",
     "payAct": "Act paid",
-    "payActRest": "The rest of the month"
+    "payActRest": "The rest of the month",
+    "splitAct": "Split act",
+    "splitBoundary": "First act up to",
+    "splitSide": "New act covers",
+    "splitFirst": "Days up to the boundary",
+    "splitSecond": "Days after the boundary",
+    "splitActivities": "Activities for the new act",
+    "splitAmount": "USD for the new act",
+    "splitOrAmount": "Or USD for the new act"
   },
   "acts": {
     "back": "← Payroll",

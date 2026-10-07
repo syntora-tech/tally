@@ -102,6 +102,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     ];
   };
 
+  // A USD share can go into a new act from the rest or from an act split off by amount (A-086).
+  const splitsByAmount = (i: (typeof items)[number], a: (typeof items)[number]['acts'][number]) =>
+    !toDecimal(i.item.totalUsd).isZero() && (a.isRest || activitiesIn(i, a).length === 0);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -239,12 +243,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                 a.periodFrom &&
                                 a.periodTo &&
                                 a.periodFrom < a.periodTo &&
-                                activitiesIn(i, a).length > 1 && (
+                                (activitiesIn(i, a).length > 1 || splitsByAmount(i, a)) && (
                                   <SplitActForm
                                     actId={a.id}
                                     periodFrom={a.periodFrom}
                                     periodTo={a.periodTo}
                                     activities={activitiesIn(i, a)}
+                                    byAmount={splitsByAmount(i, a)}
                                   />
                                 )}
                             </li>

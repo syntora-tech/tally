@@ -26,6 +26,7 @@ import {
   HoursForm,
   ParamsForm,
   RemoveAdjustmentButton,
+  DeletePeriodForm,
   ReopenForm,
 } from './period-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
@@ -68,6 +69,12 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
   const { period: p, assignments, preview, plan, adjustments, payroll, invoices } = result.value;
   const notes = new Map(assignments.map((a) => [a.assignmentId, a.note]));
   const closed = p.status === 'closed';
+  const isEmpty =
+    !closed &&
+    assignments.every((a) => a.hours === null) &&
+    adjustments.length === 0 &&
+    invoices.length === 0 &&
+    payroll.length === 0;
   const [
     t,
     tp,
@@ -103,9 +110,12 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
             )}
           </p>
         </div>
-        <Button variant="outline" render={<a href={`/api/periods/${p.id}/hours`} />}>
-          {t('hoursTemplate')}
-        </Button>
+        <div className="flex items-start gap-2">
+          {isEmpty && <DeletePeriodForm periodId={p.id} />}
+          <Button variant="outline" render={<a href={`/api/periods/${p.id}/hours`} />}>
+            {t('hoursTemplate')}
+          </Button>
+        </div>
       </div>
 
       <Step n={1} title={t('step1')} description={t('step1Description')}>

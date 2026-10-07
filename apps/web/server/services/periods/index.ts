@@ -13,6 +13,7 @@ import { PAYOUT_METHODS } from '../assignments/schema';
 import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
+import { inActorScopeAtomic } from '../atomic';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
 import { serviceError, msg } from '../errors';
@@ -83,6 +84,42 @@ export const openPeriod = defineService({
     });
     return created ? ok(created) : err(serviceError('internal_error', 'periods.openFailed'));
   },
+});
+
+/**
+ * An open period opened by mistake may go while nothing is in it yet: no hours, adjustments,
+ * invoices or payroll. Found by id (the UI) or by month (agents).
+ */
+export const deletePeriod = defineService({
+  name: 'periods.delete',
+  input: z
+    .object({
+      periodId: z.uuid().optional().describe('Exact period id'),
+      month: monthStart.optional().describe('Or the month, YYYY-MM-01'),
+      dryRun: z.boolean().default(false).describe('Validate and preview without writing'),
+    })
+    .refine((v) => (v.periodId === undefined) !== (v.month === undefined), {
+      message: 'periods.deleteWhich',
+      path: ['periodId'],
+    }),
+  handler: async (ctx, input) =>
+    inActorScopeAtomic(ctx, input, async (tx) => {
+      const [p] = await tx
+        .select()
+        .from(period)
+        .where(input.periodId ? eq(period.id, input.periodId) : eq(period.month, input.month ?? ''))
+        .for('update');
+      if (!p) return err(serviceError('not_found', 'periods.notFound'));
+      if (p.status !== 'open') return err(serviceError('conflict', 'periods.deleteClosed'));
+      const [used] = await tx.execute<{ used: boolean }>(sql`select
+        exists (select 1 from ${timesheet} where ${timesheet.periodId} = ${p.id})
+        or exists (select 1 from ${adjustment} where ${adjustment.periodId} = ${p.id})
+        or exists (select 1 from ${invoice} where ${invoice.periodId} = ${p.id})
+        or exists (select 1 from ${payrollItem} where ${payrollItem.periodId} = ${p.id}) as used`);
+      if (used?.used) return err(serviceError('conflict', 'periods.deleteNotEmpty'));
+      await tx.delete(period).where(eq(period.id, p.id));
+      return ok({ dryRun: input.dryRun, deleted: { id: p.id, month: p.month } });
+    }),
 });
 
 export const updatePeriod = defineService({
