@@ -461,7 +461,8 @@
       "annexContract": "The SOW/annex belongs to another contract",
       "packagePart": "A part must point at a signed package, and a package with parts keeps its type",
       "plannedPaid": "A paid planned payment is fixed: unlink its expenses first",
-      "actPeriodsOverlap": "The act periods of one payout cannot overlap"
+      "actPeriodsOverlap": "The act periods of one payout cannot overlap",
+      "actActivity": "An activity can move only between draft acts of its own payout"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",

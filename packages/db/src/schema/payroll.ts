@@ -10,6 +10,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, rolePolicies } from './_common';
 import { assignment, period, timesheet } from './engagements';
@@ -22,6 +23,7 @@ import {
   payrollItemStatus,
   payrollLineStatus,
 } from './enums';
+import { supplierAct } from './acts';
 import { invoiceLine } from './invoices';
 import { payee, person } from './parties';
 
@@ -95,6 +97,8 @@ export const payrollLine = pgTable(
     agencyFee: boolean().notNull().default(false),
     payableAt: timestamp({ withTimezone: true }),
     overrideReason: text(),
+    /** The FOP act this activity goes into when a month is split by activity (A-085); null = the rest. */
+    supplierActId: uuid().references((): AnyPgColumn => supplierAct.id, { onDelete: 'set null' }),
   },
   (t) => [
     unique('payroll_line_timesheet_key').on(t.timesheetId, t.agencyFee),
@@ -129,6 +133,8 @@ export const adjustment = pgTable(
     amount: numeric({ precision: 20, scale: 8 }).notNull(),
     currency: text().notNull(),
     reason: text().notNull(),
+    /** The FOP act this adjustment goes into (A-085); null = the act of the rest. */
+    supplierActId: uuid().references((): AnyPgColumn => supplierAct.id, { onDelete: 'set null' }),
   },
   (t) => [
     unique('adjustment_legacy_ref_key').on(t.legacyRef),

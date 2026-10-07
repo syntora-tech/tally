@@ -117,6 +117,8 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('validation_error', 'db.packagePart');
     case 'TL064':
       return serviceError('conflict', 'db.plannedPaid');
+    case 'TL065':
+      return serviceError('conflict', 'db.actActivity');
     case 'TL020':
       return serviceError('validation_error', 'db.sequenceDown');
     case 'TL021':

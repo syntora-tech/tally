@@ -470,6 +470,20 @@
       "when": 1791310957631,
       "tag": "20261006190500_bank_usd_fee_step",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791362205793,
+      "tag": "20261007083645_act_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791362221666,
+      "tag": "20261007083701_act_activities_invariants",
+      "breakpoints": true
     }
   ]
 }

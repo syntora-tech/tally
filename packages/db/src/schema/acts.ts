@@ -53,6 +53,11 @@ export const supplierAct = pgTable(
      */
     amountUsd: numeric({ precision: 20, scale: 8 }),
     /**
+     * The rate of this act is fixed (A-085): set when its part was paid. Unpaid acts of activities
+     * follow the payout rate.
+     */
+    rateLocked: boolean().notNull().default(false),
+    /**
      * USD→UAH rate approved for a monthly act made before its period closed (A-076); the payout
      * takes it at close. Null for acts made from a payout, which carries the rate itself.
      */
