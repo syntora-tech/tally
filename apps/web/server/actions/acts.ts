@@ -14,8 +14,8 @@ export type ActFormState = ActionResult<{ id: string }> | null;
 const decimalField = (v: unknown) => (typeof v === 'string' ? v.replace(',', '.').trim() : v);
 
 function done(id: string): ActFormState {
-  revalidatePath(`/payroll/acts/${id}`);
-  revalidatePath('/payroll/acts');
+  revalidatePath(`/acts/${id}`);
+  revalidatePath('/acts');
   return { ok: true, data: { id } };
 }
 
@@ -27,7 +27,7 @@ export async function createActAction(
   const input = formDataToObject(formData);
   const result = await createAct.run(ctx, { ...input, amountUah: decimalField(input.amountUah) });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
-  redirect(`/payroll/acts/${result.value.id}`);
+  redirect(`/acts/${result.value.id}`);
 }
 
 export async function saveActDraftAction(

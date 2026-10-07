@@ -281,7 +281,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                       </TableCell>
                       <TableCell>
                         {a.act ? (
-                          <Link className="hover:underline" href={`/payroll/acts/${a.act.id}`}>
+                          <Link className="hover:underline" href={`/acts/${a.act.id}`}>
                             {a.act.number ?? t('draft')} · {fmt.amount(a.act.amountUah, 'UAH')}
                             {a.act.fxRate && ` · ${a.act.fxRate}`}
                           </Link>

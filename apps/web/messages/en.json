@@ -28,6 +28,7 @@
     "periods": "Periods",
     "invoices": "Invoices",
     "payroll": "Payroll",
+    "acts": "Supplier acts",
     "ledger": "Ledger",
     "trips": "Trips",
     "documents": "Documents",
@@ -571,7 +572,7 @@
     "newDocument": "New document",
     "document": "Document",
     "payroll": "Payroll",
-    "acts": "FOP acts",
+    "acts": "Supplier acts registry",
     "newAct": "Extra act",
     "act": "Act",
     "trips": "Trips",
@@ -1617,15 +1618,13 @@
     "splitOrAmount": "Or USD for the new act"
   },
   "acts": {
-    "back": "← Payroll",
-    "title": "FOP acts registry",
+    "title": "Supplier acts registry",
     "newAct": "Extra act",
     "filters": "Filters",
     "counterparty": "Counterparty",
     "all": "All",
     "year": "Year",
     "show": "Show",
-    "issuedFor": "Issued for {amount}",
     "missing": "No act for: {months}",
     "col": {
       "number": "Number",
@@ -1633,7 +1632,8 @@
       "counterparty": "Counterparty",
       "period": "Period",
       "amount": "Amount",
-      "status": "Status"
+      "status": "Status",
+      "contract": "Contract"
     },
     "empty": "No acts found",
     "draft": "draft",
@@ -1643,7 +1643,13 @@
       "monthly": "monthly",
       "reimbursement": "reimbursement",
       "other": "other"
-    }
+    },
+    "subtitle": "FOP acts by counterparty with a subtotal each — the registry for the accountant",
+    "export": "Excel",
+    "yearHint": "Empty — all years",
+    "withDrafts": "Show drafts and void acts",
+    "subtotal": "Total {payee}",
+    "total": "Total: {count, plural, one {# act} other {# acts}}"
   },
   "act": {
     "back": "← Acts registry",

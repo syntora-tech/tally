@@ -42,7 +42,7 @@ export async function setPayoutRateAction(
   const result = await setPayoutRate.run(ctx, { ...input, rate: decimalField(input.rate) });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
-  revalidatePath('/payroll/acts');
+  revalidatePath('/acts');
   return { ok: true, data: { id: result.value.id } };
 }
 

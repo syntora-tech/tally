@@ -64,7 +64,7 @@ export async function createReimbursementAction(
   const result = await createReimbursement.run(ctx, { ...input, amount: decimal(input.amount) });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/trips/${result.value.tripId}`);
-  revalidatePath('/payroll/acts');
+  revalidatePath('/acts');
   return { ok: true, data: result.value };
 }
 

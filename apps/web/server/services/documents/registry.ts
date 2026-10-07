@@ -42,7 +42,7 @@ const HREF: Record<LinkEntityType, (id: string) => string> = {
   contract_annex: (id) => `/clients/contracts/annexes/${id}`,
   assignment: (id) => `/people/assignments/${id}`,
   invoice: (id) => `/invoices/${id}`,
-  supplier_act: (id) => `/payroll/acts/${id}`,
+  supplier_act: (id) => `/acts/${id}`,
   trip: (id) => `/trips/${id}`,
   transaction: (id) => `/ledger/${id}/edit`,
 };

@@ -262,7 +262,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                             })}
                       </Badge>
                       {act && (
-                        <Link href={`/payroll/acts/${act.id}`} className="underline">
+                        <Link href={`/acts/${act.id}`} className="underline">
                           {act.number ? t('act', { number: act.number }) : t('actDraft')}
                         </Link>
                       )}

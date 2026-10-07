@@ -225,7 +225,7 @@ export const dashboardOverview = defineService({
       }
       for (const [kind, dates, href] of [
         ['invoice_date', invoiceDates, '/periods'],
-        ['act_date', actDates, '/payroll/acts'],
+        ['act_date', actDates, '/acts'],
       ] as const) {
         for (const on of dates) {
           if (on >= today && on <= until) events.push({ on, kind, label: month, usd: null, href });

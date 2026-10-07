@@ -27,6 +27,7 @@ import { HtmlRenderer } from '../../render/renderers';
 import { LocalStorage } from '../../storage/local-storage';
 import { payItem } from '../payroll';
 import { createAct, issueAct, listActs, saveActDraft, setSignedUrl } from '.';
+import { actsRegistry } from './registry';
 
 // August 2045: the 31st is a Thursday, the 26th a Saturday.
 const h = intHarness('2045-09-05');
@@ -249,5 +250,29 @@ describe('FOP acts (6.6)', () => {
       await listActs.run(h.ctxFor(finance), { payeeId: ids.payee, year: 2045 })
     )._unsafeUnwrap();
     expect(res.summary[0]).toMatchObject({ total: '90349.60', missing: ['2045-06', '2045-07'] });
+  });
+
+  it('the supplier registry groups issued acts by counterparty with a subtotal (A-087)', async () => {
+    const issued = (
+      await actsRegistry.run(h.ctxFor(finance), { payeeId: ids.payee, year: '2045' })
+    )._unsafeUnwrap();
+    expect(issued.groups).toHaveLength(1);
+    expect(issued.groups[0]).toMatchObject({ total: '90349.60', missing: ['2045-06', '2045-07'] });
+    expect(issued.groups[0]?.acts.map((a) => a.actDate)).toEqual(
+      [...(issued.groups[0]?.acts.map((a) => a.actDate) ?? [])].sort(),
+    );
+    expect(issued.groups[0]?.acts.every((a) => a.status === 'issued')).toBe(true);
+    expect(issued.payees.map((p) => p.payeeId)).toContain(ids.payee);
+
+    const all = (
+      await actsRegistry.run(h.ctxFor(finance), { payeeId: ids.payee, year: '2045', all: 'on' })
+    )._unsafeUnwrap();
+    expect(all.groups[0]?.acts.length).toBeGreaterThanOrEqual(issued.groups[0]?.acts.length ?? 0);
+    expect(all.total).toBe('90349.60');
+    expect(
+      (
+        await actsRegistry.run(h.ctxFor(finance), { payeeId: ids.payee, year: '2044' })
+      )._unsafeUnwrap().groups,
+    ).toEqual([]);
   });
 });

@@ -29,7 +29,7 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/payroll/acts" className="text-sm text-muted-foreground hover:underline">
+        <Link href="/acts" className="text-sm text-muted-foreground hover:underline">
           {t('back')}
         </Link>
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">

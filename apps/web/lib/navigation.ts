@@ -8,6 +8,7 @@ export type NavIcon =
   | 'periods'
   | 'invoices'
   | 'payroll'
+  | 'acts'
   | 'ledger'
   | 'trips'
   | 'documents'
@@ -33,6 +34,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/periods', title: 'periods', icon: 'periods', roles: FINANCE_ROLES },
   { href: '/invoices', title: 'invoices', icon: 'invoices', roles: FINANCE_ROLES },
   { href: '/payroll', title: 'payroll', icon: 'payroll', roles: FINANCE_ROLES },
+  { href: '/acts', title: 'acts', icon: 'acts', roles: FINANCE_ROLES },
   { href: '/ledger', title: 'ledger', icon: 'ledger', roles: FINANCE_ROLES },
   { href: '/trips', title: 'trips', icon: 'trips', roles: ALL_ROLES },
   { href: '/documents', title: 'documents', icon: 'documents', roles: ALL_ROLES },

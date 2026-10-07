@@ -233,7 +233,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await p1.getByRole('button', { name: 'Record payout' }).click();
   await expect(page.getByText('Payout recorded')).toBeVisible();
 
-  await page.goto('/payroll/acts');
+  await page.goto('/acts?all=on&year=');
   await page
     .getByRole('row', { name: new RegExp(fop) })
     .getByRole('link', { name: 'draft' })

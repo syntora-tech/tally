@@ -114,7 +114,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
         <nav className="flex flex-wrap gap-2" aria-label={t('period')}>
-          <Button size="sm" variant="secondary" render={<Link href="/payroll/acts" />}>
+          <Button size="sm" variant="secondary" render={<Link href="/acts" />}>
             {t('actsRegistry')}
           </Button>
           <Button
@@ -218,7 +218,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                           const next = i.acts[n + 1];
                           return (
                             <li key={a.id} className="flex flex-wrap items-center gap-2">
-                              <Link className="hover:underline" href={`/payroll/acts/${a.id}`}>
+                              <Link className="hover:underline" href={`/acts/${a.id}`}>
                                 {a.number ?? tp('draftAct')}
                               </Link>
                               <span className="text-muted-foreground">

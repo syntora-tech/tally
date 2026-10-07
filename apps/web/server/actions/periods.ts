@@ -167,7 +167,7 @@ export async function draftEarlyActAction(
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${field(formData.get('periodId'))}`);
-  revalidatePath('/payroll/acts');
+  revalidatePath('/acts');
   return { ok: true, data: result.value };
 }
 

@@ -12,6 +12,7 @@ describe('navItemsFor', () => {
       '/periods',
       '/invoices',
       '/payroll',
+      '/acts',
       '/ledger',
       '/trips',
       '/documents',
