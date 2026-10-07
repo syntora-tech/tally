@@ -18,7 +18,7 @@ import { suggestRate } from '@/server/services/fx';
 import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
-import { MergeActsButton, OverrideForm, PayDialog, RateForm } from './payroll-forms';
+import { MergeActsButton, OverrideForm, PayDialog, RateForm, SplitActForm } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('payroll');
@@ -83,6 +83,24 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           t('left', { amount: fmt.amount(c.remaining, c.currency) }),
         ].join(' · '),
       }));
+
+  // Lines and adjustments in an act: the act of the rest takes those not given to another (A-085).
+  const activitiesIn = (i: (typeof items)[number], a: (typeof items)[number]['acts'][number]) => {
+    const inAct = (x: { supplierActId: string | null }) =>
+      a.isRest ? x.supplierActId === null : x.supplierActId === a.id;
+    return [
+      ...i.lines.filter(inAct).map((l) => ({
+        id: l.id,
+        kind: 'line' as const,
+        label: `${l.clientName ?? tc('internal')}${l.roleTitle ? ` · ${l.roleTitle}` : ''} · ${fmt.amount(l.amount, l.currency)}`,
+      })),
+      ...i.adjustments.filter(inAct).map((x) => ({
+        id: x.id,
+        kind: 'adjustment' as const,
+        label: `${ADJUSTMENT_KIND_LABELS[x.kind]}: ${fmt.amount(x.amount, x.currency)} — ${x.reason}`,
+      })),
+    ];
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -216,6 +234,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                               {next && a.status === 'draft' && next.status === 'draft' && (
                                 <MergeActsButton firstId={a.id} secondId={next.id} />
                               )}
+                              {a.status === 'draft' &&
+                                !a.rateLocked &&
+                                a.periodFrom &&
+                                a.periodTo &&
+                                a.periodFrom < a.periodTo &&
+                                activitiesIn(i, a).length > 1 && (
+                                  <SplitActForm
+                                    actId={a.id}
+                                    periodFrom={a.periodFrom}
+                                    periodTo={a.periodTo}
+                                    activities={activitiesIn(i, a)}
+                                  />
+                                )}
                             </li>
                           );
                         })}
@@ -298,6 +329,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         candidates={candidatesFor(i)}
                         fee={i.payeeFee}
                         hasAct={i.acts.length > 0}
+                        payableActs={i.acts
+                          .filter((a) => !a.isRest && !a.rateLocked)
+                          .map((a) => ({
+                            id: a.id,
+                            amount: a.amountUah,
+                            label: `${a.number ?? tp('draftAct')} · ${fmt.amount(a.amountUah, 'UAH')}`,
+                          }))}
                         feeAccounts={accountRows}
                         accounts={accountRows
                           .filter((a) =>

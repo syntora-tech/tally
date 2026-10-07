@@ -13,6 +13,7 @@ import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
   mergeActsAction,
+  splitActAction,
   overridePayableAction,
   payItemAction,
   setPayoutRateAction,
@@ -43,6 +44,8 @@ export type PayDialogProps = {
   isOwner: boolean;
   /** A FOP act follows the payout: a part payment gets an act of its own (A-083). */
   hasAct: boolean;
+  /** Acts of activities still to pay (A-085): paying one takes its amount, no split. */
+  payableActs: { id: string; label: string; amount: string }[];
   /** The payee's bank tariff; its fee is suggested for a new payment (A-082). */
   fee: TransferFee | null;
   /** Every account, for a fee charged in another currency (e.g. UAH for a USD SWIFT). */
@@ -90,9 +93,13 @@ export function PayDialog(p: PayDialogProps) {
       ? picked.remaining
       : itemAmount;
   const [open, setOpen] = useState(false);
+  const [actId, setActId] = useState('');
+  const pickedAct = p.payableActs.find((a) => a.id === actId);
   const [amountInput, setAmountInput] = useState<string | null>(null);
   const payCurrency = p.fiat ? 'UAH' : 'USD';
-  const amountNow = parseDecimal((amountInput ?? amountDefault).replace(',', '.'));
+  const amountNow = parseDecimal(
+    (amountInput ?? pickedAct?.amount ?? amountDefault).replace(',', '.'),
+  );
   const usdUah = parseDecimal(p.currentRate ?? p.suggestion?.rate ?? '');
   const suggestedFee =
     p.fee && amountNow.isOk()
@@ -218,8 +225,8 @@ export function PayDialog(p: PayDialogProps) {
             id={`amount-${p.itemId}`}
             name="amount"
             inputMode="decimal"
-            key={amountDefault}
-            defaultValue={amountDefault}
+            key={pickedAct?.amount ?? amountDefault}
+            defaultValue={pickedAct?.amount ?? amountDefault}
             className="w-36"
             onChange={(e) => {
               setAmountInput(e.target.value);
@@ -272,7 +279,22 @@ export function PayDialog(p: PayDialogProps) {
           </FormField>
         )}
       </div>
-      {p.fiat && p.hasAct && (
+      {p.payableActs.length > 0 && (
+        <FormField label={t('payAct')} htmlFor={`pay-act-${p.itemId}`}>
+          <NativeSelect
+            id={`pay-act-${p.itemId}`}
+            name="actId"
+            value={actId}
+            onChange={(e) => {
+              setActId(e.target.value);
+              setAmountInput(null);
+            }}
+            placeholder={t('payActRest')}
+            options={p.payableActs.map((a) => ({ value: a.id, label: a.label }))}
+          />
+        </FormField>
+      )}
+      {p.fiat && p.hasAct && !pickedAct && (
         <div className="flex flex-wrap items-end gap-3">
           <FormField
             label={t('actFrom')}
@@ -411,6 +433,106 @@ export function MergeActsButton({ firstId, secondId }: { firstId: string; second
         {t('merge')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/**
+ * Splits a draft act by activity (A-085): tick the lines and adjustments for a new act and its
+ * period at the start or the end of this one; the amounts follow from the activities.
+ */
+export function SplitActForm({
+  actId,
+  periodFrom,
+  periodTo,
+  activities,
+}: {
+  actId: string;
+  periodFrom: string;
+  periodTo: string;
+  activities: { id: string; kind: 'line' | 'adjustment'; label: string }[];
+}) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(splitActAction, null);
+  const t = useTranslations('payDialog');
+  const tc = useTranslations('common');
+  const error = useResult(state, t('split'));
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        {t('splitByActivity')}
+      </Button>
+    );
+  }
+  return (
+    <form action={action} className="flex w-full flex-col gap-3 rounded-md border p-3">
+      <input type="hidden" name="actId" value={actId} />
+      <p className="text-xs text-muted-foreground">{t('splitHint')}</p>
+      <fieldset className="flex flex-col gap-1">
+        {activities.map((a) => (
+          <label key={a.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name={a.kind === 'line' ? 'lineIds' : 'adjustmentIds'}
+              value={a.id}
+            />
+            {a.label}
+          </label>
+        ))}
+      </fieldset>
+      <div className="flex flex-wrap items-end gap-3">
+        <FormField
+          label={t('actFrom')}
+          htmlFor={`split-from-${actId}`}
+          error={error?.fieldErrors?.periodFrom}
+        >
+          <Input
+            id={`split-from-${actId}`}
+            name="periodFrom"
+            type="date"
+            defaultValue={periodFrom}
+            min={periodFrom}
+            max={periodTo}
+            className="w-40"
+          />
+        </FormField>
+        <FormField
+          label={t('actTo')}
+          htmlFor={`split-to-${actId}`}
+          error={error?.fieldErrors?.periodTo}
+        >
+          <Input
+            id={`split-to-${actId}`}
+            name="periodTo"
+            type="date"
+            min={periodFrom}
+            max={periodTo}
+            className="w-40"
+          />
+        </FormField>
+      </div>
+      {error && !error.fieldErrors && <p className="text-sm text-destructive">{error.message}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          {t('splitSubmit')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setOpen(false);
+          }}
+        >
+          {tc('cancel')}
+        </Button>
+      </div>
     </form>
   );
 }

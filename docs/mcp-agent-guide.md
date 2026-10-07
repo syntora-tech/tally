@@ -91,6 +91,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `upsert_planned_expenses` | write | Creates or partially updates planned expenses (≤ 50) with their `parts` and `charges`                                                                   |
 | `upsert_payout_charges`   | write | Creates or partially updates taxes on a person's payouts (≤ 50); stop one with `endsOn`                                                                 |
 | `get_payroll_queue`       | read  | Payouts by month: status, totals, what is left, lines with funding and deadlines, FOP acts (one per part when a month is paid in parts)                 |
+| `split_payout_act`        | write | Splits a draft act by activity: chosen lines/adjustments go into a new act for a period at one edge of it                                               |
 | `merge_payout_acts`       | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
 | `update_planned_payments` | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
 
@@ -410,7 +411,7 @@ Paid payments are fixed. A part or a tax with paid payments cannot be removed �
 
 ### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`
 
-Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged.
+Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged. A month can also be split by activity (A-085): `split_payout_act` with the `lineIds`/`adjustmentIds` of one act (from `get_payroll_queue`) and the new act's period at its start or end; amounts follow from the activities, nothing is typed in.
 
 ## 9. Report to the owner
 

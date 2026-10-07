@@ -377,7 +377,11 @@
       "noSequence": "The contract has no act numbering (Settings)",
       "voidState": "Only an issued act can be voided",
       "linkIssuedOnly": "A link is added only to an issued act",
-      "mergeAdjacentDrafts": "Only two neighbouring draft acts of one payout can be merged"
+      "mergeAdjacentDrafts": "Only two neighbouring draft acts of one payout can be merged",
+      "splitDraftOnly": "Only an unpaid draft act can be split",
+      "splitChooseActivities": "Choose activities of this act for the new one",
+      "splitKeepSome": "Leave at least one activity in this act",
+      "splitAtEdge": "The new act's period must start or end with this act's period and leave it some days"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -1588,7 +1592,13 @@
     "actFrom": "Act from",
     "actTo": "Act to",
     "actPeriodHint": "For a part of the month. Empty: from the first day without an act to the payout day; paying the whole rest keeps the act to the month's end.",
-    "partOf": "part {usd} at {rate}"
+    "partOf": "part {usd} at {rate}",
+    "split": "Act split",
+    "splitByActivity": "Split by activity",
+    "splitHint": "Tick what goes into a new act and its period at the start or the end of this one; the rest stays here. Amounts follow from the activities.",
+    "splitSubmit": "Split",
+    "payAct": "Act paid",
+    "payActRest": "The rest of the month"
   },
   "acts": {
     "back": "← Payroll",

@@ -1,9 +1,11 @@
 import type { DbTransaction } from '@tally/db';
 import {
+  adjustment,
   company,
   contract,
   payee,
   payrollItem,
+  payrollLine,
   period,
   supplierAct,
   type SupplierAct,
@@ -17,6 +19,7 @@ import {
   nextPartPeriod,
   payoutPartOf,
   payoutRest,
+  roundHalfUp,
   startOfMonth,
   sum,
   toDecimal,
@@ -120,19 +123,76 @@ export const partsOf = (acts: readonly SupplierAct[]): PayoutPart[] =>
     .filter((a) => a.amountUsd !== null)
     .map((a) => ({ usd: a.amountUsd ?? '0', uah: a.amountUah, rate: a.fxRate }));
 
+/** Parts whose rate is fixed (paid), as the domain sees them (A-085). */
+export const lockedPartsOf = (acts: readonly SupplierAct[]): PayoutPart[] =>
+  partsOf(acts.filter((a) => a.rateLocked));
+
+/** Lines and adjustments of a payout with the act each goes into (A-085). */
+export async function activitiesOf(tx: DbTransaction, itemId: string) {
+  const [item] = await tx.select().from(payrollItem).where(eq(payrollItem.id, itemId));
+  if (!item) return null;
+  const lines = await tx
+    .select({
+      id: payrollLine.id,
+      amount: payrollLine.amount,
+      currency: payrollLine.currency,
+      supplierActId: payrollLine.supplierActId,
+    })
+    .from(payrollLine)
+    .where(eq(payrollLine.payrollItemId, itemId));
+  // Adjustments belong to people; an agency item has none (A-068).
+  const adjustments = item.personId
+    ? await tx
+        .select({
+          id: adjustment.id,
+          amount: adjustment.amount,
+          currency: adjustment.currency,
+          supplierActId: adjustment.supplierActId,
+        })
+        .from(adjustment)
+        .where(
+          and(
+            eq(adjustment.periodId, item.periodId),
+            eq(adjustment.personId, item.personId),
+            eq(adjustment.payoutMethod, item.payoutMethod),
+          ),
+        )
+    : [];
+  return { item, lines, adjustments };
+}
+
 /**
- * The act of the rest still in draft follows the payout: total_uah less the parts already split
- * off (A-076, A-083). With a single act that is the whole total.
+ * Draft acts follow their payout (A-076, A-083, A-085): an act of activities (lines and
+ * adjustments chosen for it) is their USD × the payout rate + their UAH until its part is paid;
+ * the act of the rest takes total_uah less every other act. With a single act that is the whole
+ * total.
  */
 export async function syncMonthlyActDraft(tx: DbTransaction, itemId: string) {
-  const [item] = await tx
-    .select({ totalUah: payrollItem.totalUah })
-    .from(payrollItem)
-    .where(eq(payrollItem.id, itemId));
-  if (!item?.totalUah) return;
+  const data = await activitiesOf(tx, itemId);
+  if (!data?.item.totalUah) return;
+  const { item } = data;
   const acts = await monthlyActsOf(tx, itemId);
-  const parts = sum(acts.filter((a) => a.amountUsd !== null).map((a) => a.amountUah));
-  const rest = Decimal.max(toDecimal(item.totalUah).minus(parts), 0).toFixed(2);
+  for (const act of acts) {
+    if (act.status !== 'draft' || act.rateLocked || act.amountUsd === null) continue;
+    const own = [...data.lines, ...data.adjustments].filter((x) => x.supplierActId === act.id);
+    if (own.length === 0) continue;
+    const usd = sum(own.filter((x) => x.currency !== 'UAH').map((x) => x.amount));
+    const uah = sum(own.filter((x) => x.currency === 'UAH').map((x) => x.amount));
+    const rate = usd.isZero() ? null : item.payoutFxRate;
+    const amountUah = rate === null ? uah : roundHalfUp(usd.times(rate)).plus(uah);
+    act.amountUah = amountUah.toFixed(2);
+    await tx
+      .update(supplierAct)
+      .set({
+        amountUsd: usd.toFixed(8),
+        amountUah: act.amountUah,
+        fxRate: rate,
+        fxSource: rate ? item.fxSource : null,
+      })
+      .where(eq(supplierAct.id, act.id));
+  }
+  const others = sum(acts.filter((a) => a.amountUsd !== null).map((a) => a.amountUah));
+  const rest = Decimal.max(toDecimal(item.totalUah ?? '0').minus(others), 0).toFixed(2);
   await tx
     .update(supplierAct)
     .set({ amountUah: rest })
@@ -204,6 +264,7 @@ export async function splitActForPayment(
     .set({
       amountUsd: part.usd.toFixed(8),
       amountUah: part.uah.toFixed(2),
+      rateLocked: true,
       fxRate: item.item.payoutFxRate,
       fxSource: item.item.payoutFxRate ? item.item.fxSource : null,
       periodFrom: range.from,
@@ -252,8 +313,16 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
     return err(serviceError('validation_error', 'acts.mergeAdjacentDrafts'));
   }
   const toRest = a.amountUsd === null || b.amountUsd === null;
+  const locked = a.rateLocked || b.rateLocked;
   const usd = toDecimal(a.amountUsd ?? '0').plus(b.amountUsd ?? '0');
   const uah = toDecimal(a.amountUah).plus(b.amountUah);
+  // Activities move first: deleting the second act would send them to the rest (A-085).
+  for (const table of [payrollLine, adjustment] as const) {
+    await tx
+      .update(table)
+      .set({ supplierActId: toRest ? null : a.id })
+      .where(inArray(table.supplierActId, [a.id, b.id]));
+  }
   await tx.delete(supplierAct).where(eq(supplierAct.id, b.id));
   await tx
     .update(supplierAct)
@@ -262,6 +331,7 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
       actDate: b.actDate,
       amountUah: uah.toFixed(2),
       amountUsd: toRest ? null : usd.toFixed(8),
+      rateLocked: !toRest && locked,
       fxRate: toRest || usd.isZero() ? null : uah.div(usd).toFixed(6),
       fxSource: toRest || usd.isZero() ? null : 'manual',
     })
@@ -269,6 +339,117 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
   await syncMonthlyActDraft(tx, a.payrollItemId);
   return ok({ id: a.id });
 }
+
+export const splitActInput = z.object({
+  actId: z.uuid(),
+  /** Lines (activities) and adjustments that go into the new act. */
+  lineIds: z.array(z.uuid()).default([]),
+  adjustmentIds: z.array(z.uuid()).default([]),
+  /** The new act's period: at the start or the end of the act being split. */
+  periodFrom: localDateString,
+  periodTo: localDateString,
+});
+
+/**
+ * Splits a draft act by activity (A-085): the chosen lines and adjustments go into a new act for
+ * the chosen period at one edge of the old one; the rest keep the old act and the other days.
+ * Amounts follow from the activities, so none is typed in.
+ */
+export async function splitActByActivityIn(
+  tx: DbTransaction,
+  input: z.output<typeof splitActInput>,
+) {
+  const [act] = await tx
+    .select()
+    .from(supplierAct)
+    .where(eq(supplierAct.id, input.actId))
+    .for('update');
+  if (!act?.payrollItemId || act.type !== 'monthly') {
+    return err(serviceError('not_found', 'acts.notFound'));
+  }
+  if (act.status !== 'draft' || act.rateLocked) {
+    return err(serviceError('conflict', 'acts.splitDraftOnly'));
+  }
+  const data = await activitiesOf(tx, act.payrollItemId);
+  if (!data) return err(serviceError('not_found', 'acts.notFound'));
+  const isRest = act.amountUsd === null;
+  const inAct = (x: { supplierActId: string | null }) =>
+    isRest ? x.supplierActId === null : x.supplierActId === act.id;
+  const members = [...data.lines, ...data.adjustments].filter(inAct);
+  const chosen = new Set([...input.lineIds, ...input.adjustmentIds]);
+  if (chosen.size === 0 || [...chosen].some((id) => !members.some((m) => m.id === id))) {
+    return err(serviceError('validation_error', 'acts.splitChooseActivities'));
+  }
+  if (members.every((m) => chosen.has(m.id))) {
+    return err(serviceError('validation_error', 'acts.splitKeepSome'));
+  }
+  const from = (act.periodFrom ?? input.periodFrom) as LocalDate;
+  const to = (act.periodTo ?? input.periodTo) as LocalDate;
+  const atStart = input.periodFrom === from && input.periodTo < to;
+  const atEnd = input.periodTo === to && input.periodFrom > from;
+  if (input.periodFrom > input.periodTo || (!atStart && !atEnd)) {
+    return err(serviceError('validation_error', 'acts.splitAtEdge'));
+  }
+  const cal = await loadCalendar(tx);
+  const keep = atStart
+    ? { from: addDays(input.periodTo, 1), to }
+    : { from, to: addDays(input.periodFrom, -1) };
+  await tx
+    .update(supplierAct)
+    .set({
+      periodFrom: keep.from,
+      periodTo: keep.to,
+      actDate:
+        act.actDate > keep.to || act.actDate < keep.from
+          ? partActDate(cal, keep.to, keep.from)
+          : act.actDate,
+    })
+    .where(eq(supplierAct.id, act.id));
+  const [created] = await tx
+    .insert(supplierAct)
+    .values({
+      contractId: act.contractId,
+      payeeId: act.payeeId,
+      payrollItemId: act.payrollItemId,
+      type: 'monthly',
+      actDate: partActDate(cal, input.periodTo, input.periodFrom),
+      periodFrom: input.periodFrom,
+      periodTo: input.periodTo,
+      amountUah: '0',
+      amountUsd: '0',
+    })
+    .returning({ id: supplierAct.id });
+  if (!created) return err(serviceError('internal_error', 'general.createFailed'));
+  if (input.lineIds.length) {
+    await tx
+      .update(payrollLine)
+      .set({ supplierActId: created.id })
+      .where(inArray(payrollLine.id, input.lineIds));
+  }
+  if (input.adjustmentIds.length) {
+    await tx
+      .update(adjustment)
+      .set({ supplierActId: created.id })
+      .where(inArray(adjustment.id, input.adjustmentIds));
+  }
+  await syncMonthlyActDraft(tx, act.payrollItemId);
+  return ok({ id: created.id, keptActId: act.id });
+}
+
+export const splitActByActivity = defineService({
+  name: 'acts.splitByActivity',
+  input: splitActInput,
+  handler: async (ctx, input) => inActorScope(ctx, (tx) => splitActByActivityIn(tx, input)),
+});
+
+/** Splitting payout acts for agents (A-085): all-or-nothing with dryRun. */
+export const splitPayoutAct = defineService({
+  name: 'acts.splitBatch',
+  input: splitActInput.extend({
+    dryRun: z.boolean().default(false).describe('Validate and preview without writing'),
+  }),
+  handler: (ctx, input) => inActorScopeAtomic(ctx, input, (tx) => splitActByActivityIn(tx, input)),
+});
 
 export const mergeActs = defineService({
   name: 'acts.merge',

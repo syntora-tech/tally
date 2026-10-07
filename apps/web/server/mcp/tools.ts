@@ -48,7 +48,7 @@ import {
   upsertPlannedExpenses,
 } from '../services/planned/agent';
 import { listPlannedPayments } from '../services/planned/payments';
-import { getAct, mergePayoutActs } from '../services/acts';
+import { getAct, mergePayoutActs, splitPayoutAct } from '../services/acts';
 import { deleteDraftAct } from '../services/acts/delete';
 import { listPayroll } from '../services/payroll';
 
@@ -770,6 +770,9 @@ export const TOOLS: readonly ToolDef[] = [
         currency: r.currency,
         nextDeadline: r.nextDeadline,
         lines: r.lines.map((l) => ({
+          id: l.id,
+          supplierActId: l.supplierActId,
+          roleTitle: l.roleTitle,
           clientName: l.clientName,
           amount: l.amount,
           currency: l.currency,
@@ -777,6 +780,14 @@ export const TOOLS: readonly ToolDef[] = [
           fundingSource: l.fundingSource,
           invoiceNumber: l.invoiceNumber,
           deadline: l.deadline,
+        })),
+        adjustments: r.adjustments.map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          amount: a.amount,
+          currency: a.currency,
+          reason: a.reason,
+          supplierActId: a.supplierActId,
         })),
         acts: r.acts,
       })),
@@ -788,6 +799,14 @@ export const TOOLS: readonly ToolDef[] = [
       'Joins two neighbouring draft FOP acts of one payout (a month paid in parts, A-083) into one act covering both periods: with the act of the rest it becomes the rest, two paid parts add up at their average rate. Issued acts cannot be merged. Use dryRun first.',
     kind: 'write',
     service: mergePayoutActs,
+  }),
+  tool({
+    name: 'split_payout_act',
+    title: 'Split a payout act by activity',
+    description:
+      "Splits a draft, unpaid FOP act of a payout by activity (A-085): lineIds (payroll lines, e.g. the client work) and adjustmentIds from get_payroll_queue that belong to this act go into a new act; periodFrom/periodTo is the new act's period, at the start or the end of this act (periods never overlap), the old act keeps the other days and the other activities. Amounts follow from the activities (USD × the payout rate + UAH) until the act is paid. Lines and adjustments of an act with isRest are those with supplierActId null. Use dryRun first.",
+    kind: 'write',
+    service: splitPayoutAct,
   }),
 ];
 

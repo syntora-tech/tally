@@ -34,7 +34,7 @@ import { z } from 'zod';
 import {
   ensureMonthlyActDraft,
   monthlyActsOf,
-  partsOf,
+  lockedPartsOf,
   splitActForPayment,
   syncMonthlyActDraft,
 } from '../acts';
@@ -188,6 +188,9 @@ export const listPayroll = defineService({
           amountUah: a.amountUah,
           amountUsd: a.amountUsd,
           fxRate: a.fxRate,
+          rateLocked: a.rateLocked,
+          /** Takes the activities not given to another act (A-085). */
+          isRest: a.amountUsd === null,
         })),
         lines,
         adjustments,
@@ -247,7 +250,8 @@ async function applyRate(
   }
   // Paid parts keep their own rates (A-083); a new rate is only for the rest of the month.
   const acts = await monthlyActsOf(tx, item.id);
-  const parts = partsOf(acts);
+  // Acts of activities not paid yet follow the new rate with the rest (A-085).
+  const parts = lockedPartsOf(acts);
   if (toDecimal(item.paidAmount).gt(sum(parts.map((p) => p.uah)))) {
     return err(serviceError('conflict', 'payroll.rateLocked'));
   }
@@ -326,6 +330,8 @@ export const payItemInput = z
     feeAmount: z.preprocess(emptyToUndefined, decimalString.optional()),
     feeAccountId: z.preprocess(emptyToUndefined, z.uuid().optional()),
     /** Act period of a part payment; by default from the first uncovered day to the payout day (A-083). */
+    /** Pay this act of the month (A-085): its activities, at this payment's rate; no split. */
+    actId: z.preprocess(emptyToUndefined, z.uuid().optional()),
     actFrom: z.preprocess(emptyToUndefined, localDateString.optional()),
     actTo: z.preprocess(emptyToUndefined, localDateString.optional()),
   })
@@ -520,7 +526,16 @@ export const payItem = defineService({
         });
       }
       let act = fiat ? await ensureMonthlyActDraft(tx, item.item.id) : null;
-      if (act) {
+      const chosen = input.actId
+        ? (await monthlyActsOf(tx, item.item.id)).find((a) => a.id === input.actId)
+        : undefined;
+      if (input.actId && !chosen) return err(serviceError('not_found', 'acts.notFound'));
+      if (chosen && chosen.amountUsd !== null) {
+        // The act of activities is paid now: its rate is fixed with this payment.
+        await syncMonthlyActDraft(tx, item.item.id);
+        await tx.update(supplierAct).set({ rateLocked: true }).where(eq(supplierAct.id, chosen.id));
+        act = { id: chosen.id };
+      } else if (act) {
         const split = await splitActForPayment(tx, {
           itemId: item.item.id,
           paidUah: input.amount,

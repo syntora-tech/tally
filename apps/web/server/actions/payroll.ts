@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import { overridePayable } from '../services/payroll/payability';
-import { mergeActs } from '../services/acts';
+import { mergeActs, splitActByActivity } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
 import type { ActionResult } from './to-action-result';
 
@@ -63,6 +63,24 @@ export async function mergeActsAction(
 ): Promise<PayrollFormState> {
   const ctx = await requireUserContext();
   const result = await mergeActs.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  return { ok: true, data: result.value };
+}
+
+/** Splits a draft act by the chosen activities (A-085). */
+export async function splitActAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await splitActByActivity.run(ctx, {
+    actId: formData.get('actId'),
+    lineIds: formData.getAll('lineIds'),
+    adjustmentIds: formData.getAll('adjustmentIds'),
+    periodFrom: formData.get('periodFrom'),
+    periodTo: formData.get('periodTo'),
+  });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   return { ok: true, data: result.value };
