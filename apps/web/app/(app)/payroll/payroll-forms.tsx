@@ -459,7 +459,7 @@ export function SplitActForm({
   actId: string;
   periodFrom: string;
   periodTo: string;
-  activities: { id: string; kind: 'line' | 'adjustment'; label: string }[];
+  activities: { id: string; kind: 'line' | 'assignment' | 'adjustment'; label: string }[];
   byAmount: boolean;
 }) {
   const [state, action, pending] = useActionState<PayrollFormState, FormData>(splitActAction, null);
@@ -528,11 +528,7 @@ export function SplitActForm({
           <legend className="mb-1 text-xs text-muted-foreground">{t('splitActivities')}</legend>
           {activities.map((a) => (
             <label key={a.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name={a.kind === 'line' ? 'lineIds' : 'adjustmentIds'}
-                value={a.id}
-              />
+              <input type="checkbox" name={`${a.kind}Ids`} value={a.id} />
               {a.label}
             </label>
           ))}

@@ -25,8 +25,9 @@ import {
   type WorkCalendar,
   type PayoutMethod,
 } from '@tally/domain';
-import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { ensureMonthlyActDraft, syncMonthlyActDraft } from '../acts';
+import { actsOfMonth } from './early';
 
 export async function loadAdjustments(tx: DbTransaction, periodId: string) {
   return tx
@@ -79,7 +80,8 @@ export async function createPayroll(
   ) => {
     if (method !== 'fiat') return {};
     // A monthly act made before the close carries the rate approved for it (A-076).
-    const early = payeeId ? await waitingMonthlyAct(tx, payeeId, month) : undefined;
+    const waiting = payeeId ? await waitingMonthlyActs(tx, payeeId, month) : [];
+    const early = waiting.find((a) => a.amountUsd === null) ?? waiting[0];
     const approved = early?.fxRate
       ? { rate: early.fxRate, source: early.fxSource ?? ('manual' as const) }
       : input.payoutRate
@@ -136,8 +138,17 @@ export async function createPayroll(
         )
     : [];
 
-  const insertLines = async (itemId: string, lines: PlanLine[], agencyFee: boolean) => {
+  const insertLines = async (
+    itemId: string,
+    lines: PlanLine[],
+    agencyFee: boolean,
+    payeeId: string | null = null,
+  ) => {
     if (lines.length === 0) return;
+    // Work chosen for an act before the close goes into it (A-089).
+    const chosen = payeeId ? await waitingMonthlyActs(tx, payeeId, month) : [];
+    const actOf = (assignmentId: string) =>
+      chosen.find((a) => a.assignmentIds?.includes(assignmentId))?.id ?? null;
     await tx.insert(payrollLine).values(
       lines.map((l) => {
         const timesheetId = input.timesheetIds.get(l.assignmentId) ?? null;
@@ -161,6 +172,7 @@ export async function createPayroll(
           status: state.payable ? ('payable' as const) : ('awaiting_client' as const),
           fundingSource: state.payable ? state.funding : null,
           payableAt: state.payable ? new Date() : null,
+          supplierActId: agencyFee ? null : actOf(l.assignmentId),
         };
       }),
     );
@@ -185,7 +197,7 @@ export async function createPayroll(
       })
       .returning({ id: payrollItem.id });
     if (!item) throw new Error('Payroll item insert returned no row');
-    await insertLines(item.id, plan.lines, false);
+    await insertLines(item.id, plan.lines, false, plan.payoutMethod === 'fiat' ? payeeId : null);
     await tx.execute(sql`select public.refresh_payroll_item(${item.id})`);
     await attachMonthlyAct(tx, item.id, month);
     items++;
@@ -215,35 +227,34 @@ export async function createPayroll(
  * The monthly FOP act of a fresh payroll item (A-076): a draft left from an earlier close (or made
  * before it) is linked again and follows the new total; otherwise a new draft is created.
  */
-/** The monthly act of a payee and month not linked to a payout yet: made before the close. */
-async function waitingMonthlyAct(tx: DbTransaction, payeeId: string, month: LocalDate) {
-  const [act] = await tx
+/** Monthly acts of a payee and month not linked to a payout yet: made before the close. */
+function waitingMonthlyActs(tx: DbTransaction, payeeId: string, month: LocalDate) {
+  return tx
     .select()
     .from(supplierAct)
     .where(
-      and(
-        eq(supplierAct.payeeId, payeeId),
-        eq(supplierAct.type, 'monthly'),
-        ne(supplierAct.status, 'void'),
-        eq(supplierAct.periodFrom, month),
-        isNull(supplierAct.payrollItemId),
-      ),
+      and(eq(supplierAct.payeeId, payeeId), actsOfMonth(month), isNull(supplierAct.payrollItemId)),
     )
-    .limit(1);
-  return act;
+    .orderBy(asc(supplierAct.periodFrom));
 }
 
 async function attachMonthlyAct(tx: DbTransaction, itemId: string, month: LocalDate) {
   const [item] = await tx.select().from(payrollItem).where(eq(payrollItem.id, itemId));
   if (!item?.payeeId || item.payoutMethod !== 'fiat' || !item.totalUah) return;
-  const waiting = await waitingMonthlyAct(tx, item.payeeId, month);
-  if (waiting) {
-    // An issued act is linked as it is (set once, A-076); a draft follows the new total.
+  const waiting = await waitingMonthlyActs(tx, item.payeeId, month);
+  if (waiting.length) {
+    // Issued acts are linked as they are (set once, A-076); drafts follow the new total. A month
+    // split before the close keeps its acts (A-089).
     await tx
       .update(supplierAct)
       .set({ payrollItemId: itemId })
-      .where(eq(supplierAct.id, waiting.id));
-    if (waiting.status === 'draft') await syncMonthlyActDraft(tx, itemId);
+      .where(
+        inArray(
+          supplierAct.id,
+          waiting.map((a) => a.id),
+        ),
+      );
+    if (waiting.some((a) => a.status === 'draft')) await syncMonthlyActDraft(tx, itemId);
     return;
   }
   await ensureMonthlyActDraft(tx, itemId);

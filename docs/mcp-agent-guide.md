@@ -419,6 +419,8 @@ Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-0
 
 `list_acts` is the registry the accountant gets (page «Реєстр актів», Excel export): acts of each FOP in date order with the total of issued acts and the months without a monthly act. Acts issued before Tally are entered with `add_legacy_acts` (A-088) from their signed documents (`search_documents` type `act`; amount and service period are in the document notes or the PDF): one item per act with `legacyRef` `vchasno:<documentId>`, the FOP `contractId`, the number as the owner's registry writes it (e.g. `1001 - А5` for the document `OD-1001-A5`), `actDate`, `amountUah`, `type` (`reimbursement` for trip compensations), the printed period and `documentIds`. Run `dryRun` first; a re-sent item is `existing`. Legacy acts are issued and immutable — a wrong one is voided in the UI. Acts of companies on public offers (e.g. ТОВ «Вчасно Сервіс») are bills, not FOP acts, and stay out of the registry.
 
+Before the close (A-089) the person's monthly act made in the period (Draft act) is split with the same `split_payout_act`, choosing work by `assignmentIds` (from `list_assignments`) and adjustments by `adjustmentIds`; the split carries over to the payout at the close.
+
 ### 8.12 Periods — `delete_period`
 
 A month-end period opened by mistake is deleted with `delete_period` by `month` (YYYY-MM-01) or `periodId`, `dryRun` first. Only an open period with nothing in it (no hours, adjustments, invoices or payroll) can go; anything else is refused.

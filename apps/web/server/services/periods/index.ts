@@ -412,7 +412,9 @@ export const removeAdjustment = defineService({
       const owner = await periodOfAdjustment(tx, id);
       if (!owner) return err(serviceError('not_found', 'periods.adjustmentNotFound'));
       const open = owner.period.status === 'open';
-      const frozen = open ? await frozenAdjustments(tx, owner.period, owner.personId) : null;
+      const frozen = open
+        ? await frozenAdjustments(tx, owner.period, owner.personId, owner.supplierActId)
+        : null;
       if (frozen) return err(serviceError('conflict', frozen));
       const [row] = await tx
         .delete(adjustment)

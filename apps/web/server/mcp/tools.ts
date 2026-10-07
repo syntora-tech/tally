@@ -830,9 +830,9 @@ export const TOOLS: readonly ToolDef[] = [
   }),
   tool({
     name: 'split_payout_act',
-    title: 'Split a payout act by activity or amount',
+    title: 'Split a FOP act by work or amount',
     description:
-      "Splits a draft, unpaid FOP act of a payout by activity (A-085): lineIds (payroll lines, e.g. the client work) and adjustmentIds from get_payroll_queue that belong to this act go into a new act; periodFrom/periodTo is the new act's period, at the start or the end of this act (periods never overlap), the old act keeps the other days and the other activities. Amounts follow from the activities (USD × the payout rate + UAH) until the act is paid. Lines and adjustments of an act with isRest are those with supplierActId null. Instead of activities, amountUsd splits off a USD share (A-086), e.g. 1000 of a single 5000 $ line: allowed from the act of the rest or an act split off by amount, it must leave something in this act, and its UAH is amountUsd × the payout rate until paid. Use dryRun first.",
+      "Splits a draft, unpaid FOP act of a payout by activity (A-085): lineIds (payroll lines, e.g. the client work) and adjustmentIds from get_payroll_queue that belong to this act go into a new act; periodFrom/periodTo is the new act's period, at the start or the end of this act (periods never overlap), the old act keeps the other days and the other activities. Amounts follow from the activities (USD × the payout rate + UAH) until the act is paid. Lines and adjustments of an act with isRest are those with supplierActId null. Instead of activities, amountUsd splits off a USD share (A-086), e.g. 1000 of a single 5000 $ line: allowed from the act of the rest or an act split off by amount, it must leave something in this act, and its UAH is amountUsd × the payout rate until paid. Before the period closes (A-089) the person's monthly act (made with Draft act in the period) is split the same way, choosing work by assignmentIds (list_assignments) instead of lineIds; the split carries over to the payout at the close. Use dryRun first.",
     kind: 'write',
     service: splitPayoutAct,
   }),

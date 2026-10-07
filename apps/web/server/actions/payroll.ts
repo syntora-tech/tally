@@ -66,6 +66,7 @@ export async function mergeActsAction(
   const result = await mergeActs.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
+  revalidatePath('/periods/[id]', 'page');
   return { ok: true, data: result.value };
 }
 
@@ -90,11 +91,13 @@ export async function splitActAction(
   const result = await splitActByActivity.run(ctx, {
     actId: field('actId'),
     lineIds: formData.getAll('lineIds'),
+    assignmentIds: formData.getAll('assignmentIds'),
     adjustmentIds: formData.getAll('adjustmentIds'),
     amountUsd: field('amountUsd'),
     ...range,
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
+  revalidatePath('/periods/[id]', 'page');
   return { ok: true, data: result.value };
 }

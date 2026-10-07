@@ -47,6 +47,7 @@ import {
   requiredText,
 } from '../fields';
 import { loadCalendar } from '../periods';
+import { splitEarlyActIn, syncEarlyActsOf } from '../periods/early';
 import { buildActSnapshot } from './snapshot';
 
 const payeeName = sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`;
@@ -134,6 +135,7 @@ export async function activitiesOf(tx: DbTransaction, itemId: string) {
   const lines = await tx
     .select({
       id: payrollLine.id,
+      assignmentId: payrollLine.assignmentId,
       amount: payrollLine.amount,
       currency: payrollLine.currency,
       supplierActId: payrollLine.supplierActId,
@@ -293,8 +295,9 @@ export async function splitActForPayment(
 }
 
 /**
- * Joins two neighbouring draft acts of one payout into one act and one period (A-083). With the
- * act of the rest it becomes the rest; two parts add up, at their average rate.
+ * Joins two neighbouring draft acts of one payout — or of one person's month before the close
+ * (A-089) — into one act and one period (A-083). With the act of the rest it becomes the rest; two
+ * parts add up, at their average rate.
  */
 export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: string) {
   const rows = await tx
@@ -304,9 +307,14 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
     .for('update');
   const [a, b] = rows.sort((x, y) => (x.periodFrom ?? '').localeCompare(y.periodFrom ?? ''));
   if (!a || !b || a.id === b.id) return err(serviceError('not_found', 'acts.notFound'));
+  const early =
+    a.payrollItemId === null &&
+    b.payrollItemId === null &&
+    a.type === 'monthly' &&
+    b.type === 'monthly' &&
+    a.payeeId === b.payeeId;
   if (
-    a.payrollItemId === null ||
-    a.payrollItemId !== b.payrollItemId ||
+    (!early && (a.payrollItemId === null || a.payrollItemId !== b.payrollItemId)) ||
     a.status !== 'draft' ||
     b.status !== 'draft' ||
     !a.periodTo ||
@@ -319,10 +327,21 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
   const locked = a.rateLocked || b.rateLocked;
   if (!toRest && !locked) {
     // An act of activities follows them alone, so it cannot absorb an act split off by amount.
-    const data = await activitiesOf(tx, a.payrollItemId);
-    const owns = (id: string) =>
-      [...(data?.lines ?? []), ...(data?.adjustments ?? [])].some((x) => x.supplierActId === id);
-    if (owns(a.id) !== owns(b.id)) {
+    const owns = async (act: SupplierAct) =>
+      (act.assignmentIds?.length ?? 0) > 0 ||
+      (
+        await tx
+          .select({ id: adjustment.id })
+          .from(adjustment)
+          .where(eq(adjustment.supplierActId, act.id))
+      ).length > 0 ||
+      (
+        await tx
+          .select({ id: payrollLine.id })
+          .from(payrollLine)
+          .where(eq(payrollLine.supplierActId, act.id))
+      ).length > 0;
+    if ((await owns(a)) !== (await owns(b))) {
       return err(serviceError('validation_error', 'acts.mergeAmountWithActivities'));
     }
   }
@@ -336,6 +355,7 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
       .where(inArray(table.supplierActId, [a.id, b.id]));
   }
   await tx.delete(supplierAct).where(eq(supplierAct.id, b.id));
+  const assignments = [...(a.assignmentIds ?? []), ...(b.assignmentIds ?? [])];
   await tx
     .update(supplierAct)
     .set({
@@ -343,12 +363,16 @@ export async function mergeActsIn(tx: DbTransaction, firstId: string, secondId: 
       actDate: b.actDate,
       amountUah: uah.toFixed(2),
       amountUsd: toRest ? null : usd.toFixed(8),
+      assignmentIds: toRest || assignments.length === 0 ? null : assignments,
       rateLocked: !toRest && locked,
-      fxRate: toRest || usd.isZero() ? null : uah.div(usd).toFixed(6),
-      fxSource: toRest || usd.isZero() ? null : 'manual',
+      ...(!early && {
+        fxRate: toRest || usd.isZero() ? null : uah.div(usd).toFixed(6),
+        fxSource: toRest || usd.isZero() ? null : ('manual' as const),
+      }),
     })
     .where(eq(supplierAct.id, a.id));
-  await syncMonthlyActDraft(tx, a.payrollItemId);
+  if (a.payrollItemId) await syncMonthlyActDraft(tx, a.payrollItemId);
+  else await syncEarlyActsOf(tx, a.payeeId, startOfMonth(a.periodFrom as LocalDate));
   return ok({ id: a.id });
 }
 
@@ -356,6 +380,8 @@ export const splitActInput = z.object({
   actId: z.uuid(),
   /** Lines (activities) and adjustments that go into the new act. */
   lineIds: z.array(z.uuid()).default([]),
+  /** Before the close there are no lines yet: the work is chosen by assignment (A-089). */
+  assignmentIds: z.array(z.uuid()).default([]),
   adjustmentIds: z.array(z.uuid()).default([]),
   /** Or a USD share of this act for the new one, e.g. with a single activity (A-086). */
   amountUsd: z.preprocess(
@@ -371,9 +397,59 @@ export const splitActInput = z.object({
 });
 
 /**
- * Splits a draft act by activity (A-085): the chosen lines and adjustments go into a new act for
- * the chosen period at one edge of the old one; the rest keep the old act and the other days.
- * Amounts follow from the activities, so none is typed in.
+ * Cuts the chosen days off a draft act into a new one (A-085): the days must start or end with
+ * the act's period and leave it some; the old act keeps the other days.
+ */
+export async function carveAct(
+  tx: DbTransaction,
+  act: SupplierAct,
+  range: { periodFrom: string; periodTo: string },
+  values: Partial<typeof supplierAct.$inferInsert>,
+) {
+  const from = (act.periodFrom ?? range.periodFrom) as LocalDate;
+  const to = (act.periodTo ?? range.periodTo) as LocalDate;
+  const atStart = range.periodFrom === from && range.periodTo < to;
+  const atEnd = range.periodTo === to && range.periodFrom > from;
+  if (range.periodFrom > range.periodTo || (!atStart && !atEnd)) {
+    return err(serviceError('validation_error', 'acts.splitAtEdge'));
+  }
+  const cal = await loadCalendar(tx);
+  const keep = atStart
+    ? { from: addDays(range.periodTo as LocalDate, 1), to }
+    : { from, to: addDays(range.periodFrom as LocalDate, -1) };
+  await tx
+    .update(supplierAct)
+    .set({
+      periodFrom: keep.from,
+      periodTo: keep.to,
+      actDate:
+        act.actDate > keep.to || act.actDate < keep.from
+          ? partActDate(cal, keep.to, keep.from)
+          : act.actDate,
+    })
+    .where(eq(supplierAct.id, act.id));
+  const [created] = await tx
+    .insert(supplierAct)
+    .values({
+      contractId: act.contractId,
+      payeeId: act.payeeId,
+      payrollItemId: act.payrollItemId,
+      type: 'monthly',
+      actDate: partActDate(cal, range.periodTo as LocalDate, range.periodFrom as LocalDate),
+      periodFrom: range.periodFrom,
+      periodTo: range.periodTo,
+      amountUah: '0',
+      ...values,
+    })
+    .returning({ id: supplierAct.id });
+  return created ? ok(created) : err(serviceError('internal_error', 'general.createFailed'));
+}
+
+/**
+ * Splits a draft act by activity (A-085) or by a USD share (A-086): the chosen lines and
+ * adjustments go into a new act for the chosen period at one edge of the old one; the rest keep
+ * the old act and the other days. Amounts follow from the activities, so none is typed in. An act
+ * made before the close is split by assignment (A-089).
  */
 export async function splitActByActivityIn(
   tx: DbTransaction,
@@ -384,19 +460,24 @@ export async function splitActByActivityIn(
     .from(supplierAct)
     .where(eq(supplierAct.id, input.actId))
     .for('update');
-  if (!act?.payrollItemId || act.type !== 'monthly') {
+  if (!act || act.type !== 'monthly') {
     return err(serviceError('not_found', 'acts.notFound'));
   }
   if (act.status !== 'draft' || act.rateLocked) {
     return err(serviceError('conflict', 'acts.splitDraftOnly'));
   }
+  if (!act.payrollItemId) return splitEarlyActIn(tx, act, input);
   const data = await activitiesOf(tx, act.payrollItemId);
   if (!data) return err(serviceError('not_found', 'acts.notFound'));
   const isRest = act.amountUsd === null;
   const inAct = (x: { supplierActId: string | null }) =>
     isRest ? x.supplierActId === null : x.supplierActId === act.id;
   const members = [...data.lines, ...data.adjustments].filter(inAct);
-  const chosen = new Set([...input.lineIds, ...input.adjustmentIds]);
+  const lineIds = [
+    ...input.lineIds,
+    ...data.lines.filter((l) => input.assignmentIds.includes(l.assignmentId)).map((l) => l.id),
+  ];
+  const chosen = new Set([...lineIds, ...input.adjustmentIds]);
   const byAmount = input.amountUsd !== undefined;
   if (byAmount && chosen.size > 0) {
     return err(serviceError('validation_error', 'acts.splitAmountOrActivities'));
@@ -421,67 +502,40 @@ export async function splitActByActivityIn(
       return err(serviceError('validation_error', 'acts.splitKeepSome'));
     }
   }
-  const from = (act.periodFrom ?? input.periodFrom) as LocalDate;
-  const to = (act.periodTo ?? input.periodTo) as LocalDate;
-  const atStart = input.periodFrom === from && input.periodTo < to;
-  const atEnd = input.periodTo === to && input.periodFrom > from;
-  if (input.periodFrom > input.periodTo || (!atStart && !atEnd)) {
-    return err(serviceError('validation_error', 'acts.splitAtEdge'));
-  }
-  const cal = await loadCalendar(tx);
-  const keep = atStart
-    ? { from: addDays(input.periodTo, 1), to }
-    : { from, to: addDays(input.periodFrom, -1) };
-  await tx
-    .update(supplierAct)
-    .set({
-      periodFrom: keep.from,
-      periodTo: keep.to,
-      actDate:
-        act.actDate > keep.to || act.actDate < keep.from
-          ? partActDate(cal, keep.to, keep.from)
-          : act.actDate,
-    })
-    .where(eq(supplierAct.id, act.id));
-  const [created] = await tx
-    .insert(supplierAct)
-    .values({
-      contractId: act.contractId,
-      payeeId: act.payeeId,
-      payrollItemId: act.payrollItemId,
-      type: 'monthly',
-      actDate: partActDate(cal, input.periodTo, input.periodFrom),
-      periodFrom: input.periodFrom,
-      periodTo: input.periodTo,
-      amountUah: '0',
-      amountUsd: toDecimal(input.amountUsd ?? '0').toFixed(8),
-    })
-    .returning({ id: supplierAct.id });
-  if (!created) return err(serviceError('internal_error', 'general.createFailed'));
-  if (byAmount && !isRest) {
+  // The work chosen is kept by assignment too, so a reopened and closed month splits the same way.
+  const assignments = data.lines.filter((l) => chosen.has(l.id)).map((l) => l.assignmentId);
+  if (!isRest) {
     await tx
       .update(supplierAct)
       .set({
-        amountUsd: toDecimal(act.amountUsd ?? '0')
-          .minus(input.amountUsd ?? '0')
-          .toFixed(8),
+        assignmentIds: (act.assignmentIds ?? []).filter((id) => !assignments.includes(id)),
+        ...(byAmount && {
+          amountUsd: toDecimal(act.amountUsd ?? '0')
+            .minus(input.amountUsd ?? '0')
+            .toFixed(8),
+        }),
       })
       .where(eq(supplierAct.id, act.id));
   }
-  if (input.lineIds.length) {
+  const created = await carveAct(tx, act, input, {
+    amountUsd: toDecimal(input.amountUsd ?? '0').toFixed(8),
+    assignmentIds: assignments.length ? assignments : null,
+  });
+  if (created.isErr()) return err(created.error);
+  if (lineIds.length) {
     await tx
       .update(payrollLine)
-      .set({ supplierActId: created.id })
-      .where(inArray(payrollLine.id, input.lineIds));
+      .set({ supplierActId: created.value.id })
+      .where(inArray(payrollLine.id, lineIds));
   }
   if (input.adjustmentIds.length) {
     await tx
       .update(adjustment)
-      .set({ supplierActId: created.id })
+      .set({ supplierActId: created.value.id })
       .where(inArray(adjustment.id, input.adjustmentIds));
   }
   await syncMonthlyActDraft(tx, act.payrollItemId);
-  return ok({ id: created.id, keptActId: act.id });
+  return ok({ id: created.value.id, keptActId: act.id });
 }
 
 export const splitActByActivity = defineService({

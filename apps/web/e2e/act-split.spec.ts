@@ -18,6 +18,7 @@ const ids = {
   item: '',
 };
 let emptyPeriod = '';
+const early = { assignments: [] as string[], period: '' };
 
 async function one(query: ReturnType<typeof sql>) {
   const { db: d, sql: client } = db();
@@ -60,6 +61,28 @@ test.beforeAll(async () => {
     sql`insert into public.supplier_act (contract_id, payee_id, payroll_item_id, type, act_date, period_from, period_to, amount_uah)
         values (${ids.contract}, ${ids.payee}, ${ids.item}, 'monthly', '2052-09-30', '2052-09-01', '2052-09-30', 207500) returning id`,
   );
+  // A-089: the same person's month before the close, two pieces of work and one early act.
+  for (const amount of ['4000', '1000']) {
+    const id = await one(
+      sql`insert into public.assignment (person_id, is_internal, starts_on, role_title)
+          values (${ids.person}, true, '2052-01-01', ${amount === '4000' ? 'Boosty' : 'CTO'}) returning id`,
+    );
+    await one(
+      sql`insert into public.pay_terms (assignment_id, valid_from, type, amount, release_policy)
+          values (${id}, '2052-10-01', 'fixed', ${amount}, 'immediate') returning id`,
+    );
+    early.assignments.push(id);
+  }
+  await one(
+    sql`update public.person set default_payee_id = ${ids.payee} where id = ${ids.person} returning id`,
+  );
+  early.period = await one(
+    sql`insert into public.period (month, work_hours) values ('2052-10-01', 184) returning id`,
+  );
+  await one(
+    sql`insert into public.supplier_act (contract_id, payee_id, type, act_date, period_from, period_to, amount_uah, fx_rate, fx_source)
+        values (${ids.contract}, ${ids.payee}, 'monthly', '2052-10-31', '2052-10-01', '2052-10-31', 207500, 41.5, 'manual') returning id`,
+  );
   emptyPeriod = await one(
     sql`insert into public.period (month, work_hours) values ('2052-11-01', 168) returning id`,
   );
@@ -70,12 +93,18 @@ test.afterAll(async () => {
   try {
     await d.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
-      await tx.execute(sql`delete from public.supplier_act where payroll_item_id = ${ids.item}`);
+      await tx.execute(sql`delete from public.supplier_act where payee_id = ${ids.payee}`);
       await tx.execute(sql`delete from public.payroll_line where payroll_item_id = ${ids.item}`);
       await tx.execute(sql`delete from public.payroll_item where id = ${ids.item}`);
     });
-    await d.execute(sql`delete from public.period where id in (${ids.period}, ${emptyPeriod})`);
-    await d.execute(sql`delete from public.assignment where id = ${ids.assignment}`);
+    await d.execute(
+      sql`delete from public.period where id in (${ids.period}, ${emptyPeriod}, ${early.period})`,
+    );
+    for (const id of [ids.assignment, ...early.assignments]) {
+      await d.execute(sql`delete from public.pay_terms where assignment_id = ${id}`);
+      await d.execute(sql`delete from public.assignment where id = ${id}`);
+    }
+    await d.execute(sql`update public.person set default_payee_id = null where id = ${ids.person}`);
     await d.execute(sql`delete from public.contract where id = ${ids.contract}`);
     await d.execute(sql`delete from public.payee where id = ${ids.payee}`);
     await d.execute(sql`delete from public.person where id = ${ids.person}`);
@@ -111,4 +140,16 @@ test('an empty period opened by mistake is deleted', async ({ page }) => {
   // The period with payouts has no delete button.
   await page.goto(`/periods/${ids.period}`);
   await expect(page.getByRole('button', { name: 'Delete period' })).toHaveCount(0);
+});
+
+test('an act is split by work in an open period (A-089)', async ({ page }) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  await page.goto(`/periods/${early.period}`);
+  await page.getByRole('button', { name: 'Split act' }).click();
+  await page.getByRole('checkbox', { name: /Boosty/ }).check();
+  await page.getByRole('button', { name: 'Split', exact: true }).click();
+  await expect(page.getByText('Act split')).toBeVisible();
+  await expect(page.getByText('166,000.00')).toBeVisible();
+  await expect(page.getByText('41,500.00')).toBeVisible();
+  await expect(page.getByText(/01\.10\.2052–16\.10\.2052 · internal · Boosty/)).toBeVisible();
 });

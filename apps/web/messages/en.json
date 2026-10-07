@@ -476,7 +476,8 @@
       "packagePart": "A part must point at a signed package, and a package with parts keeps its type",
       "plannedPaid": "A paid planned payment is fixed: unlink its expenses first",
       "actPeriodsOverlap": "The act periods of one payout cannot overlap",
-      "actActivity": "An activity can move only between draft acts of its own payout"
+      "actActivity": "An activity can move only between draft acts of its own payout",
+      "monthActs": "Acts of one month cannot overlap, and a piece of work goes into one act only"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -1606,7 +1607,7 @@
     "actPeriodHint": "For a part of the month. Empty: from the first day without an act to the payout day; paying the whole rest keeps the act to the month's end.",
     "partOf": "part {usd} at {rate}",
     "split": "Act split",
-    "splitHint": "Choose the boundary day and which side of it the new act takes, then what goes into it: activities or a USD share. The rest stays in this act; amounts in UAH follow at the payout rate.",
+    "splitHint": "Choose the boundary day and which side of it the new act takes, then what goes into it: work and adjustments, or a USD share. The rest stays in this act; amounts in UAH follow at the rate.",
     "splitSubmit": "Split",
     "payAct": "Act paid",
     "payActRest": "The rest of the month",

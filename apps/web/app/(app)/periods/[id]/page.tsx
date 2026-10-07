@@ -30,6 +30,7 @@ import {
   ReopenForm,
 } from './period-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { MergeActsButton, SplitActForm } from '../../payroll/payroll-forms';
 
 export const generateMetadata = pageTitle('period');
 
@@ -280,17 +281,73 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
                           .join(' + ') || '—'}
                       </TableCell>
                       <TableCell>
-                        {a.act ? (
-                          <Link className="hover:underline" href={`/acts/${a.act.id}`}>
-                            {a.act.number ?? t('draft')} · {fmt.amount(a.act.amountUah, 'UAH')}
-                            {a.act.fxRate && ` · ${a.act.fxRate}`}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
+                        {a.acts.length === 0 && '—'}
+                        <ul className="flex flex-col gap-1">
+                          {a.acts.map((act, n) => {
+                            const next = a.acts[n + 1];
+                            const activities = [
+                              ...a.lines
+                                .filter((l) => act.assignmentIds.includes(l.assignmentId))
+                                .map((l) => ({
+                                  id: l.assignmentId,
+                                  kind: 'assignment' as const,
+                                  label: `${l.clientName ?? tc('internal')}${l.roleTitle ? ` · ${l.roleTitle}` : ''} · ${fmt.amount(l.amount, l.currency)}`,
+                                })),
+                              ...a.adjustments
+                                .filter((j) => act.adjustmentIds.includes(j.id))
+                                .map((j) => ({
+                                  id: j.id,
+                                  kind: 'adjustment' as const,
+                                  label: `${ADJUSTMENT_KIND_LABELS[j.kind] ?? j.kind}: ${fmt.amount(j.amount, j.currency)} — ${j.reason}`,
+                                })),
+                            ];
+                            const splittable =
+                              docs.open &&
+                              act.status === 'draft' &&
+                              act.payrollItemId === null &&
+                              act.periodFrom !== null &&
+                              act.periodTo !== null &&
+                              act.periodFrom < act.periodTo;
+                            const byAmount =
+                              !toDecimal(a.usd).isZero() && (act.isRest || activities.length === 0);
+                            return (
+                              <li key={act.id} className="flex flex-wrap items-center gap-2">
+                                <Link className="hover:underline" href={`/acts/${act.id}`}>
+                                  {act.number ?? t('draft')} · {fmt.amount(act.amountUah, 'UAH')}
+                                  {act.fxRate && ` · ${act.fxRate}`}
+                                </Link>
+                                {a.acts.length > 1 && act.periodFrom && act.periodTo && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {fmt.date(act.periodFrom)}–{fmt.date(act.periodTo)}
+                                    {activities.length > 0 &&
+                                      ` · ${activities.map((x) => x.label.split(' · ').slice(0, -1).join(' · ') || x.label).join(', ')}`}
+                                  </span>
+                                )}
+                                {docs.open &&
+                                  next &&
+                                  act.status === 'draft' &&
+                                  next.status === 'draft' && (
+                                    <MergeActsButton firstId={act.id} secondId={next.id} />
+                                  )}
+                                {splittable &&
+                                  act.periodFrom &&
+                                  act.periodTo &&
+                                  (activities.length > 1 || byAmount) && (
+                                    <SplitActForm
+                                      actId={act.id}
+                                      periodFrom={act.periodFrom}
+                                      periodTo={act.periodTo}
+                                      activities={activities}
+                                      byAmount={byAmount}
+                                    />
+                                  )}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </TableCell>
                       <TableCell>
-                        {docs.open && a.act?.status !== 'issued' && (
+                        {docs.open && (!a.act || a.acts.some((x) => x.status === 'draft')) && (
                           <EarlyActForm
                             periodId={p.id}
                             personId={a.personId}
