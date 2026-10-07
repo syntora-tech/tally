@@ -376,6 +376,8 @@
       "notFound": "Act not found",
       "chooseContract": "Choose a contract",
       "chooseFopContract": "Choose a FOP contract",
+      "legacyPeriod": "The act period starts after it ends",
+      "legacyChanged": "Historical act {ref} is already entered with other values",
       "issuedLocked": "An issued act cannot be changed",
       "alreadyIssued": "The act is already issued",
       "noSequence": "The contract has no act numbering (Settings)",

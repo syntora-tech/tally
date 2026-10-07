@@ -93,6 +93,8 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `get_payroll_queue`       | read  | Payouts by month: status, totals, what is left, lines with funding and deadlines, FOP acts (one per part when a month is paid in parts)                 |
 | `split_payout_act`        | write | Splits a draft act by activity: chosen lines/adjustments go into a new act for a period at one edge of it                                               |
 | `merge_payout_acts`       | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
+| `list_acts`               | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
+| `add_legacy_acts`         | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
 | `update_planned_payments` | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
@@ -412,6 +414,10 @@ Paid payments are fixed. A part or a tax with paid payments cannot be removed �
 ### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`
 
 Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged. A month can also be split by activity (A-085): `split_payout_act` with the `lineIds`/`adjustmentIds` of one act (from `get_payroll_queue`) and the new act's period at its start or end; amounts follow from the activities, nothing is typed in. With a single activity, pass `amountUsd` instead (A-086): e.g. 4 000 of a 5 000 $ line for 01–16 and the rest for 17–30; it must be less than the USD left in the act, and its UAH follows the payout rate until it is paid.
+
+### 8.13 Supplier acts registry — `list_acts`, `add_legacy_acts`
+
+`list_acts` is the registry the accountant gets (page «Реєстр актів», Excel export): acts of each FOP in date order with the total of issued acts and the months without a monthly act. Acts issued before Tally are entered with `add_legacy_acts` (A-088) from their signed documents (`search_documents` type `act`; amount and service period are in the document notes or the PDF): one item per act with `legacyRef` `vchasno:<documentId>`, the FOP `contractId`, the number as the owner's registry writes it (e.g. `1001 - А5` for the document `OD-1001-A5`), `actDate`, `amountUah`, `type` (`reimbursement` for trip compensations), the printed period and `documentIds`. Run `dryRun` first; a re-sent item is `existing`. Legacy acts are issued and immutable — a wrong one is voided in the UI. Acts of companies on public offers (e.g. ТОВ «Вчасно Сервіс») are bills, not FOP acts, and stay out of the registry.
 
 ### 8.12 Periods — `delete_period`
 

@@ -73,9 +73,10 @@ export const supplierAct = pgTable(
   },
   (t) => [
     unique('supplier_act_legacy_ref_key').on(t.legacyRef),
+    // Legacy acts keep their numbers verbatim, and the old numbering reused some (A-088).
     uniqueIndex('supplier_act_number_key')
       .on(t.contractId, t.number)
-      .where(sql`${t.status} <> 'draft'`),
+      .where(sql`${t.status} <> 'draft' and not ${t.isLegacy}`),
     check('supplier_act_draft_number_check', sql`${t.status} <> 'draft' or ${t.number} is null`),
     check(
       'supplier_act_issued_number_check',

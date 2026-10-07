@@ -484,6 +484,13 @@
       "when": 1791362221666,
       "tag": "20261007083701_act_activities_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791387993311,
+      "tag": "20261007154633_legacy_act_numbers",
+      "breakpoints": true
     }
   ]
 }

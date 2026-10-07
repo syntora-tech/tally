@@ -51,6 +51,8 @@ import { listPlannedPayments } from '../services/planned/payments';
 import { getAct, mergePayoutActs, splitPayoutAct } from '../services/acts';
 import { deletePeriod } from '../services/periods';
 import { deleteDraftAct } from '../services/acts/delete';
+import { addLegacyActs } from '../services/acts/legacy';
+import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
 
 export type ToolKind = 'read' | 'write';
@@ -227,6 +229,22 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       'One FOP act by id: status, number, contract, payee, amount, service period, payout links and file references. Read before deleting a mistaken draft.',
     service: getAct,
+  }),
+  tool({
+    name: 'list_acts',
+    title: 'Supplier acts registry',
+    kind: 'read',
+    description:
+      'The supplier acts registry (A-087): FOP acts grouped by counterparty in date order — number, actDate, amountUah, type, service period, contract, isLegacy, signed — with the UAH total of issued acts per counterparty and overall, and months without a monthly act (missing). Filters: payeeId, year (e.g. "2026"), all true to include drafts and void acts (never counted).',
+    service: actsRegistry,
+  }),
+  tool({
+    name: 'add_legacy_acts',
+    title: 'Add historical FOP acts',
+    kind: 'write',
+    description:
+      'Historical FOP acts issued before Tally (A-088), max 100: each lands in the registry as an issued legacy act — no payout, file generation or working-day check — with the number verbatim (old reused numbers allowed). Item: legacyRef (stable key, e.g. "vchasno:<documentId>"; a re-sent item with the same values is "existing", other values are an error), contractId (FOP contract), number, actDate, amountUah, type monthly|reimbursement|other, periodFrom/periodTo, documentIds (the act documents to link). Issued acts are immutable afterwards (void in the UI). All-or-nothing; errors keyed "acts.<index>"; use dryRun first.',
+    service: addLegacyActs,
   }),
   tool({
     name: 'delete_draft_act',
