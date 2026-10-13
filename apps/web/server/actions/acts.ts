@@ -7,6 +7,7 @@ import { formDataToObject } from '@/lib/form-data';
 import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
 import { createAct, issueAct, saveActDraft, setSignedUrl, voidAct } from '../services/acts';
+import { deleteDraftAct } from '../services/acts/delete';
 import type { ActionResult } from './to-action-result';
 
 export type ActFormState = ActionResult<{ id: string }> | null;
@@ -76,4 +77,18 @@ export async function setSignedUrlAction(
   return result.isErr()
     ? { ok: false, error: await localizeForUser(result.error) }
     : done(result.value.id);
+}
+
+export async function deleteDraftActAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const result = await deleteDraftAct.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/acts');
+  revalidatePath('/payroll');
+  revalidatePath('/periods', 'layout');
+  const { mergedInto } = result.value;
+  redirect(mergedInto ? `/acts/${mergedInto}` : '/acts');
 }

@@ -51,6 +51,7 @@ import { listPlannedPayments } from '../services/planned/payments';
 import { getAct, mergePayoutActs, splitPayoutAct } from '../services/acts';
 import { deletePeriod } from '../services/periods';
 import { deleteDraftAct } from '../services/acts/delete';
+import { listContractorInvoices } from '../services/contractor-invoices';
 import { addLegacyActs } from '../services/acts/legacy';
 import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
@@ -239,6 +240,14 @@ export const TOOLS: readonly ToolDef[] = [
     service: actsRegistry,
   }),
   tool({
+    name: 'list_contractor_invoices',
+    title: 'Contractor invoices',
+    kind: 'read',
+    description:
+      'Invoices contractors abroad (not FOPs) issue to us for a payout (A-090), newest first: number (the invoice date as DDMMYYYY), status draft|issued|void, invoiceDate, service period, hours, amount and currency, payee, contract, payrollItemId and the filed bill documentId. Drafting, issuing and voiding stay in the UI (Payroll). Filters: payeeId, payrollItemIds, status.',
+    service: listContractorInvoices,
+  }),
+  tool({
     name: 'add_legacy_acts',
     title: 'Add historical FOP acts',
     kind: 'write',
@@ -252,7 +261,7 @@ export const TOOLS: readonly ToolDef[] = [
     kind: 'write',
     destructive: true,
     description:
-      'Owner only, on an explicit request to delete this act. Permanently deletes one standalone unnumbered draft, retaining the audited old row and reason. Refuses issued or signed acts, files, registry-document links, payroll and reimbursement links. Read get_act and identify the exact counterparty and period first. Always run dryRun first and show what will be deleted. Issued acts must be voided in the UI; their numbers remain reserved.',
+      "Owner only, on an explicit request to delete this act. Deletes one unnumbered draft (A-091), retaining the audited old row and reason: a standalone draft or a person's only act of a month before the close is removed; an act split off a month gives its days and work back to the neighbouring draft (the result names it in mergedInto); the only act of a payout stays. Refuses issued or signed acts, paid parts, files, registry-document links and reimbursement acts. Read get_act and identify the exact counterparty and period first. Always run dryRun first and show what will be deleted. Issued acts must be voided in the UI; their numbers remain reserved.",
     service: deleteDraftAct,
   }),
   tool({

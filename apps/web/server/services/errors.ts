@@ -121,6 +121,8 @@ export function mapDbError(error: unknown): ServiceError | null {
       return serviceError('conflict', 'db.actActivity');
     case 'TL066':
       return serviceError('conflict', 'db.monthActs');
+    case 'TL067':
+      return serviceError('validation_error', 'db.contractorInvoiceContract');
     case 'TL020':
       return serviceError('validation_error', 'db.sequenceDown');
     case 'TL021':

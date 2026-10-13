@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { getPerson } from '../people';
-import { createPayee, getPayee, listPayees, setDefaultPayee } from '.';
+import { createPayee, getPayee, listPayees, payeeInput, setDefaultPayee } from '.';
 
 const h = intHarness();
 let owner: Awaited<ReturnType<typeof h.user>>;
@@ -48,10 +48,23 @@ describe('payees', () => {
     const res = await createPayee.run(h.ctxFor(finance), {
       kind: 'crypto',
       iban: 'not-an-iban',
-      taxId: 'abc',
     });
     const fields = res._unsafeUnwrapErr().fieldErrors ?? {};
-    expect(Object.keys(fields).sort()).toEqual(['iban', 'legalNameUa', 'taxId', 'walletAddress']);
+    expect(Object.keys(fields).sort()).toEqual(['iban', 'legalNameUa', 'walletAddress']);
+
+    // A FOP tax ID is digits; a contractor abroad keeps theirs as printed (A-090).
+    const fop = await createPayee.run(h.ctxFor(finance), {
+      kind: 'fop',
+      legalNameUa: 'ФОП Цифри',
+      taxId: 'abc',
+    });
+    expect(fop._unsafeUnwrapErr().fieldErrors?.taxId).toBeDefined();
+    const abroad = payeeInput.safeParse({
+      kind: 'other',
+      legalNameEn: 'Contractor Abroad',
+      taxId: '(Canada) 961-358-652',
+    });
+    expect(abroad.success).toBe(true);
 
     const noWallet = await createPayee.run(h.ctxFor(finance), {
       kind: 'crypto',

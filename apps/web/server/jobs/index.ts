@@ -9,6 +9,7 @@ import { GoogleDocsRenderer, HtmlRenderer, type DocumentRenderer } from '../rend
 import { getDocumentStorage } from '../storage';
 import { DriveStorage } from '../storage/drive-storage';
 import { renderActHandler } from './render-act';
+import { renderContractorInvoiceHandler } from './render-contractor-invoice';
 import { renderInvoiceHandler } from './render-invoice';
 import { runNextJob, type JobHandler } from './worker';
 
@@ -49,6 +50,11 @@ function getHandlers(): Record<string, JobHandler> {
       renderer: getRenderer(),
       storage: getDocumentStorage(),
       templateId: env.GOOGLE_TEMPLATE_ACT_FOP_ID,
+    }),
+    render_contractor_invoice: renderContractorInvoiceHandler({
+      renderer: getRenderer(),
+      storage: getDocumentStorage(),
+      templateId: env.GOOGLE_TEMPLATE_INVOICE_CONTRACTOR_ID,
     }),
   };
   return handlers;

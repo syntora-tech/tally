@@ -206,6 +206,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(body.result.tools.map((t) => t.name)).toEqual([
       'get_act',
       'list_acts',
+      'list_contractor_invoices',
       'list_invoices',
       'get_invoice',
       'get_balances',
@@ -236,7 +237,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(56);
+    expect(tools).toHaveLength(57);
     for (const name of [
       'delete_transactions',
       'unlink_documents',

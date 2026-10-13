@@ -1,6 +1,7 @@
 import type { docs_v1 } from '@googleapis/docs';
 import type { drive_v3 } from '@googleapis/drive';
 import type { ActSnapshot } from '../services/acts/snapshot';
+import type { ContractorInvoiceSnapshot } from '../services/contractor-invoices/snapshot';
 import type { InvoiceSnapshot } from '../services/invoices/snapshot';
 import type { DriveStorage } from '../storage/drive-storage';
 import { safeFileName } from '../storage/folders';
@@ -8,7 +9,7 @@ import { fillRequests, insertRowRequests, planTemplate } from './google-docs';
 import { describeTemplateError } from './template';
 
 export type InvoiceLayout = 'invoice_hourly' | 'invoice_fixed';
-export type DocumentLayout = InvoiceLayout | 'act_fop';
+export type DocumentLayout = InvoiceLayout | 'act_fop' | 'invoice_contractor';
 
 export type RenderInput = {
   /** Google Docs template id: the contract's own, else the default for the layout. */
@@ -18,6 +19,7 @@ export type RenderInput = {
 } & (
   | { layout: InvoiceLayout; snapshot: InvoiceSnapshot }
   | { layout: 'act_fop'; snapshot: ActSnapshot }
+  | { layout: 'invoice_contractor'; snapshot: ContractorInvoiceSnapshot }
 );
 
 export type RenderOutput = {
@@ -102,7 +104,9 @@ export class HtmlRenderer implements DocumentRenderer {
     const html =
       input.layout === 'act_fop'
         ? actHtml(input.fileName, input.snapshot)
-        : invoiceHtml(input.layout, input.fileName, input.snapshot);
+        : input.layout === 'invoice_contractor'
+          ? contractorInvoiceHtml(input.fileName, input.snapshot)
+          : invoiceHtml(input.layout, input.fileName, input.snapshot);
     return Promise.resolve({
       sourceFileId: null,
       file: {
@@ -152,5 +156,31 @@ function actHtml(fileName: string, s: ActSnapshot): string {
 <p>Вартість послуг: <b>${e(s.total.amount)} грн</b> (${e(s.total.words_ua)}), без ПДВ.</p>
 <table><tr><td><b>Виконавець</b><br>${e(s.payee.name_ua)}<br>ІПН: ${e(s.payee.tax_id)}<br>${e(s.payee.address_ua)}<br>IBAN: ${e(s.payee.iban)}<br>${e(s.payee.bank)}</td>
 <td><b>Замовник</b><br>${e(s.company.name_ua)}<br>ЄДРПОУ: ${e(s.company.legal_code)}<br>${e(s.company.address_ua)}<br>${e(s.company.bank_ua)}</td></tr></table>
+</body></html>`;
+}
+
+/** Mirrors the contractor's own bilingual invoice (A-090); the Google template is the same layout. */
+function contractorInvoiceHtml(fileName: string, s: ContractorInvoiceSnapshot): string {
+  const e = (v: string) => escapeHtml(v).replaceAll('\n', '<br>');
+  const rows = s.lines
+    .map(
+      (l) =>
+        `<tr><td>${e(l.n)}</td><td>${e(l.description_en)} / ${e(l.description_ua)}</td><td>${e(l.qty)}</td><td>${e(l.amount)}</td></tr>`,
+    )
+    .join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${e(fileName)}</title>
+<style>body{font:13px/1.35 serif;max-width:820px;margin:2rem auto}table{width:100%;border-collapse:collapse;margin-bottom:1rem}td,th{border:1px solid #333;padding:3px 6px;vertical-align:top;text-align:left}h1{font-size:15px;text-align:center}.draft{color:#b00}</style></head><body>
+<p class="draft">Local render (no Google template)</p>
+<h1>Invoice (offer) / Інвойс (оферта) № ${e(s.doc.number)}<br>to the Services Agreement ${e(s.contract.ref_en)} /<br>до Договору про надання послуг ${e(s.contract.ref_ua)}</h1>
+<table>
+<tr><td><b>Date</b>: ${e(s.doc.date)}</td><td><b>Дата</b>: ${e(s.doc.date)}</td></tr>
+<tr><td><b>Customer</b>: ${e(s.company.name_en)}<br>Company number: ${e(s.company.legal_code)}</td><td><b>Замовник</b>: ${e(s.company.name_ua)}<br>ЄДРПОУ: ${e(s.company.legal_code)}</td></tr>
+<tr><td><b>Contractor</b>: ${e(s.payee.name_en)}<br>TAX ID: ${e(s.payee.tax_id)}<br>Address: ${e(s.payee.address_en)}</td><td><b>Підрядник</b>: ${e(s.payee.name_en)}<br>TAX ID: ${e(s.payee.tax_id)}<br>Address: ${e(s.payee.address_en)}</td></tr>
+<tr><td><b>Subject matter:</b> ${e(s.subject.en)}</td><td><b>Предмет:</b> ${e(s.subject.ua)}</td></tr>
+<tr><td><b>Currency</b>: ${e(s.total.currency)}</td><td><b>Валюта</b>: ${e(s.total.currency)}</td></tr>
+<tr><td><b>Contractor Bank information</b>:<br>${e(s.payee.bank_en)}</td><td></td></tr>
+</table>
+<table><thead><tr><th>№</th><th>Description / Опис</th><th>Amount, hours / Кількість, години</th><th>Amount, ${e(s.total.currency)} / Загальна вартість</th></tr></thead>
+<tbody>${rows}<tr><td colspan="3">Total to pay / Всього до сплати: ${e(s.total.words_en)} / ${e(s.total.words_ua)}</td><td>${e(s.total.amount)}</td></tr></tbody></table>
 </body></html>`;
 }

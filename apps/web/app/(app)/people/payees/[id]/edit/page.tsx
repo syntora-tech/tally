@@ -29,6 +29,8 @@ export default async function EditPayeePage({ params }: { params: Promise<{ id: 
           edrRecord: payee.edrRecord,
           edrDate: payee.edrDate,
           addressUa: payee.addressUa,
+          addressEn: payee.addressEn,
+          bankDetailsEn: payee.bankDetailsEn,
           iban: payee.iban,
           bankName: payee.bankName,
           walletAddress: payee.walletAddress,

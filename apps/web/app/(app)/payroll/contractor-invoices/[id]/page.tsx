@@ -1,0 +1,133 @@
+import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { AuditHistory } from '@/components/audit-history';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FINANCE_ROLES } from '@/lib/navigation';
+import { requireRole } from '@/server/request-context';
+import {
+  contractorInvoiceNumber,
+  getContractorInvoice,
+} from '@/server/services/contractor-invoices';
+import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import type { LocalDate } from '@tally/domain';
+import {
+  ContractorInvoiceDraftForm,
+  DeleteContractorInvoiceForm,
+  IssueContractorInvoiceForm,
+  VoidContractorInvoiceForm,
+} from '../contractor-invoice-forms';
+
+export const generateMetadata = pageTitle('contractorInvoice');
+
+export default async function ContractorInvoicePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const ctx = await requireRole(FINANCE_ROLES);
+  const { id } = await params;
+  const result = await getContractorInvoice.run(ctx, { id });
+  if (result.isErr()) notFound();
+  const { invoice: inv, payeeName, contractNumber, personName, month } = result.value;
+  const draft = inv.status === 'draft';
+  const [t, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
+    getTranslations('contractorInvoice'),
+    getFormat(),
+    getLabels(),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
+          {t('back')}
+        </Link>
+        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          {inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
+          <Badge variant={draft ? 'outline' : 'secondary'}>
+            {DOC_STATUS_LABELS[inv.status] ?? inv.status}
+          </Badge>
+        </h1>
+        <p className="text-muted-foreground">
+          {t('subtitle', { payee: payeeName, contract: contractNumber })}
+          {personName && month && ` · ${personName} · ${fmt.month(month)}`}
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-4">
+          <div>
+            <div className="text-muted-foreground">{t('date')}</div>
+            {fmt.date(inv.invoiceDate)}
+          </div>
+          <div>
+            <div className="text-muted-foreground">{t('period')}</div>
+            {inv.periodFrom && inv.periodTo
+              ? `${fmt.date(inv.periodFrom)}–${fmt.date(inv.periodTo)}`
+              : '—'}
+          </div>
+          <div>
+            <div className="text-muted-foreground">{t('hours')}</div>
+            {inv.hours ?? '—'}
+          </div>
+          <div>
+            <div className="text-muted-foreground">{t('amount')}</div>
+            <span data-testid="contractor-invoice-amount">
+              {fmt.amount(inv.amount, inv.currency)}
+            </span>
+          </div>
+          <div className="sm:col-span-4">
+            {inv.descriptionEn} / {inv.descriptionUa}
+          </div>
+          {inv.voidReason && (
+            <div className="sm:col-span-4">{t('voidReasonShown', { reason: inv.voidReason })}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      {draft && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('issueTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">{t('draftHint')}</p>
+            <ContractorInvoiceDraftForm
+              id={inv.id}
+              invoiceDate={inv.invoiceDate}
+              descriptionEn={inv.descriptionEn}
+              descriptionUa={inv.descriptionUa}
+            />
+            <IssueContractorInvoiceForm
+              id={inv.id}
+              number={contractorInvoiceNumber(inv.invoiceDate as LocalDate, [])}
+            />
+            <DeleteContractorInvoiceForm id={inv.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {inv.status === 'issued' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('fileTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 text-sm">
+            {inv.documentId ? (
+              <Link className="hover:underline" href={`/documents/${inv.documentId}`}>
+                {t('openDocument')}
+              </Link>
+            ) : (
+              <p className="text-muted-foreground">{t('fileRendering')}</p>
+            )}
+            <VoidContractorInvoiceForm id={inv.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      <AuditHistory ctx={ctx} tableName="contractor_invoice" rowId={inv.id} />
+    </div>
+  );
+}

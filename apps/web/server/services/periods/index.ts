@@ -1,5 +1,6 @@
 import {
   client,
+  contractorInvoice,
   invoice,
   adjustment,
   payrollItem,
@@ -353,6 +354,20 @@ export const reopenPeriod = defineService({
       if (locked[0]) {
         return err(
           serviceError('conflict', msg('periods.actIssued', { number: locked[0].number ?? '' })),
+        );
+      }
+      const [billed] = await tx
+        .select({ number: contractorInvoice.number })
+        .from(contractorInvoice)
+        .innerJoin(payrollItem, eq(payrollItem.id, contractorInvoice.payrollItemId))
+        .where(and(eq(payrollItem.periodId, periodId), ne(contractorInvoice.status, 'draft')))
+        .limit(1);
+      if (billed) {
+        return err(
+          serviceError(
+            'conflict',
+            msg('periods.contractorInvoiceIssued', { number: billed.number ?? '' }),
+          ),
         );
       }
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);

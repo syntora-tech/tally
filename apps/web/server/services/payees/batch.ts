@@ -16,10 +16,16 @@ const payeePatch = z.object({
   kind: z.enum(PAYEE_KINDS).optional().describe('fop (Ukrainian sole trader), crypto or other'),
   legalNameUa: text('Legal name in Ukrainian, e.g. "ФОП Іваненко Іван Іванович"'),
   legalNameEn: text('Legal name in English'),
-  taxId: text('ІПН / ЄДРПОУ, 8–12 digits; the match key without id'),
+  taxId: text(
+    'ІПН / ЄДРПОУ, 8–12 digits for a FOP; a contractor abroad as printed, e.g. "(Canada) 961-358-652". The match key without id',
+  ),
   edrRecord: text('EDR record number'),
   edrDate: text('EDR registration date, YYYY-MM-DD'),
   addressUa: text('Registered address in Ukrainian'),
+  addressEn: text('Address in English, printed on a contractor invoice (A-090)'),
+  bankDetailsEn: text(
+    'Bank details in English for a contractor invoice, one per line: beneficiary, account, bank, SWIFT…',
+  ),
   iban: text('IBAN, spaces allowed'),
   bankName: text('Bank name'),
   walletAddress: text('Payout wallet address (kind crypto)'),

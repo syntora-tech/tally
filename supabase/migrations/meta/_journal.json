@@ -505,6 +505,20 @@
       "when": 1791388077221,
       "tag": "20261007154757_act_assignments_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791888800929,
+      "tag": "20261013105320_contractor_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791888822047,
+      "tag": "20261013105342_contractor_invoice_invariants",
+      "breakpoints": true
     }
   ]
 }

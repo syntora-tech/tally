@@ -22,6 +22,8 @@ export type PayeeFormValues = {
   edrRecord: string | null;
   edrDate: string | null;
   addressUa: string | null;
+  addressEn: string | null;
+  bankDetailsEn: string | null;
   iban: string | null;
   bankName: string | null;
   walletAddress: string | null;
@@ -84,7 +86,7 @@ export function PayeeForm({ payee, people, defaultPersonId }: Props) {
         <Input id="legalNameEn" name="legalNameEn" defaultValue={payee?.legalNameEn ?? ''} />
       </FormField>
       <FormField label={t('taxId')} htmlFor="taxId" error={errors?.taxId}>
-        <Input id="taxId" name="taxId" inputMode="numeric" defaultValue={payee?.taxId ?? ''} />
+        <Input id="taxId" name="taxId" defaultValue={payee?.taxId ?? ''} />
       </FormField>
       <FormField label={t('edrRecord')} htmlFor="edrRecord" error={errors?.edrRecord}>
         <Input id="edrRecord" name="edrRecord" defaultValue={payee?.edrRecord ?? ''} />
@@ -105,6 +107,28 @@ export function PayeeForm({ payee, people, defaultPersonId }: Props) {
         error={errors?.addressUa}
       >
         <Textarea id="addressUa" name="addressUa" rows={2} defaultValue={payee?.addressUa ?? ''} />
+      </FormField>
+      <FormField
+        label={t('addressEn')}
+        htmlFor="addressEn"
+        className="md:col-span-2"
+        error={errors?.addressEn}
+      >
+        <Textarea id="addressEn" name="addressEn" rows={2} defaultValue={payee?.addressEn ?? ''} />
+      </FormField>
+      <FormField
+        label={t('bankDetailsEn')}
+        htmlFor="bankDetailsEn"
+        className="md:col-span-2"
+        error={errors?.bankDetailsEn}
+      >
+        <Textarea
+          id="bankDetailsEn"
+          name="bankDetailsEn"
+          rows={5}
+          defaultValue={payee?.bankDetailsEn ?? ''}
+          placeholder={t('bankDetailsEnHint')}
+        />
       </FormField>
       <FormField label={t('wallet')} htmlFor="walletAddress" error={errors?.walletAddress}>
         <Input id="walletAddress" name="walletAddress" defaultValue={payee?.walletAddress ?? ''} />

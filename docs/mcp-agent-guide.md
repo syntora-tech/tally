@@ -44,58 +44,59 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 
 ## 3. Tools
 
-| Tool                      | Kind  | What it does                                                                                                                                            |
-| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_balances`            | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + postings; `asOf` = up to that date) |
-| `list_categories`         | read  | Categories: `txType`, `name`, `id`                                                                                                                      |
-| `list_transactions`       | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`                   |
-| `list_fx_rates`           | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                               |
-| `upsert_accounts`         | write | Creates or updates accounts by exact name (≤ 100)                                                                                                       |
-| `upsert_categories`       | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                                    |
-| `set_fx_rates`            | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                              |
-| `add_transactions`        | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                                         |
-| `update_transactions`     | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                                   |
-| `delete_transactions`     | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request                |
-| `search_people`           | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data              |
-| `get_person`              | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                                         |
-| `list_clients`            | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                                  |
-| `find_wallets`            | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                                        |
-| `list_payees`             | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                                 |
-| `upsert_person_profile`   | write | Creates or partially updates people profiles (≤ 200)                                                                                                    |
-| `upsert_clients`          | write | Creates or partially updates clients (≤ 100)                                                                                                            |
-| `list_contracts`          | read  | Client and FOP contracts: counterparty, currency, status, date rules, SOW/assignment counts, linked documents                                           |
-| `get_contract`            | read  | One contract with its documents, SOWs/annexes and assignments of people                                                                                 |
-| `upsert_contracts`        | write | Creates or partially updates contracts (≤ 50); `documentIds` links registry documents                                                                   |
-| `list_contract_annexes`   | read  | SOWs/annexes inside contracts with their own date rules, documents and assignment count                                                                 |
-| `upsert_contract_annexes` | write | Creates or partially updates SOWs/annexes (≤ 100); each result has the `id` for assignments                                                             |
-| `list_assignments`        | read  | People on contracts/SOWs with the terms in force for a month and every terms version                                                                    |
-| `upsert_assignments`      | write | Creates or partially updates assignments (≤ 100) with the first or next `billing`/`pay` versions                                                        |
-| `upsert_wallets`          | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
-| `upsert_payees`           | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
-| `list_trips`              | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
-| `get_trip`                | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
-| `upsert_trips`            | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
-| `add_trip_expenses`       | write | Adds expenses to a trip (≤ 200) with optional receipt files; NBU rate by default; duplicate receipts refused                                            |
-| `search_documents`        | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
-| `get_document`            | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
-| `find_link_targets`       | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
-| `add_documents`           | write | Adds documents (≤ 10) with a base64 file (≤ 3 MB per call) or a link, plus links; `supersedesId` for a new version                                      |
-| `update_documents`        | write | Corrects document metadata by `id` (≤ 100), including `type`; `status: void` cancels; generated/signed files are read-only                              |
-| `split_document`          | write | Splits a signed PDF holding several documents into parts by pages; the original stays as a `package` (A-078)                                            |
-| `link_documents`          | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
-| `unlink_documents`        | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
-| `delete_documents`        | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
-| `list_planned_expenses`   | read  | Recurring company costs with their parts in the month, taxes (withheld / on top), bank fee tariff and next date                                         |
-| `list_payout_charges`     | read  | Taxes charged on every payout to a person (on top, e.g. 20 % in UAH)                                                                                    |
-| `list_planned_payments`   | read  | Payments to make by due date: instalments, their taxes and payout taxes, with status, expected bank fee and the Ledger expenses that paid them          |
-| `upsert_planned_expenses` | write | Creates or partially updates planned expenses (≤ 50) with their `parts` and `charges`                                                                   |
-| `upsert_payout_charges`   | write | Creates or partially updates taxes on a person's payouts (≤ 50); stop one with `endsOn`                                                                 |
-| `get_payroll_queue`       | read  | Payouts by month: status, totals, what is left, lines with funding and deadlines, FOP acts (one per part when a month is paid in parts)                 |
-| `split_payout_act`        | write | Splits a draft act by activity: chosen lines/adjustments go into a new act for a period at one edge of it                                               |
-| `merge_payout_acts`       | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
-| `list_acts`               | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
-| `add_legacy_acts`         | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
-| `update_planned_payments` | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
+| Tool                       | Kind  | What it does                                                                                                                                            |
+| -------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_balances`             | read  | Accounts: `name`, `kind`, `currency`, `network`, `address`, `openingBalance`, `openingDate`, `balance` (= opening + postings; `asOf` = up to that date) |
+| `list_categories`          | read  | Categories: `txType`, `name`, `id`                                                                                                                      |
+| `list_transactions`        | read  | Journal with postings; filters `from`, `to`, `type`, `categoryId`, `accountId`, `limit` (≤ 1000). The response includes `externalRef`                   |
+| `list_fx_rates`            | read  | Stored rates: `onDate`, `base`, `quote`, `rate`, `source`                                                                                               |
+| `upsert_accounts`          | write | Creates or updates accounts by exact name (≤ 100)                                                                                                       |
+| `upsert_categories`        | write | Adds categories by (`txType`, `name`) (≤ 200); existing ones come back as `existing`                                                                    |
+| `set_fx_rates`             | write | Manual rates (≤ 500); the same day and pair is overwritten                                                                                              |
+| `add_transactions`         | write | Transactions in a batch (≤ 500), de-duplicated by `externalRef`                                                                                         |
+| `update_transactions`      | write | Corrects transactions by `id` (≤ 100): only the fields sent change; legs `null` remove; links `personId` / `clientId`                                   |
+| `delete_transactions`      | write | Deletes transactions by `id` (≤ 500) with their postings; allocated ones are refused. Destructive — only on the owner's explicit request                |
+| `search_people`            | read  | People with Bench filters: `q`, `stack`, `seniority`, `maxRate`, `availableOn`, `allocation`, `location`, `bench`, `status`; no payee data              |
+| `get_person`               | read  | A person's profile by `id`, current load (`load`, `bench`) and crypto `wallets`                                                                         |
+| `list_clients`             | read  | Clients: `legalName`, `shortName`, `country`, `defaultCurrency`, number of contracts, crypto `wallets`                                                  |
+| `find_wallets`             | read  | Who owns an address: wallets of people/clients with `owner`, plus our accounts with that address (`ownAccounts`)                                        |
+| `list_payees`              | read  | Payees: `kind`, name, `taxId`, `iban`, payout wallet, linked `personId`                                                                                 |
+| `upsert_person_profile`    | write | Creates or partially updates people profiles (≤ 200)                                                                                                    |
+| `upsert_clients`           | write | Creates or partially updates clients (≤ 100)                                                                                                            |
+| `list_contracts`           | read  | Client and FOP contracts: counterparty, currency, status, date rules, SOW/assignment counts, linked documents                                           |
+| `get_contract`             | read  | One contract with its documents, SOWs/annexes and assignments of people                                                                                 |
+| `upsert_contracts`         | write | Creates or partially updates contracts (≤ 50); `documentIds` links registry documents                                                                   |
+| `list_contract_annexes`    | read  | SOWs/annexes inside contracts with their own date rules, documents and assignment count                                                                 |
+| `upsert_contract_annexes`  | write | Creates or partially updates SOWs/annexes (≤ 100); each result has the `id` for assignments                                                             |
+| `list_assignments`         | read  | People on contracts/SOWs with the terms in force for a month and every terms version                                                                    |
+| `upsert_assignments`       | write | Creates or partially updates assignments (≤ 100) with the first or next `billing`/`pay` versions                                                        |
+| `upsert_wallets`           | write | Adds crypto wallets of people/clients or changes their `label` / `isActive` (≤ 200)                                                                     |
+| `upsert_payees`            | write | Creates or partially updates payees (≤ 100), links them to a person, `makeDefault`                                                                      |
+| `list_trips`               | read  | Trips: dates, status, participants with what is left to reimburse (UAH)                                                                                 |
+| `get_trip`                 | read  | One trip: expenses with UAH/USD values, reimbursements, per-person summary                                                                              |
+| `upsert_trips`             | write | Creates or updates trips (≤ 20); adds participants                                                                                                      |
+| `add_trip_expenses`        | write | Adds expenses to a trip (≤ 200) with optional receipt files; NBU rate by default; duplicate receipts refused                                            |
+| `search_documents`         | read  | Document registry with linked records; filters `q`, `type`, `status`, `unlinked`, `linkedTo`                                                            |
+| `get_document`             | read  | One document: metadata, links, version chain; `includeContent` returns the file (≤ 3 MB) as base64                                                      |
+| `find_link_targets`        | read  | Records a document can be linked to, by `entityType` and text `q` → `{id, label}`                                                                       |
+| `add_documents`            | write | Adds documents (≤ 10) with a base64 file (≤ 3 MB per call) or a link, plus links; `supersedesId` for a new version                                      |
+| `update_documents`         | write | Corrects document metadata by `id` (≤ 100), including `type`; `status: void` cancels; generated/signed files are read-only                              |
+| `split_document`           | write | Splits a signed PDF holding several documents into parts by pages; the original stays as a `package` (A-078)                                            |
+| `link_documents`           | write | Links documents to records (≤ 200); an existing link comes back as `existing`                                                                           |
+| `unlink_documents`         | write | Removes links (≤ 200); the documents stay. Destructive — only on the owner's request                                                                    |
+| `delete_documents`         | write | Deletes documents uploaded by mistake (≤ 200) with their links; files go to the Drive trash. Destructive — only on the owner's request                  |
+| `list_planned_expenses`    | read  | Recurring company costs with their parts in the month, taxes (withheld / on top), bank fee tariff and next date                                         |
+| `list_payout_charges`      | read  | Taxes charged on every payout to a person (on top, e.g. 20 % in UAH)                                                                                    |
+| `list_planned_payments`    | read  | Payments to make by due date: instalments, their taxes and payout taxes, with status, expected bank fee and the Ledger expenses that paid them          |
+| `upsert_planned_expenses`  | write | Creates or partially updates planned expenses (≤ 50) with their `parts` and `charges`                                                                   |
+| `upsert_payout_charges`    | write | Creates or partially updates taxes on a person's payouts (≤ 50); stop one with `endsOn`                                                                 |
+| `get_payroll_queue`        | read  | Payouts by month: status, totals, what is left, lines with funding and deadlines, FOP acts (one per part when a month is paid in parts)                 |
+| `split_payout_act`         | write | Splits a draft act by activity: chosen lines/adjustments go into a new act for a period at one edge of it                                               |
+| `merge_payout_acts`        | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
+| `list_acts`                | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
+| `add_legacy_acts`          | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
+| `list_contractor_invoices` | read  | Invoices contractors abroad issue to us for a payout (A-090): number, status, date, hours, USD amount, payee, contract, filed bill                      |
+| `update_planned_payments`  | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
 
@@ -421,6 +422,10 @@ Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-0
 
 Before the close (A-089) the person's monthly act made in the period (Draft act) is split with the same `split_payout_act`, choosing work by `assignmentIds` (from `list_assignments`) and adjustments by `adjustmentIds`; the split carries over to the payout at the close.
 
+### 8.14 Contractor invoices — `list_contractor_invoices`
+
+A contractor abroad who is not a FOP (Andrii Skoropupov) is paid in USD (`bank_usd`) without a FOP act; instead they sign an invoice-offer to their contract (A-090). Tally drafts it from the payout on Payroll («Prepare the invoice»): the amount is the payout's USD, hours are the hours paid, the number is the invoice date as DDMMYYYY; issuing renders the `invoice_contractor` template and files the PDF as a `bill` of the payee. The payee needs `legalNameEn`, `taxId` (as printed), `addressEn` and `bankDetailsEn` (`upsert_payees`) and a contract (`upsert_contracts` with `payeeId`, annex via `upsert_contract_annexes`). `list_contractor_invoices` shows them; drafting, issuing and voiding are UI only.
+
 ### 8.12 Periods — `delete_period`
 
 A month-end period opened by mistake is deleted with `delete_period` by `month` (YYYY-MM-01) or `periodId`, `dryRun` first. Only an open period with nothing in it (no hours, adjustments, invoices or payroll) can go; anything else is refused.
@@ -448,4 +453,4 @@ Use `list_invoices` and `get_invoice` to identify an issued unpaid invoice and i
 
 ### Delete a mistaken draft act
 
-On an explicit owner request, identify the exact act with `find_link_targets(entityType: "supplier_act")` and `get_act`. `delete_draft_act` removes only a standalone unnumbered draft without files, linked documents, a payroll item or a reimbursement. Supply the act id and reason, preview with `dryRun: true`, show the exact counterparty, service period and amount, then use a fresh `idempotencyKey` to delete. The old row and reason remain in the audit log. Issued acts must be voided in the UI; consumed numbers are retained.
+On an explicit owner request, identify the exact act with `find_link_targets(entityType: "supplier_act")` and `get_act`. `delete_draft_act` removes an unnumbered draft without files, linked documents, a paid part or a reimbursement (A-091): a standalone draft or a person's only act of a month before the close is deleted; an act split off a month gives its days and work back to the neighbouring draft (`mergedInto` in the result); the only act of a payout stays. Supply the act id and reason, preview with `dryRun: true`, show the exact counterparty, service period and amount, then use a fresh `idempotencyKey` to delete. The old row and reason remain in the audit log. Issued acts must be voided in the UI; consumed numbers are retained.

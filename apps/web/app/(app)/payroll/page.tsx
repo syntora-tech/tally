@@ -15,9 +15,11 @@ import {
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { suggestRate } from '@/server/services/fx';
+import { listContractorInvoices } from '@/server/services/contractor-invoices';
 import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
+import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-invoice-forms';
 import { MergeActsButton, OverrideForm, PayDialog, RateForm, SplitActForm } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
@@ -45,13 +47,29 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
         await payoutCandidates.run(ctx, { since: unpaidMonths.reduce((a, b) => (a < b ? a : b)) })
       ).unwrapOr([])
     : [];
-  const [t, tc, tp, fmt, { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS }] = await Promise.all([
+  // A contractor abroad bills us for their payout (A-090): a person's USD payout to a non-FOP payee.
+  const billable = (i: (typeof items)[number]) =>
+    i.item.kind === 'person' &&
+    i.payeeKind !== null &&
+    i.payeeKind !== 'fop' &&
+    i.item.payoutMethod !== 'fiat';
+  const billedIds = items.filter(billable).map((i) => i.item.id);
+  const contractorInvoices = billedIds.length
+    ? (await listContractorInvoices.run(ctx, { payrollItemIds: billedIds })).match(
+        (r) => r.items.filter((x) => x.status !== 'void'),
+        () => [],
+      )
+    : [];
+  const [t, tc, tp, tci, fmt, labels] = await Promise.all([
     getTranslations('payroll'),
     getTranslations('common'),
     getTranslations('payDialog'),
+    getTranslations('contractorInvoice'),
     getFormat(),
     getLabels(),
   ]);
+  const { ADJUSTMENT_KIND_LABELS, FX_SOURCE_LABELS, DOC_STATUS_LABELS, PAYOUT_METHOD_LABELS } =
+    labels;
   const lineStatus = (s: string) =>
     (LINE_STATUSES as readonly string[]).includes(s)
       ? t(`lineStatus.${s as (typeof LINE_STATUSES)[number]}`)
@@ -165,7 +183,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         · {fmt.month(i.month)}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {fiat ? 'fiat' : 'crypto'} · {i.payeeName ?? t('noPayee')}
+                        {PAYOUT_METHOD_LABELS[i.item.payoutMethod] ?? i.item.payoutMethod} ·{' '}
+                        {i.payeeName ?? t('noPayee')}
                         {i.nextDeadline && t('deadline', { date: fmt.date(i.nextDeadline) })}
                       </p>
                     </div>
@@ -210,6 +229,29 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                             />
                           )
                         )}
+                      </div>
+                    )}
+                    {billable(i) && (
+                      <div
+                        className="flex flex-wrap items-center gap-2 text-sm"
+                        data-testid="contractor-invoice"
+                      >
+                        <span className="text-muted-foreground">{tci('label')}:</span>
+                        {(() => {
+                          const ci = contractorInvoices.find((x) => x.payrollItemId === i.item.id);
+                          return ci ? (
+                            <Link
+                              className="hover:underline"
+                              href={`/payroll/contractor-invoices/${ci.id}`}
+                            >
+                              {ci.number ?? tci('titleDraft')} ·{' '}
+                              {fmt.amount(ci.amount, ci.currency)} ·{' '}
+                              {DOC_STATUS_LABELS[ci.status] ?? ci.status}
+                            </Link>
+                          ) : (
+                            <DraftContractorInvoiceButton payrollItemId={i.item.id} />
+                          );
+                        })()}
                       </div>
                     )}
                     {i.acts.length > 0 && (

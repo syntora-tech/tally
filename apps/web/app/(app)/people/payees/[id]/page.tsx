@@ -81,6 +81,13 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
                 }
               />
               <Row label={t('address')} value={p.addressUa} />
+              {p.addressEn && <Row label={t('addressEn')} value={p.addressEn} />}
+              {p.bankDetailsEn && (
+                <Row
+                  label={t('bankDetailsEn')}
+                  value={<span className="whitespace-pre-line">{p.bankDetailsEn}</span>}
+                />
+              )}
               <Row label="IBAN" value={p.iban} />
               <Row label={t('bank')} value={p.bankName} />
               <Row label={t('fee')} value={feeLabel(p, fmt, p.feeCurrency ?? 'UAH')} />

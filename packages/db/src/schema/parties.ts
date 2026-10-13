@@ -97,6 +97,9 @@ export const payee = pgTable(
     edrRecord: text(),
     edrDate: date({ mode: 'string' }),
     addressUa: text(),
+    /** A contractor abroad (A-090): address and bank details printed on their invoice to us. */
+    addressEn: text(),
+    bankDetailsEn: text(),
     iban: text(),
     bankName: text(),
     walletAddress: text(),

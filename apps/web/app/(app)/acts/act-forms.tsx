@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   createActAction,
+  deleteDraftActAction,
   issueActAction,
   saveActDraftAction,
   setSignedUrlAction,
@@ -110,6 +111,32 @@ export function VoidActForm({ id }: { id: string }) {
       </FormField>
       <Button type="submit" variant="destructive" disabled={pending}>
         {t('void')}
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function DeleteDraftActForm({ id, partOfMonth }: { id: string; partOfMonth: boolean }) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(
+    deleteDraftActAction,
+    null,
+  );
+  const t = useTranslations('actForms');
+  const error = state && !state.ok ? state.error : null;
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <p className="w-full text-sm text-muted-foreground">
+        {partOfMonth ? t('deleteMergeHint') : t('deleteHint')}
+      </p>
+      <FormField label={t('deleteReason')} htmlFor="act-delete" error={error?.fieldErrors?.reason}>
+        <Input id="act-delete" name="reason" required className="w-80" />
+      </FormField>
+      <Button type="submit" variant="destructive" disabled={pending}>
+        {t('deleteDraft')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />

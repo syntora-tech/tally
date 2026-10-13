@@ -32,16 +32,8 @@ const optionalIban = z
   )
   .transform((v) => v ?? null);
 
-const optionalDigits = z
-  .preprocess(
-    emptyToNull,
-    z
-      .string()
-      .trim()
-      .regex(/^\d{8,12}$/, 'payees.taxId')
-      .nullable()
-      .optional(),
-  )
+const optionalTaxId = z
+  .preprocess(emptyToNull, z.string().trim().max(50).nullable().optional())
   .transform((v) => v ?? null);
 
 const optionalUuid = z
@@ -53,10 +45,12 @@ export const payeeInput = z
     kind: z.enum(PAYEE_KINDS, { error: 'payees.kind' }),
     legalNameUa: optionalText,
     legalNameEn: optionalText,
-    taxId: optionalDigits,
+    taxId: optionalTaxId,
     edrRecord: optionalText,
     edrDate: optionalLocalDate,
     addressUa: optionalText,
+    addressEn: optionalText,
+    bankDetailsEn: optionalText,
     iban: optionalIban,
     bankName: optionalText,
     walletAddress: optionalText,
@@ -67,6 +61,11 @@ export const payeeInput = z
   .refine((p) => p.legalNameUa ?? p.legalNameEn, {
     message: 'payees.name',
     path: ['legalNameUa'],
+  })
+  // A Ukrainian tax ID is digits; a contractor abroad keeps theirs as printed (A-090).
+  .refine((p) => p.kind !== 'fop' || !p.taxId || /^\d{8,12}$/.test(p.taxId), {
+    message: 'payees.taxId',
+    path: ['taxId'],
   })
   .refine((p) => p.kind !== 'crypto' || p.walletAddress, {
     message: 'payees.wallet',

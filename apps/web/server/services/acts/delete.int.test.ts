@@ -92,8 +92,16 @@ beforeAll(async () => {
     .insert(documentLink)
     .values({ documentId: ids.document, entityType: 'supplier_act', entityId: ids.acts[2] ?? '' });
 });
+const split = { period: '', item: '', part: '', rest: '' };
+
 afterAll(async () =>
   h.cleanup(async (db) => {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local session_replication_role = replica`);
+      await tx.delete(supplierAct).where(eq(supplierAct.payrollItemId, split.item));
+    });
+    await db.delete(payrollItem).where(eq(payrollItem.id, split.item));
+    await db.delete(period).where(eq(period.id, split.period));
     await db.delete(document).where(eq(document.id, ids.document));
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
@@ -196,5 +204,87 @@ describe('delete mistaken standalone draft act', () => {
       (await deleteDraftAct.run(h.ctxFor(owner), { id: ids.acts[0], reason }))._unsafeUnwrapErr()
         .code,
     ).toBe('not_found');
+  });
+});
+
+describe('delete a draft act split off a month (A-091)', () => {
+  beforeAll(async () => {
+    const [month] = await h.db
+      .insert(period)
+      .values({ month: '2089-07-01', workHours: '184', status: 'closed' })
+      .returning();
+    split.period = month?.id ?? '';
+    const [item] = await h.db
+      .insert(payrollItem)
+      .values({
+        periodId: split.period,
+        personId: ids.person,
+        payoutMethod: 'fiat',
+        payeeId: ids.payee,
+        totalUsd: '25',
+        payoutFxRate: '40',
+        fxSource: 'manual',
+        totalUah: '1000.00',
+      })
+      .returning();
+    split.item = item?.id ?? '';
+    const base = {
+      contractId: ids.contract,
+      payeeId: ids.payee,
+      payrollItemId: split.item,
+      type: 'monthly' as const,
+    };
+    const [part] = await h.db
+      .insert(supplierAct)
+      .values({
+        ...base,
+        actDate: '2089-07-13',
+        periodFrom: '2089-07-01',
+        periodTo: '2089-07-15',
+        amountUsd: '10',
+        amountUah: '400.00',
+        fxRate: '40',
+        fxSource: 'manual',
+      })
+      .returning();
+    const [rest] = await h.db
+      .insert(supplierAct)
+      .values({
+        ...base,
+        actDate: '2089-07-31',
+        periodFrom: '2089-07-16',
+        periodTo: '2089-07-31',
+        amountUah: '600.00',
+      })
+      .returning();
+    split.part = part?.id ?? '';
+    split.rest = rest?.id ?? '';
+  });
+
+  it('gives the part’s days back to the act of the rest, which then follows the whole payout', async () => {
+    const result = (
+      await deleteDraftAct.run(h.ctxFor(owner), { id: split.part, reason })
+    )._unsafeUnwrap();
+    expect(result.mergedInto).toBe(split.rest);
+    const acts = await h.db
+      .select()
+      .from(supplierAct)
+      .where(eq(supplierAct.payrollItemId, split.item));
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toMatchObject({
+      id: split.rest,
+      periodFrom: '2089-07-01',
+      periodTo: '2089-07-31',
+      actDate: '2089-07-31',
+      amountUah: '1000.00',
+      amountUsd: null,
+    });
+  });
+
+  it('keeps the only act of a payout', async () => {
+    expect(
+      (await deleteDraftAct.run(h.ctxFor(owner), { id: split.rest, reason }))._unsafeUnwrapErr()
+        .message,
+    ).toBe('acts.deleteOnlyPayoutAct');
   });
 });

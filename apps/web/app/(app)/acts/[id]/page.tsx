@@ -8,7 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { getAct } from '@/server/services/acts';
-import { ActDraftForm, IssueActForm, SignedUrlForm, VoidActForm } from '../act-forms';
+import {
+  ActDraftForm,
+  DeleteDraftActForm,
+  IssueActForm,
+  SignedUrlForm,
+  VoidActForm,
+} from '../act-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('act');
@@ -79,6 +85,20 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
               dateOverrideReason={a.dateOverrideReason}
             />
             <IssueActForm id={a.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {draft && ctx.actor.role === 'owner' && !a.reimbursementId && !a.rateLocked && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('deleteTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DeleteDraftActForm
+              id={a.id}
+              partOfMonth={a.type === 'monthly' && (a.amountUsd !== null || !!a.payrollItemId)}
+            />
           </CardContent>
         </Card>
       )}

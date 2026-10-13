@@ -43,6 +43,7 @@ export const serverEnvSchema = z.object({
   GOOGLE_TEMPLATE_INVOICE_HOURLY_ID: z.string().optional(),
   GOOGLE_TEMPLATE_INVOICE_FIXED_ID: z.string().optional(),
   GOOGLE_TEMPLATE_ACT_FOP_ID: z.string().optional(),
+  GOOGLE_TEMPLATE_INVOICE_CONTRACTOR_ID: z.string().optional(),
   CRON_SECRET: z.string().min(16).optional(),
   APP_TODAY: optionalLocalDate,
   /** E2E only: lets a `tally_today` cookie move the business date per request (never in production). */

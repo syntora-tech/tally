@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>invoice_contractor</title>
+    <!--
+      Google Docs template `invoice_contractor` (A-090), after the contractor's own invoice
+      No. 16092026. Upload to Drive _templates, open with Google Docs (File → Save as Google Docs),
+      share with the service account and put its id into GOOGLE_TEMPLATE_INVOICE_CONTRACTOR_ID
+      (or a contract's invoiceTemplateFileId). The customer block is static text of our company.
+    -->
+    <style>
+      body {
+        font-family: 'Times New Roman', serif;
+        font-size: 10.5pt;
+      }
+      h1 {
+        font-size: 11pt;
+        text-align: center;
+        margin: 0 0 12pt;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 12pt;
+      }
+      td,
+      th {
+        border: 1px solid #000;
+        padding: 2pt 4pt;
+        vertical-align: top;
+        text-align: left;
+      }
+      th {
+        font-weight: normal;
+        background: #eee;
+      }
+      .sign {
+        text-align: center;
+        margin-top: 18pt;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>
+      Invoice (offer) / Інвойс (оферта) № {{doc.number}}<br />
+      to the Services Agreement {{contract.ref_en}} /<br />
+      до Договору про надання послуг {{contract.ref_ua}}
+    </h1>
+    <table>
+      <tr>
+        <td><b>Date</b>: {{doc.date}}</td>
+        <td><b>Дата</b>: {{doc.date}}</td>
+      </tr>
+      <tr>
+        <td>
+          <b>Customer</b>: LLC "SYNTORA"<br />
+          Company address: 17 Polova Street, Fontanka village, Odesa district, Odesa region, 67571,
+          Ukraine<br />
+          Represented by Vladyslav Boichenko, Director<br />
+          Company number: 46140580
+        </td>
+        <td>
+          <b>Замовник</b>: ТОВ "СІНТОРА",<br />
+          Адреса: 67571, Україна, обл. Одеська, р-н. Одеський, с. Фонтанка, вул. Польова, буд. 17<br />
+          В особі директора Бойченко Владислава Сергійовича<br />
+          ЄДРПОУ: 46140580
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <b>Contractor</b>: {{payee.name_en}}<br />
+          TAX ID: {{payee.tax_id}}<br />
+          Address: {{payee.address_en}}
+        </td>
+        <td>
+          <b>Підрядник</b>: {{payee.name_en}}<br />
+          TAX ID: {{payee.tax_id}}<br />
+          Address: {{payee.address_en}}
+        </td>
+      </tr>
+      <tr>
+        <td><b>Subject matter:</b> {{subject.en}}</td>
+        <td><b>Предмет:</b> {{subject.ua}}</td>
+      </tr>
+      <tr>
+        <td><b>Currency</b>: {{total.currency}}</td>
+        <td><b>Валюта</b>: Долар США</td>
+      </tr>
+      <tr>
+        <td>
+          <b>Terms of payments and acceptation:</b><br />Postpayment of 100% upon the delivery.
+        </td>
+        <td><b>Умови оплати та передачі:</b> 100% післяплата за фактом поставки.</td>
+      </tr>
+      <tr>
+        <td><b>Contractor Bank information</b>:<br />{{payee.bank_en}}</td>
+        <td>
+          <b>Customer Bank information</b>:<br />
+          Beneficiary: ТОВ “СІНТОРА”<br />
+          IBAN code: UA833052990000026004024931648<br />
+          Beneficiary’s bank: JSC CB "PRIVATBANK"<br />
+          1D Hrushevskoho Str., Kyiv, 01001, Ukraine<br />
+          SWIFT code: PBANUA2X
+        </td>
+      </tr>
+    </table>
+    <table>
+      <tr>
+        <th>№</th>
+        <th>Description/<br />Опис</th>
+        <th>Amount, hours/<br />Кількість, години</th>
+        <th>Amount, USD /<br />Загальна вартість, Долар США</th>
+      </tr>
+      <tr>
+        <td>{{line.n}}</td>
+        <td>{{line.description_en}} / {{line.description_ua}}</td>
+        <td>{{line.qty}}</td>
+        <td>{{line.amount}}</td>
+      </tr>
+      <tr>
+        <td colspan="3">
+          Total to pay/ {{total.words_en}} /<br />
+          Всього до сплати: {{total.words_ua}}
+        </td>
+        <td>{{total.amount}}</td>
+      </tr>
+    </table>
+    <table>
+      <tr>
+        <td>
+          Payment under this Invoice constitutes acceptance of the offer to enter into the agreement
+          on the terms and conditions set forth in this Invoice and in the
+          <b>Services Agreement {{contract.ref_en}}</b>. Payment under this Invoice shall also
+          constitute confirmation that the Parties have no mutual claims against each other
+          regarding the amounts specified in this Invoice. The agreement does not provide for
+          penalties or fines. Payment under this Invoice may serve as a set-off/additional payment
+          to previous Invoices if the counterparties have receivables/payables.<br />
+          The Parties shall not be liable for non-performance or improper performance of obligations
+          under the agreement during the period of force majeure circumstances.<br />
+          All disputes arising between the Parties under the agreement shall be settled by the
+          competent court at the location of the defendant.
+        </td>
+        <td>
+          Оплата за цим Інвойсом є прийняттям пропозиції укласти договір на умовах, викладених у
+          цьому Інвойсі та в <b>Договорі про надання послуг {{contract.ref_ua}}</b>. Оплата за цим
+          Інвойсом також є підтвердженням того, що Сторони не мають взаємних претензій одна до одної
+          щодо сум, зазначених у цьому Інвойсі. Договір не передбачає штрафних санкцій. Оплата за
+          цим Інвойсом може бути взаємозаліком/доплатою до попередніх Інвойсів, якщо у контрагентів
+          виникає дебіторська/кредиторська заборгованість.<br />
+          Сторони звільняються від відповідальності за невиконання чи неналежне виконання
+          зобов’язань за договором на час дії форс-мажорних обставин.<br />
+          Всі спори, що виникнуть між Сторонами по договору будуть розглядатись компетентним судом
+          за місцезнаходження відповідача.
+        </td>
+      </tr>
+    </table>
+    <p class="sign">
+      _________________________<br />
+      Vladyslav Boichenko/Владислав Бойченко<br />
+      Director of LLC “SYNTORA”/ Директор ТОВ “СІНТОРА”
+    </p>
+    <p class="sign">
+      _________________________<br />
+      {{payee.name_en}}<br />
+      Contractor/Підрядник
+    </p>
+  </body>
+</html>

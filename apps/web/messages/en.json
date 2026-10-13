@@ -288,7 +288,8 @@
       "rateCurrency": "The rate currency of {person} ({rateCurrency}) does not match the currency of contract {contract} ({contractCurrency})",
       "deleteClosed": "Only an open period can be deleted",
       "deleteNotEmpty": "The period already has hours, adjustments, invoices or payouts — it cannot be deleted",
-      "deleteWhich": "Give either the period id or its month"
+      "deleteWhich": "Give either the period id or its month",
+      "contractorInvoiceIssued": "Contractor invoice {number} of this period is issued or voided: the period cannot be reopened"
     },
     "ledger": {
       "currencyLocked": "The currency of an account with postings cannot change",
@@ -391,7 +392,10 @@
       "splitAmountOrActivities": "Choose either activities or a USD amount, not both",
       "splitAmountFromActivities": "An act of activities is split by activity, not by amount",
       "splitAmountTooBig": "The new act must leave something in this one: at most {max} USD, less than that",
-      "mergeAmountWithActivities": "An act of activities cannot be merged with an act split off by amount; merge them into the rest instead"
+      "mergeAmountWithActivities": "An act of activities cannot be merged with an act split off by amount; merge them into the rest instead",
+      "deletePaidPart": "A paid part of the month keeps its act",
+      "deleteOnlyPayoutAct": "The only act of a payout cannot be deleted: the payout needs one",
+      "deleteNoNeighbour": "No neighbouring draft act to give this act’s days to: merge or void instead"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -477,7 +481,8 @@
       "plannedPaid": "A paid planned payment is fixed: unlink its expenses first",
       "actPeriodsOverlap": "The act periods of one payout cannot overlap",
       "actActivity": "An activity can move only between draft acts of its own payout",
-      "monthActs": "Acts of one month cannot overlap, and a piece of work goes into one act only"
+      "monthActs": "Acts of one month cannot overlap, and a piece of work goes into one act only",
+      "contractorInvoiceContract": "The contract must belong to the same payee"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -528,6 +533,14 @@
       "noFopContract": "This payee has no FOP contract for an act",
       "reimbursementNotFound": "Reimbursement not found",
       "paidWithPayroll": "This reimbursement is paid with the monthly payout"
+    },
+    "contractorInvoices": {
+      "notForPayout": "An invoice is prepared for a person’s USD payout to a contractor who is not a FOP",
+      "noContract": "The payee has no contract: add it on the payee page first",
+      "draftOnly": "Only a draft invoice can be changed or deleted",
+      "notFound": "Contractor invoice not found",
+      "numberTaken": "Number {number} is already used by this contractor",
+      "voidState": "Only an issued invoice can be voided"
     }
   },
   "audit": {
@@ -587,7 +600,8 @@
     "editTrip": "Edit trip",
     "trip": "Trip",
     "documentsInbox": "Documents to sort out",
-    "documentChecks": "Document checks"
+    "documentChecks": "Document checks",
+    "contractorInvoice": "Contractor invoice"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -1095,7 +1109,10 @@
       "bank": "Bank",
       "address": "Address",
       "wallet": "Wallet address",
-      "network": "Network"
+      "network": "Network",
+      "addressEn": "Address in English",
+      "bankDetailsEn": "Bank details in English",
+      "bankDetailsEnHint": "For a contractor abroad, printed on their invoice: beneficiary, account, bank, SWIFT — one per line"
     },
     "card": {
       "newContract": "New contract",
@@ -1111,7 +1128,9 @@
       "contracts": "FOP contracts",
       "noContracts": "No contracts yet",
       "of": " of {date}",
-      "fee": "Bank fee"
+      "fee": "Bank fee",
+      "addressEn": "Address (EN)",
+      "bankDetailsEn": "Bank details (EN)"
     }
   },
   "documents": {
@@ -1668,7 +1687,8 @@
     "signVoid": "Signing and voiding",
     "fileReady": "The act file is generated — see documents below",
     "fileRendering": "The file is being generated…",
-    "newSubtitle": "Trip reimbursement or another service with a manual date"
+    "newSubtitle": "Trip reimbursement or another service with a manual date",
+    "deleteTitle": "Delete the draft"
   },
   "actForms": {
     "draftSaved": "Draft saved",
@@ -1690,7 +1710,11 @@
     "other": "Other",
     "periodFrom": "Period from",
     "periodTo": "to",
-    "createDraft": "Create draft"
+    "createDraft": "Create draft",
+    "deleteHint": "The draft is deleted; its old values and the reason stay in the history.",
+    "deleteMergeHint": "The act is part of a month: its days and work go back to the neighbouring draft act.",
+    "deleteReason": "Reason",
+    "deleteDraft": "Delete draft"
   },
   "settings": {
     "title": "Settings",
@@ -2002,5 +2026,33 @@
     "confirmDelete": "Delete this charge? Its unpaid payments are removed; paid ones stay.",
     "samePaymentCurrency": "as the payment",
     "add": "Add a tax"
+  },
+  "contractorInvoice": {
+    "label": "Contractor invoice",
+    "draft": "Prepare the invoice",
+    "saved": "Draft saved",
+    "date": "Invoice date",
+    "descriptionEn": "Service (EN)",
+    "descriptionUa": "Service (UA)",
+    "number": "Number",
+    "issue": "Issue the invoice",
+    "issued": "Invoice issued",
+    "voidReason": "Void reason",
+    "void": "Void",
+    "voided": "Invoice voided",
+    "deleteDraft": "Delete draft",
+    "back": "← Payroll",
+    "titleNumber": "Contractor invoice No. {number}",
+    "titleDraft": "Contractor invoice draft",
+    "subtitle": "{payee} · contract {contract}",
+    "period": "Period",
+    "hours": "Hours",
+    "amount": "Amount",
+    "voidReasonShown": "Void reason: {reason}",
+    "issueTitle": "Issue",
+    "draftHint": "Amount and hours follow the payout until the invoice is issued. The number is the invoice date (DDMMYYYY) unless you enter another.",
+    "fileTitle": "File",
+    "openDocument": "Open the invoice document",
+    "fileRendering": "The file is being generated…"
   }
 }
