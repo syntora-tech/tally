@@ -91,7 +91,10 @@ export function PayDialog(p: PayDialogProps) {
       ? payrollTotalUah(p.lines, p.adjustments, parsed.value)
       : null;
   const preview = totalUah?.isOk() ? totalUah.value.toFixed(2) : null;
-  const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>('new');
+  // The statement is the source of truth: a payout already in the Ledger carries the bank's real fee.
+  const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>(
+    p.candidates.length > 0 ? 'existing' : 'new',
+  );
   const [transactionId, setTransactionId] = useState('');
   const picked = p.candidates.find((c) => c.id === transactionId);
   const itemAmount = p.remaining ?? preview ?? '';
@@ -191,6 +194,7 @@ export function PayDialog(p: PayDialogProps) {
               <p className="text-sm text-muted-foreground">{t('noCandidates')}</p>
             ) : (
               <NativeSelect
+                aria-describedby={`tx-fee-${p.itemId}`}
                 id={`tx-${p.itemId}`}
                 name="transactionId"
                 placeholder={t('chooseTransaction')}
@@ -201,6 +205,9 @@ export function PayDialog(p: PayDialogProps) {
                 options={p.candidates.map((c) => ({ value: c.id, label: c.label }))}
               />
             )}
+            <p id={`tx-fee-${p.itemId}`} className="text-xs text-muted-foreground">
+              {t('feeFromStatement')}
+            </p>
           </FormField>
         ) : (
           <>

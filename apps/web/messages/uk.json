@@ -1648,7 +1648,8 @@
     "splitSecond": "Дні після межі",
     "splitActivities": "Діяльності в новий акт",
     "splitAmount": "Сума USD у новий акт",
-    "splitOrAmount": "Або сума USD у новий акт"
+    "splitOrAmount": "Або сума USD у новий акт",
+    "feeFromStatement": "Комісія банку береться з виписки: тут нічого вводити не треба."
   },
   "acts": {
     "title": "Реєстр актів постачальників",

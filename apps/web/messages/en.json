@@ -1648,7 +1648,8 @@
     "splitSecond": "Days after the boundary",
     "splitActivities": "Activities for the new act",
     "splitAmount": "USD for the new act",
-    "splitOrAmount": "Or USD for the new act"
+    "splitOrAmount": "Or USD for the new act",
+    "feeFromStatement": "The bank fee comes from the statement: nothing to enter here."
   },
   "acts": {
     "title": "Supplier acts registry",
