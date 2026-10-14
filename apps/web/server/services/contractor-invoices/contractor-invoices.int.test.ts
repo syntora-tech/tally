@@ -221,7 +221,7 @@ describe('contractor invoices (A-090)', () => {
     );
   });
 
-  it('re-renders with the payee requisites of the card while the payout is unpaid (A-094)', async () => {
+  it('re-renders with the payee requisites of the card paid or not (A-094)', async () => {
     const ctx = h.ctxFor(finance);
     const [inv] = (
       await listContractorInvoices.run(ctx, { payrollItemIds: [ids.items[0] ?? ''] })
@@ -252,8 +252,9 @@ describe('contractor invoices (A-090)', () => {
       .where(eq(payee.id, ids.payee));
     (await rerenderContractorInvoice.run(ctx, { id, reason: 'Again' }))._unsafeUnwrap();
     const [paid] = await h.db.select().from(contractorInvoice).where(eq(contractorInvoice.id, id));
+    // A paid payout does not freeze the requisites: they are not figures.
     expect((paid?.snapshot as { payee: { name_en: string } }).payee.name_en).toBe(
-      'Contractor Renamed',
+      'Contractor Later',
     );
     await h.db
       .update(payrollItem)

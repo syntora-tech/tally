@@ -11,7 +11,7 @@ import {
   person,
   timesheet,
 } from '@tally/db/schema';
-import { endOfMonth, roundHalfUp, sum, toDecimal, type LocalDate } from '@tally/domain';
+import { endOfMonth, roundHalfUp, sum, type LocalDate } from '@tally/domain';
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -266,8 +266,8 @@ export const voidContractorInvoice = defineService({
 
 /**
  * Renders an issued invoice again, e.g. after the template layout changed (A-093): number and
- * figures stay; the new file becomes the next version of its document. Until the payout is paid,
- * the payee's requisites are taken afresh from the payee card (A-094).
+ * figures stay; the new file becomes the next version of its document. The payee's requisites are
+ * taken afresh from the payee card (A-094).
  */
 export const rerenderContractorInvoice = defineService({
   name: 'contractorInvoices.rerender',
@@ -279,21 +279,17 @@ export const rerenderContractorInvoice = defineService({
           status: contractorInvoice.status,
           snapshot: contractorInvoice.snapshot,
           payee,
-          paidAmount: payrollItem.paidAmount,
         })
         .from(contractorInvoice)
         .innerJoin(payee, eq(payee.id, contractorInvoice.payeeId))
-        .leftJoin(payrollItem, eq(payrollItem.id, contractorInvoice.payrollItemId))
         .where(eq(contractorInvoice.id, id))
         .for('update', { of: contractorInvoice });
       if (row?.status !== 'issued') {
         return err(serviceError('conflict', 'contractorInvoices.rerenderIssuedOnly'));
       }
-      const unpaid = row.paidAmount === null || toDecimal(row.paidAmount).isZero();
-      const snapshot =
-        unpaid && row.snapshot
-          ? { ...(row.snapshot as Record<string, unknown>), payee: payeeSnapshot(row.payee) }
-          : row.snapshot;
+      const snapshot = row.snapshot
+        ? { ...(row.snapshot as Record<string, unknown>), payee: payeeSnapshot(row.payee) }
+        : row.snapshot;
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
       await tx
         .update(contractorInvoice)
