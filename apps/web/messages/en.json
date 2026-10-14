@@ -451,7 +451,12 @@
       "methodUsdOnly": "Only a payout made of USD lines can move to a USD method",
       "methodAdjustments": "The payout has adjustments of a closed month: its method cannot change",
       "methodTaken": "This month already has a payout to them by this method",
-      "methodActIssued": "Act {number} is already issued for this payout: its method cannot change"
+      "methodActIssued": "Act {number} is already issued for this payout: its method cannot change",
+      "actFirst": "Issue and sign the act this payment pays first: to pay part of the month, split the act and choose its part",
+      "actNotSigned": "The act this payment pays is not issued and signed yet",
+      "invoiceNotSigned": "The contractor invoice of this payout is not issued and signed yet",
+      "documentOverrideField": "Enter why it is paid before the document is signed",
+      "documentOwnerOnly": "Only the owner can pay before the document is signed"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -547,7 +552,9 @@
       "notFound": "Contractor invoice not found",
       "numberTaken": "Number {number} is already used by this contractor",
       "voidState": "Only an issued invoice can be voided",
-      "rerenderIssuedOnly": "Only an issued contractor invoice can be rendered again"
+      "rerenderIssuedOnly": "Only an issued contractor invoice can be rendered again",
+      "signedWhat": "Add the signed link or the signed file",
+      "signIssuedOnly": "Only an issued contractor invoice can be signed"
     }
   },
   "audit": {
@@ -1598,7 +1605,14 @@
     "changeMethod": "Change method",
     "changeMethodLabel": "New payout method",
     "changeMethodReason": "Reason for the change",
-    "methodChanged": "Payout method changed"
+    "methodChanged": "Payout method changed",
+    "signed": "signed",
+    "unsigned": "not signed",
+    "step": {
+      "issue": "Next: issue the document",
+      "sign": "Next: sign the document",
+      "pay": "Next: pay"
+    }
   },
   "payDialog": {
     "paid": "Payout recorded",
@@ -1649,7 +1663,10 @@
     "splitActivities": "Activities for the new act",
     "splitAmount": "USD for the new act",
     "splitOrAmount": "Or USD for the new act",
-    "feeFromStatement": "The bank fee comes from the statement: nothing to enter here."
+    "feeFromStatement": "The bank fee comes from the statement: nothing to enter here.",
+    "actNotSigned": "The act this payment pays is not issued and signed yet. To pay part of the month, split the act first and choose its part.",
+    "invoiceNotSigned": "The contractor invoice is not issued and signed yet.",
+    "documentOverrideReason": "Reason to pay before the document is signed"
   },
   "acts": {
     "title": "Supplier acts registry",
@@ -2069,6 +2086,14 @@
     "rerender": "Regenerate PDF",
     "rerenderReason": "Reason for regenerating",
     "rerendered": "PDF queued for regeneration",
-    "rerenderHint": "After changing the template layout or the payee card: number, dates and amounts stay, the payee requisites are taken from the card. The new PDF becomes the next version of the document."
+    "rerenderHint": "After changing the template layout or the payee card: number, dates and amounts stay, the payee requisites are taken from the card. The new PDF becomes the next version of the document.",
+    "signedUrl": "Signed link (DocuSign)",
+    "signedFile": "Signed PDF",
+    "markSigned": "Mark as signed",
+    "signedSaved": "Marked as signed",
+    "signHint": "Once both sides have signed, add the link or the signed PDF: the payout can then be paid.",
+    "signedOn": "Signed {date}",
+    "signedLink": "signed link",
+    "signedCopy": "signed copy"
   }
 }

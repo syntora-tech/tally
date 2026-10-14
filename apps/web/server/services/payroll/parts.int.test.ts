@@ -122,7 +122,9 @@ const acts = () =>
 
 describe('a month paid in parts, an act per part (A-083)', () => {
   it('splits the act at the first payment and pays the rest at a later rate', async () => {
-    const first = await payItem.run(h.ctxFor(finance), {
+    const first = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: ids.item,
       accountId: ids.account,
       occurredOn: '2047-10-16',
@@ -149,7 +151,9 @@ describe('a month paid in parts, an act per part (A-083)', () => {
     const [, rest] = await acts();
     expect(rest?.amountUah).toBe('42000.00');
 
-    const second = await payItem.run(h.ctxFor(finance), {
+    const second = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: ids.item,
       accountId: ids.account,
       occurredOn: '2047-10-31',

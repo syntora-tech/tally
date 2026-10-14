@@ -179,7 +179,9 @@ describe('an act per activity (A-085)', () => {
     await setPayoutRate.run(h.ctxFor(finance), { itemId: ids.item, rate: '42' });
     const [boostyAct] = await acts();
     expect(boostyAct?.amountUah).toBe('168000.00');
-    const paid = await payItem.run(h.ctxFor(finance), {
+    const paid = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: ids.item,
       accountId: ids.account,
       occurredOn: '2048-10-16',

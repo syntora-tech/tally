@@ -20,6 +20,7 @@ import {
   DeleteContractorInvoiceForm,
   IssueContractorInvoiceForm,
   RerenderContractorInvoiceForm,
+  SignContractorInvoiceForm,
   VoidContractorInvoiceForm,
 } from '../contractor-invoice-forms';
 
@@ -135,6 +136,37 @@ export default async function ContractorInvoicePage({
               <p className="text-muted-foreground">{t('fileRendering')}</p>
             )}
             {rendering && <AutoRefresh />}
+            {inv.signedAt ? (
+              <p data-testid="contractor-invoice-signed">
+                {t('signedOn', { date: fmt.date(inv.signedAt.toISOString().slice(0, 10)) })}
+                {inv.signedUrl && (
+                  <>
+                    {' · '}
+                    <a
+                      className="hover:underline"
+                      href={inv.signedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t('signedLink')}
+                    </a>
+                  </>
+                )}
+                {inv.signedDocumentId && (
+                  <>
+                    {' · '}
+                    <Link className="hover:underline" href={`/documents/${inv.signedDocumentId}`}>
+                      {t('signedCopy')}
+                    </Link>
+                  </>
+                )}
+              </p>
+            ) : (
+              <>
+                <p className="text-muted-foreground">{t('signHint')}</p>
+                <SignContractorInvoiceForm id={inv.id} />
+              </>
+            )}
             <p className="text-muted-foreground">{t('rerenderHint')}</p>
             <RerenderContractorInvoiceForm id={inv.id} />
             <VoidContractorInvoiceForm id={inv.id} />

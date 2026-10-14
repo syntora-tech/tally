@@ -88,6 +88,35 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
   }));
   const isOwner = ctx.actor.role === 'owner';
   const USD_LIKE = ['USD', 'USDT', 'USDC'];
+  // Document → signature → payment (A-096): what the payout needs signed before it is paid.
+  const documentOf = (i: (typeof items)[number]) => {
+    if (i.payeeKind === 'fop' && i.item.payoutMethod === 'fiat') {
+      return {
+        kind: 'act' as const,
+        signedActIds: i.acts.filter((a) => a.signed).map((a) => a.id),
+        restSigned: !!i.acts.find((a) => a.isRest)?.signed,
+      };
+    }
+    if (billable(i)) {
+      const ci = contractorInvoices.find((x) => x.payrollItemId === i.item.id);
+      return { kind: 'invoice' as const, signed: ci?.status === 'issued' && !!ci.signedAt };
+    }
+    return null;
+  };
+  const nextStep = (i: (typeof items)[number]) => {
+    const doc = documentOf(i);
+    if (doc?.kind === 'act') {
+      const open = i.acts.filter((a) => !a.rateLocked);
+      if (open.length === 0 || open.some((a) => a.status === 'draft')) return 'issue';
+      return open.every((a) => a.signed) ? 'pay' : 'sign';
+    }
+    if (doc?.kind === 'invoice') {
+      const ci = contractorInvoices.find((x) => x.payrollItemId === i.item.id);
+      if (!ci || ci.status === 'draft') return 'issue';
+      return doc.signed ? 'pay' : 'sign';
+    }
+    return 'pay';
+  };
   const candidatesFor = (i: (typeof items)[number]) =>
     candidates
       .filter(
@@ -194,6 +223,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         {i.payeeName ?? t('noPayee')}
                         {i.nextDeadline && t('deadline', { date: fmt.date(i.nextDeadline) })}
                       </p>
+                      {i.group !== 'paid' && (
+                        <Badge variant="outline" className="mt-1" data-testid="next-step">
+                          {t(`step.${nextStep(i)}`)}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-right text-sm">
                       {(!fiat || !toDecimal(i.item.totalUsd).isZero()) && (
@@ -262,6 +296,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                               {ci.number ?? tci('titleDraft')} ·{' '}
                               {fmt.amount(ci.amount, ci.currency)} ·{' '}
                               {DOC_STATUS_LABELS[ci.status] ?? ci.status}
+                              {ci.status === 'issued' &&
+                                ` · ${ci.signedAt ? t('signed') : t('unsigned')}`}
                             </Link>
                           ) : (
                             <DraftContractorInvoiceButton payrollItemId={i.item.id} />
@@ -284,6 +320,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                   : ''}
                               </span>
                               <span>{fmt.amount(a.amountUah, 'UAH')}</span>
+                              {a.status === 'issued' && (
+                                <Badge variant={a.signed ? 'secondary' : 'outline'}>
+                                  {a.signed ? t('signed') : t('unsigned')}
+                                </Badge>
+                              )}
                               {a.amountUsd !== null && (
                                 <span className="text-muted-foreground">
                                   {tp('partOf', {
@@ -399,6 +440,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                             label: `${a.number ?? tp('draftAct')} · ${fmt.amount(a.amountUah, 'UAH')}`,
                           }))}
                         feeAccounts={accountRows}
+                        document={documentOf(i)}
                         accounts={accountRows
                           .filter((a) =>
                             fiat ? a.currency === 'UAH' : USD_LIKE.includes(a.currency),

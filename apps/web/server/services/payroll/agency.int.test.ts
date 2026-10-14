@@ -221,7 +221,9 @@ describe('agency fees (A-068)', () => {
     expect(await agencyLine()).toMatchObject({ status: 'payable', fundingSource: 'client' });
 
     const item = await agencyItem();
-    const paid = await payItem.run(h.ctxFor(finance), {
+    const paid = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: item?.id ?? '',
       accountId: ids.account,
       occurredOn: '2047-04-12',

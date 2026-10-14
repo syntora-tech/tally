@@ -6,6 +6,7 @@ import {
   category,
   client,
   contract,
+  contractorInvoice,
   invoice,
   invoiceLine,
   payee,
@@ -189,6 +190,8 @@ export const listPayroll = defineService({
           amountUsd: a.amountUsd,
           fxRate: a.fxRate,
           rateLocked: a.rateLocked,
+          /** Issued and signed (Вчасно link): it may be paid (A-096). */
+          signed: a.status === 'issued' && !!a.signedUrl,
           /** Takes the activities not given to another act (A-085). */
           isRest: a.amountUsd === null,
         })),
@@ -306,6 +309,8 @@ async function applyRate(
       totalUah: totalUah.value.toFixed(2),
     })
     .where(eq(payrollItem.id, item.id));
+  // A month closed without a rate gets its act now, so it can be signed before the payout (A-096).
+  await ensureMonthlyActDraft(tx, item.id);
   await syncMonthlyActDraft(tx, item.id);
   return ok({ id: item.id, totalUah: totalUah.value.toFixed(2) });
 }
@@ -326,6 +331,8 @@ export const payItemInput = z
     description: optionalText,
     /** Paying more than the payable part is an advance: owner only, with a reason (5.3 rule 6). */
     overrideReason: optionalText,
+    /** Paying before the act or invoice is issued and signed: owner only, with a reason (A-096). */
+    documentOverrideReason: optionalText,
     /** Bank fee of a new payout (the payee's tariff is suggested, A-082). */
     feeAmount: z.preprocess(emptyToUndefined, decimalString.optional()),
     feeAccountId: z.preprocess(emptyToUndefined, z.uuid().optional()),
@@ -344,6 +351,39 @@ export const payItemInput = z
       issues.addIssue({ code: 'custom', path: ['occurredOn'], message: 'field.date' });
     }
   });
+
+/**
+ * What must be signed before a payout is paid (A-096), or null when nothing is missing: a FOP
+ * payout pays an act — the one chosen, else the act of the rest, which must cover the payment
+ * (a part paid off the rest would get a new, unsigned act); a contractor abroad (not a FOP, paid in
+ * USD) bills us with a contractor invoice. Other payouts have no document.
+ */
+async function unsignedDocument(
+  tx: Parameters<Parameters<typeof inActorScope>[1]>[0],
+  item: typeof payrollItem.$inferSelect,
+  pay: { actId: string | undefined; coversRest: boolean },
+) {
+  if (!item.payeeId) return null;
+  const [p] = await tx.select({ kind: payee.kind }).from(payee).where(eq(payee.id, item.payeeId));
+  if (p?.kind === 'fop' && item.payoutMethod === 'fiat') {
+    const acts = await monthlyActsOf(tx, item.id);
+    const target = pay.actId
+      ? acts.find((a) => a.id === pay.actId)
+      : acts.find((a) => a.amountUsd === null);
+    if (!target || (target.amountUsd === null && !pay.coversRest)) return 'payroll.actFirst';
+    return target.status === 'issued' && target.signedUrl ? null : 'payroll.actNotSigned';
+  }
+  if (p && p.kind !== 'fop' && item.kind === 'person' && item.payoutMethod !== 'fiat') {
+    const [inv] = await tx
+      .select({ status: contractorInvoice.status, signedAt: contractorInvoice.signedAt })
+      .from(contractorInvoice)
+      .where(
+        and(eq(contractorInvoice.payrollItemId, item.id), ne(contractorInvoice.status, 'void')),
+      );
+    return inv?.status === 'issued' && inv.signedAt ? null : 'payroll.invoiceNotSigned';
+  }
+  return null;
+}
 
 /**
  * "Виплатити" (6.6): optional rate, an expense from the chosen account (or an existing one from a
@@ -421,7 +461,27 @@ export const payItem = defineService({
         return err(serviceError('forbidden', 'payroll.advanceOwnerOnly'));
       }
 
-      const advanceNote = input.overrideReason && `Advance: ${input.overrideReason}`;
+      const unsigned = await unsignedDocument(tx, item.item, {
+        actId: input.actId,
+        coversRest: after.gte(toDecimal(total).toDecimalPlaces(2)),
+      });
+      if (unsigned && !input.documentOverrideReason) {
+        return err(
+          serviceError('validation_error', unsigned, {
+            documentOverrideReason: ['payroll.documentOverrideField'],
+          }),
+        );
+      }
+      if (unsigned && !(ctx.actor.kind === 'user' && ctx.actor.role === 'owner')) {
+        return err(serviceError('forbidden', 'payroll.documentOwnerOnly'));
+      }
+
+      const advanceNote = [
+        input.overrideReason && `Advance: ${input.overrideReason}`,
+        unsigned && input.documentOverrideReason && `Unsigned: ${input.documentOverrideReason}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
       let transactionId: string;
       let currency: string;
       let paidOn = input.occurredOn ?? ctx.today;

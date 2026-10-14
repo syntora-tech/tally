@@ -59,6 +59,14 @@ export type PayDialogProps = {
   fee: TransferFee | null;
   /** Every account, for a fee charged in another currency (e.g. UAH for a USD SWIFT). */
   feeAccounts: { id: string; label: string; currency: string }[];
+  /**
+   * The document the payment needs signed first (A-096): FOP acts (the signed ones, the act of the
+   * rest) or a contractor invoice; null when the payout has no document.
+   */
+  document:
+    | { kind: 'act'; signedActIds: string[]; restSigned: boolean }
+    | { kind: 'invoice'; signed: boolean }
+    | null;
 };
 
 /**
@@ -124,6 +132,17 @@ export function PayDialog(p: PayDialogProps) {
         )
       : null;
   const feeCurrency = suggestedFee?.currency ?? payCurrency;
+  const remainingNow = parseDecimal(p.remaining ?? '');
+  // Paying part of the act of the rest would cut a new, unsigned act off it.
+  const unsigned =
+    p.document?.kind === 'invoice'
+      ? !p.document.signed
+      : p.document?.kind === 'act'
+        ? actId
+          ? !p.document.signedActIds.includes(actId)
+          : !p.document.restSigned ||
+            (amountNow.isOk() && remainingNow.isOk() && amountNow.value.lt(remainingNow.value))
+        : false;
 
   if (!open) {
     return (
@@ -329,6 +348,22 @@ export function PayDialog(p: PayDialogProps) {
           <p className="mb-2 max-w-sm text-xs text-muted-foreground">{t('actPeriodHint')}</p>
         </div>
       )}
+      {unsigned && (
+        <Alert role="status">
+          <AlertDescription>
+            {p.document?.kind === 'invoice' ? t('invoiceNotSigned') : t('actNotSigned')}
+          </AlertDescription>
+        </Alert>
+      )}
+      {unsigned && p.isOwner && (
+        <FormField
+          label={t('documentOverrideReason')}
+          htmlFor={`doc-override-${p.itemId}`}
+          error={error?.fieldErrors?.documentOverrideReason}
+        >
+          <Input id={`doc-override-${p.itemId}`} name="documentOverrideReason" required />
+        </FormField>
+      )}
       {p.isOwner && (
         <FormField
           label={t('advanceReason')}
@@ -344,7 +379,7 @@ export function PayDialog(p: PayDialogProps) {
         </Alert>
       )}
       <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || (unsigned && !p.isOwner)}>
           {t('record')}
         </Button>
         <Button

@@ -166,7 +166,9 @@ afterAll(async () => {
 
 describe('FOP acts (6.6)', () => {
   it('a fiat FOP payout creates a draft act equal to total_uah to the kopiyka', async () => {
-    const paid = await payItem.run(h.ctxFor(finance), {
+    const paid = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: ids.item,
       accountId: ids.account,
       occurredOn: '2045-09-05',

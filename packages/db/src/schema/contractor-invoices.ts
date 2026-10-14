@@ -7,6 +7,7 @@ import {
   numeric,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -47,8 +48,16 @@ export const contractorInvoice = pgTable(
     pdfFileId: text(),
     documentId: uuid().references(() => document.id, { onDelete: 'set null' }),
     voidReason: text(),
+    /** Signed by both sides (A-096): a link (DocuSign) and/or the signed copy filed as a document. */
+    signedAt: timestamp({ withTimezone: true }),
+    signedUrl: text(),
+    signedDocumentId: uuid().references(() => document.id, { onDelete: 'set null' }),
   },
   (t) => [
+    check(
+      'contractor_invoice_signed_check',
+      sql`${t.signedAt} is not null or (${t.signedUrl} is null and ${t.signedDocumentId} is null)`,
+    ),
     uniqueIndex('contractor_invoice_number_key')
       .on(t.payeeId, t.number)
       .where(sql`${t.status} <> 'draft'`),

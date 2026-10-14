@@ -222,29 +222,39 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.goto('/payroll');
   const p1 = itemCard(page, people.p1);
   await expect(p1).toContainText('client');
+  await expect(p1.getByTestId('next-step')).toHaveText('Next: issue the document');
   await p1.getByRole('button', { name: 'Pay' }).click();
   await expect(p1.getByText('actual exchange')).toBeVisible();
   await expect(p1.getByLabel('USD→UAH rate')).toHaveValue('41.050000');
-  const uahOption = await p1
-    .locator('select[name=accountId] option', { hasText: accounts.uah })
-    .getAttribute('value');
-  await p1.locator('select[name=accountId]').selectOption(uahOption ?? '');
-  const payAmount = await p1.getByLabel('Amount, UAH').inputValue();
-  await p1.getByRole('button', { name: 'Record payout' }).click();
-  await expect(page.getByText('Payout recorded')).toBeVisible();
+  await p1.getByRole('button', { name: 'Cancel' }).click();
 
-  await page.goto('/acts?all=on&year=');
-  await page
-    .getByRole('row', { name: new RegExp(fop) })
-    .getByRole('link', { name: 'draft' })
-    .click();
+  // Document → signature → payment (A-096): approve the rate, issue the act, sign it, then pay.
+  await p1.getByLabel('Payout rate USD→UAH').fill('41.05');
+  await p1.getByRole('button', { name: 'Approve rate' }).click();
+  await expect(page.getByText('Rate approved; the draft act follows it')).toBeVisible();
+  await p1.getByTestId('payout-acts').getByRole('link', { name: 'draft' }).click();
   await expect(page.getByLabel('Act date')).toHaveValue('2043-08-31');
-  await expect(page.getByTestId('act-amount')).toContainText(
-    payAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
-  );
+  const actAmount = await page.getByTestId('act-amount').innerText();
   await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
   await expect(page.getByRole('heading', { name: /Act No\. 94 - А1/ })).toBeVisible();
   await expect(page.getByText('The act file is generated')).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel('Signed act in Vchasno').fill('https://vchasno.ua/e2e/94-1');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Link saved')).toBeVisible();
+
+  await page.goto('/payroll');
+  const signed = itemCard(page, people.p1);
+  await expect(signed.getByTestId('next-step')).toHaveText('Next: pay');
+  await signed.getByRole('button', { name: 'Pay' }).click();
+  await signed.getByLabel('Payment', { exact: true }).selectOption('new');
+  const uahOption = await signed
+    .locator('select[name=accountId] option', { hasText: accounts.uah })
+    .getAttribute('value');
+  await signed.locator('select[name=accountId]').selectOption(uahOption ?? '');
+  const payAmount = await signed.getByLabel('Amount, UAH').inputValue();
+  expect(actAmount).toContain(payAmount.replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+  await signed.getByRole('button', { name: 'Record payout' }).click();
+  await expect(page.getByText('Payout recorded')).toBeVisible();
 
   // 4. 50 % on 18.09 → the line waits until 21.09.
   await setToday(page, '2043-09-18');

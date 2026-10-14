@@ -365,6 +365,8 @@ export const listContractorInvoices = defineService({
           payrollItemId: contractorInvoice.payrollItemId,
           documentId: contractorInvoice.documentId,
           voidReason: contractorInvoice.voidReason,
+          signedAt: contractorInvoice.signedAt,
+          signedUrl: contractorInvoice.signedUrl,
         })
         .from(contractorInvoice)
         .innerJoin(payee, eq(payee.id, contractorInvoice.payeeId))

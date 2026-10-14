@@ -14,6 +14,7 @@ import {
   saveContractorInvoiceDraft,
   voidContractorInvoice,
 } from '../services/contractor-invoices';
+import { signContractorInvoice } from '../services/contractor-invoices/sign';
 import type { ActionResult } from './to-action-result';
 
 export type ContractorInvoiceFormState = ActionResult<{ id: string }> | null;
@@ -87,6 +88,17 @@ export async function rerenderContractorInvoiceAction(
   const result = await rerenderContractorInvoice.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   runJobsAfterResponse();
+  revalidatePath('/documents');
+  return done(result.value.id);
+}
+
+export async function signContractorInvoiceAction(
+  _prev: ContractorInvoiceFormState,
+  formData: FormData,
+): Promise<ContractorInvoiceFormState> {
+  const ctx = await requireUserContext();
+  const result = await signContractorInvoice.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/documents');
   return done(result.value.id);
 }

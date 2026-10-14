@@ -533,6 +533,13 @@
       "when": 1791974007436,
       "tag": "20261014103327_contractor_invoice_payee_refresh",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791976092890,
+      "tag": "20261014110812_contractor_invoice_signed",
+      "breakpoints": true
     }
   ]
 }

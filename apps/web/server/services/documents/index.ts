@@ -32,7 +32,7 @@ export const uploadFile = z
   .refine((f) => f.size > 0, 'documents.emptyFile')
   .refine((f) => f.size <= MAX_UPLOAD_BYTES, 'documents.tooLarge');
 
-const optionalFile = z.preprocess(
+export const optionalFile = z.preprocess(
   // An untouched file input still posts an empty File; treat it as "no file".
   (v) => (v instanceof File && v.size === 0 ? undefined : v),
   uploadFile.optional(),

@@ -13,6 +13,7 @@ import {
   issueContractorInvoiceAction,
   rerenderContractorInvoiceAction,
   saveContractorInvoiceDraftAction,
+  signContractorInvoiceAction,
   voidContractorInvoiceAction,
   type ContractorInvoiceFormState,
 } from '@/server/actions/contractor-invoices';
@@ -103,6 +104,35 @@ export function IssueContractorInvoiceForm({ id, number }: { id: string; number:
       </FormField>
       <Button type="submit" disabled={pending}>
         {t('issue')}
+      </Button>
+      <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+    </form>
+  );
+}
+
+/** Both sides signed (A-096): a link (DocuSign) and/or the signed PDF; the payout may be paid. */
+export function SignContractorInvoiceForm({ id }: { id: string }) {
+  const t = useTranslations('contractorInvoice');
+  const { run, pending, error } = useForm(signContractorInvoiceAction, t('signedSaved'));
+  return (
+    <form
+      action={run}
+      className="flex flex-wrap items-end gap-2"
+      data-testid="sign-contractor-invoice"
+    >
+      <input type="hidden" name="id" value={id} />
+      <FormField
+        label={t('signedUrl')}
+        htmlFor="ci-signed-url"
+        error={error?.fieldErrors?.signedUrl}
+      >
+        <Input id="ci-signed-url" name="signedUrl" type="url" className="w-80" />
+      </FormField>
+      <FormField label={t('signedFile')} htmlFor="ci-signed-file" error={error?.fieldErrors?.file}>
+        <Input id="ci-signed-file" name="file" type="file" accept="application/pdf,image/*" />
+      </FormField>
+      <Button type="submit" disabled={pending}>
+        {t('markSigned')}
       </Button>
       <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
     </form>

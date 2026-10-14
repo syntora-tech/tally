@@ -146,7 +146,9 @@ describe('acts split off by amount (A-086)', () => {
     await setPayoutRate.run(h.ctxFor(finance), { itemId: ids.item, rate: '42' });
     const [first] = await acts();
     expect(first?.amountUah).toBe('168000.00');
-    const paid = await payItem.run(h.ctxFor(finance), {
+    const paid = await payItem.run(h.ctxFor(await h.user('owner')), {
+      // These cover paying at once; the act-first gate is covered in signing.int.test.ts (A-096).
+      documentOverrideReason: 'Paid before signing',
       itemId: ids.item,
       accountId: ids.account,
       occurredOn: '2049-10-16',
