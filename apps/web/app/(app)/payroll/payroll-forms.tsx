@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
+  changePayoutMethodAction,
   mergeActsAction,
   splitActAction,
   overridePayableAction,
@@ -375,6 +376,43 @@ export function OverrideForm({ lineId }: { lineId: string }) {
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>
+  );
+}
+
+/** Owner only: an unpaid payout closed under the wrong method moves to a USD one (A-092). */
+export function ChangeMethodForm({ itemId, current }: { itemId: string; current: string }) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    changePayoutMethodAction,
+    null,
+  );
+  const t = useTranslations('payroll');
+  const { PAYOUT_METHOD_LABELS } = useLabels();
+  const error = useResult(state, t('methodChanged'));
+  const methods = (['bank_usd', 'crypto'] as const).filter((m) => m !== current);
+  return (
+    <details className="text-sm" data-testid="change-payout-method">
+      <summary className="cursor-pointer text-muted-foreground">{t('changeMethod')}</summary>
+      <form action={action} className="mt-2 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="itemId" value={itemId} />
+        <NativeSelect
+          name="payoutMethod"
+          aria-label={t('changeMethodLabel')}
+          className="h-8 w-40"
+          options={methods.map((m) => ({ value: m, label: PAYOUT_METHOD_LABELS[m] ?? m }))}
+        />
+        <Input
+          name="reason"
+          placeholder={t('changeMethodReason')}
+          aria-label={t('changeMethodReason')}
+          className="h-8 w-56"
+          required
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+          {t('changeMethod')}
+        </Button>
+        {error && <span className="text-sm text-destructive">{error.message}</span>}
+      </form>
+    </details>
   );
 }
 

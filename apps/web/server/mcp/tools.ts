@@ -55,6 +55,7 @@ import { listContractorInvoices } from '../services/contractor-invoices';
 import { addLegacyActs } from '../services/acts/legacy';
 import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
+import { changePayoutMethod } from '../services/payroll/method';
 
 export type ToolKind = 'read' | 'write';
 
@@ -844,6 +845,14 @@ export const TOOLS: readonly ToolDef[] = [
       "Splits a draft, unpaid FOP act of a payout by activity (A-085): lineIds (payroll lines, e.g. the client work) and adjustmentIds from get_payroll_queue that belong to this act go into a new act; periodFrom/periodTo is the new act's period, at the start or the end of this act (periods never overlap), the old act keeps the other days and the other activities. Amounts follow from the activities (USD × the payout rate + UAH) until the act is paid. Lines and adjustments of an act with isRest are those with supplierActId null. Instead of activities, amountUsd splits off a USD share (A-086), e.g. 1000 of a single 5000 $ line: allowed from the act of the rest or an act split off by amount, it must leave something in this act, and its UAH is amountUsd × the payout rate until paid. Before the period closes (A-089) the person's monthly act (made with Draft act in the period) is split the same way, choosing work by assignmentIds (list_assignments) instead of lineIds; the split carries over to the payout at the close. Use dryRun first.",
     kind: 'write',
     service: splitPayoutAct,
+  }),
+  tool({
+    name: 'change_payout_method',
+    title: 'Change the method of an unpaid payout',
+    kind: 'write',
+    description:
+      "Owner only, on an explicit request (A-092). Moves an unpaid payout from get_payroll_queue to a USD method — bank_usd (SWIFT from a USD account) or crypto — when its month was closed under terms naming the wrong method; the terms of a closed month cannot change. Clears the UAH rate and total and deletes the payout's draft FOP acts. Refuses payouts with payments, UAH lines, adjustments or an issued act, and when the month already has a payout to them by that method. Fix the terms for later months with upsert_assignments. Run dryRun first.",
+    service: changePayoutMethod,
   }),
 ];
 

@@ -20,7 +20,14 @@ import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
 import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-invoice-forms';
-import { MergeActsButton, OverrideForm, PayDialog, RateForm, SplitActForm } from './payroll-forms';
+import {
+  ChangeMethodForm,
+  MergeActsButton,
+  OverrideForm,
+  PayDialog,
+  RateForm,
+  SplitActForm,
+} from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 
 export const generateMetadata = pageTitle('payroll');
@@ -231,6 +238,14 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         )}
                       </div>
                     )}
+                    {isOwner &&
+                      i.group !== 'paid' &&
+                      toDecimal(i.item.paidAmount).isZero() &&
+                      i.lines.every((l) => l.currency === 'USD') &&
+                      i.adjustments.length === 0 &&
+                      i.acts.every((a) => a.status === 'draft') && (
+                        <ChangeMethodForm itemId={i.item.id} current={i.item.payoutMethod} />
+                      )}
                     {billable(i) && (
                       <div
                         className="flex flex-wrap items-center gap-2 text-sm"

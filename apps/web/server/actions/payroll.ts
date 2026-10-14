@@ -8,6 +8,7 @@ import { requireUserContext } from '../request-context';
 import { overridePayable } from '../services/payroll/payability';
 import { mergeActs, splitActByActivity } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
+import { changePayoutMethod } from '../services/payroll/method';
 import type { ActionResult } from './to-action-result';
 
 export type PayrollFormState = ActionResult<{ id: string }> | null;
@@ -40,6 +41,19 @@ export async function setPayoutRateAction(
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
   const result = await setPayoutRate.run(ctx, { ...input, rate: decimalField(input.rate) });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/acts');
+  return { ok: true, data: { id: result.value.id } };
+}
+
+/** Moves an unpaid payout to a USD method after the close (A-092). */
+export async function changePayoutMethodAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await changePayoutMethod.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   revalidatePath('/acts');

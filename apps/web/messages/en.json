@@ -445,7 +445,13 @@
       "transactionMismatch": "This transaction is not a payout expense in the payout currency",
       "chooseUahExpense": "Choose an expense from a UAH account",
       "chooseUsdExpense": "Choose an expense from a USD/USDT/USDC account",
-      "noDaysForRest": "No days of the month are left for the rest of the payout: shorten this act period"
+      "noDaysForRest": "No days of the month are left for the rest of the payout: shorten this act period",
+      "methodSame": "The payout already uses this method",
+      "methodPaid": "A payout with payments keeps its method",
+      "methodUsdOnly": "Only a payout made of USD lines can move to a USD method",
+      "methodAdjustments": "The payout has adjustments of a closed month: its method cannot change",
+      "methodTaken": "This month already has a payout to them by this method",
+      "methodActIssued": "Act {number} is already issued for this payout: its method cannot change"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1587,7 +1593,11 @@
     "fundingClient": "client",
     "fundingCompany": "company",
     "left": "left {amount}",
-    "agencyTitle": "{payee} · agency fee"
+    "agencyTitle": "{payee} · agency fee",
+    "changeMethod": "Change method",
+    "changeMethodLabel": "New payout method",
+    "changeMethodReason": "Reason for the change",
+    "methodChanged": "Payout method changed"
   },
   "payDialog": {
     "paid": "Payout recorded",

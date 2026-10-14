@@ -93,6 +93,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `get_payroll_queue`        | read  | Payouts by month: status, totals, what is left, lines with funding and deadlines, FOP acts (one per part when a month is paid in parts)                 |
 | `split_payout_act`         | write | Splits a draft act by activity: chosen lines/adjustments go into a new act for a period at one edge of it                                               |
 | `merge_payout_acts`        | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
+| `change_payout_method`     | write | Owner only: moves an unpaid payout of a closed month to `bank_usd` or `crypto` when it was closed under the wrong method                                |
 | `list_acts`                | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
 | `add_legacy_acts`          | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
 | `list_contractor_invoices` | read  | Invoices contractors abroad issue to us for a payout (A-090): number, status, date, hours, USD amount, payee, contract, filed bill                      |
@@ -412,9 +413,11 @@ Recurring company costs that are not contractor payouts — the accountant, the 
 
 Paid payments are fixed. A part or a tax with paid payments cannot be removed — stop it with `endsOn`.
 
-### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`
+### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`, `change_payout_method`
 
 Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-083), e.g. 4 000 $ when the client pays and the rest at the end of the month: each part gets its own FOP act at its own rate, from the first day no act covers to the payout day (moved into the month of work); a payment of the whole rest keeps its act to the month's end. In `get_payroll_queue` the acts of a payout never overlap; `amountUsd`/`fxRate` are set on paid parts and null on the act that follows the rest. When the owner wants one act for the month, merge neighbouring draft acts with `merge_payout_acts` (`dryRun` first). Issued acts are never merged. A month can also be split by activity (A-085): `split_payout_act` with the `lineIds`/`adjustmentIds` of one act (from `get_payroll_queue`) and the new act's period at its start or end; amounts follow from the activities, nothing is typed in. With a single activity, pass `amountUsd` instead (A-086): e.g. 4 000 of a 5 000 $ line for 01–16 and the rest for 17–30; it must be less than the USD left in the act, and its UAH follows the payout rate until it is paid.
+
+When a month was closed under terms naming the wrong payout method (a contractor abroad paid by SWIFT shown as a UAH payout), the owner may move the unpaid payout with `change_payout_method` (A-092): `itemId` from `get_payroll_queue`, `payoutMethod` `bank_usd` or `crypto`, a reason, `dryRun` first. It clears the UAH rate and total and deletes the payout's draft FOP acts; payouts with payments, UAH lines, adjustments or an issued act are refused. Fix the terms of later months with `upsert_assignments` (a pay version with `validFrom`).
 
 ### 8.13 Supplier acts registry — `list_acts`, `add_legacy_acts`
 
