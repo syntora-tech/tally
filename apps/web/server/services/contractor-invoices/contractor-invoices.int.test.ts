@@ -18,6 +18,7 @@ import {
   deleteContractorInvoiceDraft,
   draftContractorInvoice,
   issueContractorInvoice,
+  rerenderContractorInvoice,
   listContractorInvoices,
   saveContractorInvoiceDraft,
   voidContractorInvoice,
@@ -218,6 +219,46 @@ describe('contractor invoices (A-090)', () => {
     expect((await issueContractorInvoice.run(ctx, { id }))._unsafeUnwrap().number).toBe(
       '13102026/1',
     );
+  });
+
+  it('re-renders with the payee requisites of the card while the payout is unpaid (A-094)', async () => {
+    const ctx = h.ctxFor(finance);
+    const [inv] = (
+      await listContractorInvoices.run(ctx, { payrollItemIds: [ids.items[0] ?? ''] })
+    )._unsafeUnwrap().items;
+    const id = inv?.id ?? '';
+    await h.db
+      .update(contractorInvoice)
+      .set({ pdfFileId: 'pdf-1' })
+      .where(eq(contractorInvoice.id, id));
+    await h.db
+      .update(payee)
+      .set({ legalNameEn: 'Contractor Renamed' })
+      .where(eq(payee.id, ids.payee));
+    (await rerenderContractorInvoice.run(ctx, { id, reason: 'Name fixed' }))._unsafeUnwrap();
+    const [row] = await h.db.select().from(contractorInvoice).where(eq(contractorInvoice.id, id));
+    const snapshot = row?.snapshot as { payee: { name_en: string }; doc: { number: string } };
+    expect(snapshot.payee.name_en).toBe('Contractor Renamed');
+    expect(snapshot.doc.number).toBe(row?.number);
+    expect(row).toMatchObject({ pdfFileId: null, amount: inv?.amount });
+
+    await h.db
+      .update(payrollItem)
+      .set({ paidAmount: '1' })
+      .where(eq(payrollItem.id, ids.items[0] ?? ''));
+    await h.db
+      .update(payee)
+      .set({ legalNameEn: 'Contractor Later' })
+      .where(eq(payee.id, ids.payee));
+    (await rerenderContractorInvoice.run(ctx, { id, reason: 'Again' }))._unsafeUnwrap();
+    const [paid] = await h.db.select().from(contractorInvoice).where(eq(contractorInvoice.id, id));
+    expect((paid?.snapshot as { payee: { name_en: string } }).payee.name_en).toBe(
+      'Contractor Renamed',
+    );
+    await h.db
+      .update(payrollItem)
+      .set({ paidAmount: '0' })
+      .where(eq(payrollItem.id, ids.items[0] ?? ''));
   });
 
   it('blocks reopening the period, voids with a reason and deletes only drafts', async () => {

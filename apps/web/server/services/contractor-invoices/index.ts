@@ -11,7 +11,7 @@ import {
   person,
   timesheet,
 } from '@tally/db/schema';
-import { endOfMonth, roundHalfUp, sum, type LocalDate } from '@tally/domain';
+import { endOfMonth, roundHalfUp, sum, toDecimal, type LocalDate } from '@tally/domain';
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -20,7 +20,7 @@ import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { msg, serviceError } from '../errors';
 import { localDateString, optionalText, requiredText } from '../fields';
-import { buildContractorInvoiceSnapshot } from './snapshot';
+import { buildContractorInvoiceSnapshot, payeeSnapshot } from './snapshot';
 
 export const DEFAULT_DESCRIPTION = {
   en: 'Software Development',
@@ -265,8 +265,9 @@ export const voidContractorInvoice = defineService({
 });
 
 /**
- * Renders an issued invoice again from its snapshot, e.g. after the template layout changed
- * (A-093): number and figures stay; the new file becomes the next version of its document.
+ * Renders an issued invoice again, e.g. after the template layout changed (A-093): number and
+ * figures stay; the new file becomes the next version of its document. Until the payout is paid,
+ * the payee's requisites are taken afresh from the payee card (A-094).
  */
 export const rerenderContractorInvoice = defineService({
   name: 'contractorInvoices.rerender',
@@ -274,17 +275,29 @@ export const rerenderContractorInvoice = defineService({
   handler: async (ctx, { id, reason }) =>
     inActorScope(ctx, async (tx) => {
       const [row] = await tx
-        .select({ status: contractorInvoice.status })
+        .select({
+          status: contractorInvoice.status,
+          snapshot: contractorInvoice.snapshot,
+          payee,
+          paidAmount: payrollItem.paidAmount,
+        })
         .from(contractorInvoice)
+        .innerJoin(payee, eq(payee.id, contractorInvoice.payeeId))
+        .leftJoin(payrollItem, eq(payrollItem.id, contractorInvoice.payrollItemId))
         .where(eq(contractorInvoice.id, id))
-        .for('update');
+        .for('update', { of: contractorInvoice });
       if (row?.status !== 'issued') {
         return err(serviceError('conflict', 'contractorInvoices.rerenderIssuedOnly'));
       }
+      const unpaid = row.paidAmount === null || toDecimal(row.paidAmount).isZero();
+      const snapshot =
+        unpaid && row.snapshot
+          ? { ...(row.snapshot as Record<string, unknown>), payee: payeeSnapshot(row.payee) }
+          : row.snapshot;
       await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
       await tx
         .update(contractorInvoice)
-        .set({ pdfFileId: null, gdocFileId: null })
+        .set({ pdfFileId: null, gdocFileId: null, snapshot })
         .where(eq(contractorInvoice.id, id));
       await enqueueJob(tx, renderContractorInvoiceJob(id));
       return ok({ id });

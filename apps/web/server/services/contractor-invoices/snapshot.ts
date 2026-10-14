@@ -36,6 +36,16 @@ const annexLabels = (number: string) =>
     ? { en: `Annex ${number}`, ua: `Додаток ${number}` }
     : { en: number, ua: number };
 
+/** The payee part of the snapshot — the only part a re-render may refresh (A-094). */
+export function payeeSnapshot(p: ContractorInvoiceSnapshotInput['payee']) {
+  return {
+    name_en: p.legalNameEn ?? p.legalNameUa ?? '',
+    tax_id: p.taxId ?? '',
+    address_en: p.addressEn ?? '',
+    bank_en: p.bankDetailsEn ?? '',
+  };
+}
+
 /** Frozen data of a contractor invoice (`invoice_contractor` placeholders); PDFs render only from this. */
 export function buildContractorInvoiceSnapshot(i: ContractorInvoiceSnapshotInput) {
   const date = formatUaDate(i.invoiceDate);
@@ -44,7 +54,6 @@ export function buildContractorInvoiceSnapshot(i: ContractorInvoiceSnapshotInput
   const from = i.periodFrom ? formatUaDate(i.periodFrom) : '';
   const to = i.periodTo ? formatUaDate(i.periodTo) : '';
   const amount = formatAmount(i.amount, undefined, { decimal: 'comma', grouping: 'space' });
-  const name = i.payee.legalNameEn ?? i.payee.legalNameUa ?? '';
   return {
     version: 1,
     doc: { number: i.number, date },
@@ -59,12 +68,7 @@ export function buildContractorInvoiceSnapshot(i: ContractorInvoiceSnapshotInput
       name_ua: i.company.nameUa,
       legal_code: i.company.legalCode ?? '',
     },
-    payee: {
-      name_en: name,
-      tax_id: i.payee.taxId ?? '',
-      address_en: i.payee.addressEn ?? '',
-      bank_en: i.payee.bankDetailsEn ?? '',
-    },
+    payee: payeeSnapshot(i.payee),
     subject: { en: i.descriptionEn, ua: i.descriptionUa },
     period: { from, to },
     lines: [

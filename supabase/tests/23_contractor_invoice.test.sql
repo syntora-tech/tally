@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(10);
+select plan(12);
 
 insert into public.company (id, name_en, name_ua) values ('10000000-0000-0000-0000-000000000023', 'S', 'С');
 insert into public.payee (id, kind, legal_name_en) values ('30000000-0000-0000-0000-000000000023', 'other', 'Contractor 23');
@@ -37,6 +37,12 @@ select throws_ok($$ update public.contractor_invoice set pdf_file_id = null, gdo
 select lives_ok($$ select set_config('app.reason', 'New layout', true);
   update public.contractor_invoice set pdf_file_id = null, gdoc_file_id = null
   where id = '90000000-0000-0000-0000-000000000023' $$, 'A-093: files cleared for a re-render with a reason');
+select throws_ok($$ select set_config('app.reason', 'Typo', true);
+  update public.contractor_invoice set snapshot = '{"doc": {"number": "1"}}'
+  where id = '90000000-0000-0000-0000-000000000023' $$, 'TL001', null, 'only the payee part of the snapshot changes');
+select lives_ok($$ select set_config('app.reason', 'Name fixed', true);
+  update public.contractor_invoice set snapshot = '{"payee": {"name_en": "Contractor"}}'
+  where id = '90000000-0000-0000-0000-000000000023' $$, 'A-094: payee requisites refreshed with a reason');
 select lives_ok($$ update public.contractor_invoice set status = 'void', void_reason = 'Wrong month'
   where id = '90000000-0000-0000-0000-000000000023' $$, 'void with a reason');
 

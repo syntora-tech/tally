@@ -2068,6 +2068,6 @@
     "rerender": "Regenerate PDF",
     "rerenderReason": "Reason for regenerating",
     "rerendered": "PDF queued for regeneration",
-    "rerenderHint": "After changing the template layout: number and amounts stay, the new PDF becomes the next version of the document."
+    "rerenderHint": "After changing the template layout or the payee card: number, dates and amounts stay; until the payout is paid the payee requisites are taken from the card. The new PDF becomes the next version of the document."
   }
 }
