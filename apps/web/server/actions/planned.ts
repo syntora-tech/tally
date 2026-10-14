@@ -52,6 +52,7 @@ async function finish(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger/planned');
   revalidatePath('/dashboard');
+  revalidatePath('/payroll');
   if (extraPath) revalidatePath(extraPath);
   return { ok: true, data: { id: result.value.id } };
 }

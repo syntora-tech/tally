@@ -46,6 +46,9 @@ test('planned payments: salary in two parts with taxes, marked paid (A-082)', as
   await page.locator('#pe-new-category').selectOption({ label: 'Payroll' });
   await page.locator('#pe-new-amount').fill('11401.68');
   await page.locator('#pe-new-day').fill('22');
+  // A person's salary also shows on Payroll as a payout without an act (A-097).
+  await page.locator('#pe-new-person').selectOption({ index: 1 });
+  const personName = (await page.locator('#pe-new-person option:checked').innerText()).trim();
   await page.getByRole('button', { name: 'Add' }).first().click();
   await expect(page.getByText('Planned expense added')).toBeVisible();
 
@@ -90,4 +93,17 @@ test('planned payments: salary in two parts with taxes, marked paid (A-082)', as
   await expect(advance).toContainText('Paid');
   // The new expense pays the net amount, not the gross.
   await expect(advance.getByRole('link')).toContainText('4,510.00');
+
+  await page.goto('/payroll');
+  const salary = page
+    .getByTestId('salary-payout')
+    .filter({ hasText: personName })
+    .filter({ hasText: 'Advance' });
+  // This month's advance is paid; the months around it still wait.
+  await expect(
+    salary.getByRole('row', { name: /Advance/ }).filter({ hasText: /paid · \d/ }),
+  ).toHaveCount(1);
+  await expect(
+    salary.getByRole('row', { name: /Rest/ }).first().getByRole('button', { name: 'Paid…' }),
+  ).toBeVisible();
 });

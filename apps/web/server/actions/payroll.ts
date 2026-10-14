@@ -8,6 +8,7 @@ import { requireUserContext } from '../request-context';
 import { overridePayable } from '../services/payroll/payability';
 import { mergeActs, splitActByActivity } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
+import { removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
 import type { ActionResult } from './to-action-result';
 
@@ -45,6 +46,19 @@ export async function setPayoutRateAction(
   revalidatePath('/payroll');
   revalidatePath('/acts');
   return { ok: true, data: { id: result.value.id } };
+}
+
+/** Takes a line out of an unpaid payout of a closed month (A-097). */
+export async function removePayoutLineAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await removePayoutLine.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/acts');
+  return { ok: true, data: { id: result.value.removed.itemId } };
 }
 
 /** Moves an unpaid payout to a USD method after the close (A-092). */

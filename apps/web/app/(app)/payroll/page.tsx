@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { sum, toDecimal } from '@tally/domain';
+import { addMonths, endOfMonth, startOfMonth, sum, toDecimal, type LocalDate } from '@tally/domain';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,11 +19,14 @@ import { listContractorInvoices } from '@/server/services/contractor-invoices';
 import { listAccounts } from '@/server/services/ledger';
 import { listPayroll, payoutCandidates, type PayrollGroup } from '@/server/services/payroll';
 import { listPeriods } from '@/server/services/periods';
+import { listPlannedPayments, plannedPaymentCandidates } from '@/server/services/planned/payments';
+import { PaymentActions } from '../ledger/planned/planned-forms';
 import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-invoice-forms';
 import {
   ChangeMethodForm,
   MergeActsButton,
   OverrideForm,
+  RemoveLineForm,
   PayDialog,
   RateForm,
   SplitActForm,
@@ -117,6 +120,58 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     }
     return 'pay';
   };
+  // A salary paid without an act (A-097): instalments of a planned expense for a person (a director
+  // of the LLC), paid in parts within the month by linking Ledger expenses — no period close needed.
+  const month = periods.unwrapOr([]).find((p) => p.period.id === periodId)?.period.month as
+    LocalDate | undefined;
+  const planned = (
+    await listPlannedPayments.run(
+      ctx,
+      month ? { from: month, to: endOfMonth(addMonths(month, 1)) } : {},
+    )
+  ).unwrapOr([]);
+  const salary = planned.filter(
+    (r) =>
+      r.payment.personId !== null &&
+      r.payment.partId !== null &&
+      r.payment.parentId === null &&
+      (!month || r.payment.month === month),
+  );
+  const chargesOf = (id: string) => planned.filter((r) => r.payment.parentId === id);
+  const salaryCurrencies = [
+    ...new Set(salary.filter((r) => r.payment.status === 'due').map((r) => r.payment.currency)),
+  ];
+  const salaryCandidates = new Map(
+    await Promise.all(
+      salaryCurrencies.map(
+        async (currency) =>
+          [
+            currency,
+            (
+              await plannedPaymentCandidates.run(ctx, {
+                currency,
+                since: addMonths(month ?? startOfMonth(ctx.today), -1),
+                until: addMonths(month ?? startOfMonth(ctx.today), 2),
+              })
+            ).unwrapOr([]),
+          ] as const,
+      ),
+    ),
+  );
+  const salaryGroups = [
+    ...new Map(
+      salary.map((r) => [`${r.payment.personId ?? ''}:${r.payment.month}`, r] as const),
+    ).values(),
+  ].map((first) => ({
+    key: `${first.payment.personId ?? ''}:${first.payment.month}`,
+    personName: first.personName,
+    month: first.payment.month,
+    rows: salary.filter(
+      (r) =>
+        r.payment.personId === first.payment.personId && r.payment.month === first.payment.month,
+    ),
+  }));
+
   const candidatesFor = (i: (typeof items)[number]) =>
     candidates
       .filter(
@@ -194,6 +249,100 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
             ))}
         </nav>
       </div>
+
+      {salaryGroups.length > 0 && (
+        <section className="flex flex-col gap-3" aria-label={t('salaryTitle')}>
+          <h2 className="text-lg font-semibold">{t('salaryTitle')}</h2>
+          <p className="text-sm text-muted-foreground">{t('salaryHint')}</p>
+          {salaryGroups.map((g) => (
+            <Card key={g.key} data-testid="salary-payout">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {g.personName} · {fmt.month(g.month)}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">{t('salaryNoAct')}</p>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('salaryPart')}</TableHead>
+                      <TableHead>{t('salaryDue')}</TableHead>
+                      <TableHead>{t('salaryAmount')}</TableHead>
+                      <TableHead>{t('salaryTaxes')}</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {g.rows.map(({ payment: p, transactions, overdue }) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.name}</TableCell>
+                        <TableCell className={overdue ? 'text-destructive' : undefined}>
+                          {fmt.date(p.dueOn)}
+                        </TableCell>
+                        <TableCell>
+                          {fmt.amount(p.amount, p.currency)}
+                          {p.gross && (
+                            <div className="text-xs text-muted-foreground">
+                              {t('salaryGross', { amount: fmt.amount(p.gross, p.currency) })}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {chargesOf(p.id).map((c) => (
+                            <div key={c.payment.id}>
+                              {c.payment.name}: {fmt.amount(c.payment.amount, c.payment.currency)}
+                              {c.payment.status === 'paid' && ` · ${t('salaryPaid')}`}
+                            </div>
+                          ))}
+                        </TableCell>
+                        <TableCell>
+                          {p.status === 'due' ? (
+                            <PaymentActions
+                              id={p.id}
+                              isInstalment
+                              amount={p.amount}
+                              gross={p.gross}
+                              currency={p.currency}
+                              fee={
+                                p.feeAmount
+                                  ? { amount: p.feeAmount, currency: p.feeCurrency ?? p.currency }
+                                  : null
+                              }
+                              today={ctx.today}
+                              accounts={accountRows}
+                              candidates={(salaryCandidates.get(p.currency) ?? []).map((c) => ({
+                                id: c.id,
+                                label: [
+                                  fmt.date(c.occurredOn),
+                                  c.counterparty ?? c.description ?? '—',
+                                  fmt.amount(c.amount, p.currency),
+                                ].join(' · '),
+                              }))}
+                            />
+                          ) : p.status === 'paid' ? (
+                            <span className="text-sm">
+                              {t('salaryPaid')}
+                              {transactions.map((x) => ` · ${fmt.date(x.occurredOn)}`).join('')}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              {t('salarySkipped')}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Link href="/ledger/planned" className="mt-2 inline-block text-sm hover:underline">
+                  {t('salaryPlanned')}
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+      )}
 
       {items.length === 0 && <p className="text-muted-foreground">{t('empty')}</p>}
 
@@ -399,6 +548,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                               {isOwner && l.status === 'awaiting_client' && (
                                 <OverrideForm lineId={l.id} />
                               )}
+                              {isOwner &&
+                                toDecimal(i.item.paidAmount).isZero() &&
+                                i.acts.every((a) => a.status === 'draft') && (
+                                  <RemoveLineForm lineId={l.id} />
+                                )}
                             </TableCell>
                           </TableRow>
                         ))}

@@ -456,7 +456,10 @@
       "actNotSigned": "The act this payment pays is not issued and signed yet",
       "invoiceNotSigned": "The contractor invoice of this payout is not issued and signed yet",
       "documentOverrideField": "Enter why it is paid before the document is signed",
-      "documentOwnerOnly": "Only the owner can pay before the document is signed"
+      "documentOwnerOnly": "Only the owner can pay before the document is signed",
+      "lineNotFound": "Payout line not found",
+      "lineItemPaid": "The payout has payments: its lines stay",
+      "lineActIssued": "The payout has an issued act: void it to change its lines"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1612,7 +1615,21 @@
       "issue": "Next: issue the document",
       "sign": "Next: sign the document",
       "pay": "Next: pay"
-    }
+    },
+    "removeLine": "Remove from payout",
+    "removeLineReason": "Why it does not belong here",
+    "lineRemoved": "Line removed; the payout and its draft act are recalculated",
+    "salaryTitle": "Salary without an act",
+    "salaryHint": "A salary paid in parts within the month (planned payments): link the bank payment to each part, no period close needed.",
+    "salaryNoAct": "Paid without an act: link a Ledger payment to each part",
+    "salaryPart": "Part",
+    "salaryDue": "Due",
+    "salaryAmount": "To pay",
+    "salaryTaxes": "Taxes",
+    "salaryGross": "gross {amount}",
+    "salaryPaid": "paid",
+    "salarySkipped": "skipped",
+    "salaryPlanned": "Planned payments →"
   },
   "payDialog": {
     "paid": "Payout recorded",

@@ -21,6 +21,7 @@ import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
   changePayoutMethodAction,
+  removePayoutLineAction,
   mergeActsAction,
   splitActAction,
   overridePayableAction,
@@ -418,6 +419,35 @@ export function OverrideForm({ lineId }: { lineId: string }) {
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>
+  );
+}
+
+/** Owner only (A-097): a line that does not belong to the payout, e.g. a salary paid by plan. */
+export function RemoveLineForm({ lineId }: { lineId: string }) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    removePayoutLineAction,
+    null,
+  );
+  const t = useTranslations('payroll');
+  const error = useResult(state, t('lineRemoved'));
+  return (
+    <details className="text-xs" data-testid="remove-line">
+      <summary className="cursor-pointer text-muted-foreground">{t('removeLine')}</summary>
+      <form action={action} className="mt-1 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="lineId" value={lineId} />
+        <Input
+          name="reason"
+          placeholder={t('removeLineReason')}
+          aria-label={t('removeLineReason')}
+          className="h-8 w-56"
+          required
+        />
+        <Button type="submit" size="sm" variant="destructive" disabled={pending}>
+          {t('removeLine')}
+        </Button>
+        {error && <span className="text-destructive">{error.message}</span>}
+      </form>
+    </details>
   );
 }
 

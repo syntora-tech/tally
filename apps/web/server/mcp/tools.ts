@@ -55,6 +55,7 @@ import { listContractorInvoices } from '../services/contractor-invoices';
 import { addLegacyActs } from '../services/acts/legacy';
 import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
+import { removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
 
 export type ToolKind = 'read' | 'write';
@@ -853,6 +854,15 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       "Owner only, on an explicit request (A-092). Moves an unpaid payout from get_payroll_queue to a USD method — bank_usd (SWIFT from a USD account) or crypto — when its month was closed under terms naming the wrong method; the terms of a closed month cannot change. Clears the UAH rate and total and deletes the payout's draft FOP acts. Refuses payouts with payments, UAH lines, adjustments or an issued act, and when the month already has a payout to them by that method. Fix the terms for later months with upsert_assignments. Run dryRun first.",
     service: changePayoutMethod,
+  }),
+  tool({
+    name: 'remove_payout_line',
+    title: 'Remove a line from an unpaid payout',
+    kind: 'write',
+    destructive: true,
+    description:
+      "Owner only, on an explicit request (A-097). Takes one line (lines[].id from get_payroll_queue) out of an unpaid payout of a closed month — e.g. a director's salary that is paid through planned payments and must not sit in the FOP payout and its act. Recomputes the payout totals and its draft act; a payout left empty is deleted. Refuses payouts with payments or an issued act. End the assignment (upsert_assignments endsOn) so later months do not accrue it again. Run dryRun first and show the line, payout and new total.",
+    service: removePayoutLine,
   }),
 ];
 
