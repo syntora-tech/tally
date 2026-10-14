@@ -101,6 +101,24 @@ test('a contractor abroad gets an invoice drafted from the payout and issued (A-
       timeout: 1_000,
     });
   }).toPass({ timeout: 20_000 });
+  await page.getByLabel('Reason for regenerating').fill('New layout');
+  await page.getByRole('button', { name: 'Regenerate PDF' }).click();
+  await expect(page.getByText('PDF queued for regeneration')).toBeVisible();
+  // A-093: the new PDF is the next version of the document, the old one is void.
+  await expect(async () => {
+    const { db: d, sql: client } = db();
+    try {
+      const docs = await d.execute<{ version: number; status: string }>(
+        sql`select d.version, d.status from public.document d join public.document_link l on l.document_id = d.id
+            where l.entity_type = 'payee' and l.entity_id = ${ids.payee} order by d.version`,
+      );
+      expect(docs.map((r) => `${String(r.version)}:${r.status}`)).toEqual(['1:void', '2:issued']);
+    } finally {
+      await client.end();
+    }
+  }).toPass({ timeout: 20_000 });
+  await page.reload();
+  await expect(page.getByRole('link', { name: 'Open the invoice document' })).toBeVisible();
   await page.goto(`/payroll?period=${ids.period}`);
   await expect(page.getByTestId('contractor-invoice')).toContainText('13102053');
 });

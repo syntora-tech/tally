@@ -64,7 +64,17 @@ export function renderContractorInvoiceHandler(deps: ContractorInvoiceRenderDeps
       db,
       config: { allowedEmails: [] },
     };
+    // A re-render (A-093) files the new PDF as the next version of the invoice's document.
+    const [previous] = inv.documentId
+      ? await withSystem(db, 'system:jobs', (tx) =>
+          tx
+            .select({ id: document.id, version: document.version })
+            .from(document)
+            .where(eq(document.id, inv.documentId ?? '')),
+        )
+      : [];
     const created = await insertDocument(ctx, deps.storage, {
+      ...(previous ? { supersedes: previous } : {}),
       type: 'bill',
       title,
       number: inv.number,
@@ -83,6 +93,9 @@ export function renderContractorInvoiceHandler(deps: ContractorInvoiceRenderDeps
         .select({ key: document.driveFileId })
         .from(document)
         .where(eq(document.id, created.id));
+      if (previous) {
+        await tx.update(document).set({ status: 'void' }).where(eq(document.id, previous.id));
+      }
       await tx
         .update(contractorInvoice)
         .set({ pdfFileId: doc?.key ?? null, gdocFileId: out.sourceFileId, documentId: created.id })

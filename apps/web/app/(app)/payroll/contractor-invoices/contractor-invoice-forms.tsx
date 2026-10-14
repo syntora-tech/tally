@@ -11,6 +11,7 @@ import {
   deleteContractorInvoiceAction,
   draftContractorInvoiceAction,
   issueContractorInvoiceAction,
+  rerenderContractorInvoiceAction,
   saveContractorInvoiceDraftAction,
   voidContractorInvoiceAction,
   type ContractorInvoiceFormState,
@@ -102,6 +103,32 @@ export function IssueContractorInvoiceForm({ id, number }: { id: string; number:
       </FormField>
       <Button type="submit" disabled={pending}>
         {t('issue')}
+      </Button>
+      <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+    </form>
+  );
+}
+
+/** Renders the issued invoice again with the current template (A-093). */
+export function RerenderContractorInvoiceForm({ id }: { id: string }) {
+  const t = useTranslations('contractorInvoice');
+  const { run, pending, error } = useForm(rerenderContractorInvoiceAction, t('rerendered'));
+  return (
+    <form
+      action={run}
+      className="flex flex-wrap items-end gap-2"
+      data-testid="rerender-contractor-invoice"
+    >
+      <input type="hidden" name="id" value={id} />
+      <FormField
+        label={t('rerenderReason')}
+        htmlFor="ci-rerender"
+        error={error?.fieldErrors?.reason}
+      >
+        <Input id="ci-rerender" name="reason" required className="w-80" />
+      </FormField>
+      <Button type="submit" variant="outline" disabled={pending}>
+        {t('rerender')}
       </Button>
       <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
     </form>

@@ -10,6 +10,7 @@ import {
   deleteContractorInvoiceDraft,
   draftContractorInvoice,
   issueContractorInvoice,
+  rerenderContractorInvoice,
   saveContractorInvoiceDraft,
   voidContractorInvoice,
 } from '../services/contractor-invoices';
@@ -76,4 +77,16 @@ export async function deleteContractorInvoiceAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   redirect('/payroll');
+}
+
+export async function rerenderContractorInvoiceAction(
+  _prev: ContractorInvoiceFormState,
+  formData: FormData,
+): Promise<ContractorInvoiceFormState> {
+  const ctx = await requireUserContext();
+  const result = await rerenderContractorInvoice.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  runJobsAfterResponse();
+  revalidatePath('/documents');
+  return done(result.value.id);
 }

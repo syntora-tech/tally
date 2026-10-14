@@ -264,6 +264,33 @@ export const voidContractorInvoice = defineService({
   },
 });
 
+/**
+ * Renders an issued invoice again from its snapshot, e.g. after the template layout changed
+ * (A-093): number and figures stay; the new file becomes the next version of its document.
+ */
+export const rerenderContractorInvoice = defineService({
+  name: 'contractorInvoices.rerender',
+  input: z.object({ id: z.uuid(), reason: requiredText('field.reason') }),
+  handler: async (ctx, { id, reason }) =>
+    inActorScope(ctx, async (tx) => {
+      const [row] = await tx
+        .select({ status: contractorInvoice.status })
+        .from(contractorInvoice)
+        .where(eq(contractorInvoice.id, id))
+        .for('update');
+      if (row?.status !== 'issued') {
+        return err(serviceError('conflict', 'contractorInvoices.rerenderIssuedOnly'));
+      }
+      await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
+      await tx
+        .update(contractorInvoice)
+        .set({ pdfFileId: null, gdocFileId: null })
+        .where(eq(contractorInvoice.id, id));
+      await enqueueJob(tx, renderContractorInvoiceJob(id));
+      return ok({ id });
+    }),
+});
+
 export const deleteContractorInvoiceDraft = defineService({
   name: 'contractorInvoices.deleteDraft',
   input: z.object({ id: z.uuid() }),

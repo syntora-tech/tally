@@ -519,6 +519,13 @@
       "when": 1791888822047,
       "tag": "20261013105342_contractor_invoice_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791971383661,
+      "tag": "20261014094943_contractor_invoice_rerender",
+      "breakpoints": true
     }
   ]
 }

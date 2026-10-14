@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(7);
+select plan(10);
 
 insert into public.company (id, name_en, name_ua) values ('10000000-0000-0000-0000-000000000023', 'S', 'С');
 insert into public.payee (id, kind, legal_name_en) values ('30000000-0000-0000-0000-000000000023', 'other', 'Contractor 23');
@@ -28,6 +28,15 @@ select throws_ok($$ delete from public.contractor_invoice where id = '90000000-0
 select throws_ok($$ insert into public.contractor_invoice (contract_id, payee_id, invoice_date, amount, description_en, description_ua, status, number, snapshot)
   values ('50000000-0000-0000-0000-000000000023', '30000000-0000-0000-0000-000000000023', '2039-10-13', 1, 'S', 'Р', 'issued', '13102039', '{}') $$,
   '23505', null, 'a contractor''s number is used once');
+update public.contractor_invoice set pdf_file_id = 'pdf-1', gdoc_file_id = 'gdoc-1'
+  where id = '90000000-0000-0000-0000-000000000023';
+select throws_ok($$ update public.contractor_invoice set pdf_file_id = 'pdf-2' where id = '90000000-0000-0000-0000-000000000023' $$,
+  'TL001', null, 'generated files are set once');
+select throws_ok($$ update public.contractor_invoice set pdf_file_id = null, gdoc_file_id = null
+  where id = '90000000-0000-0000-0000-000000000023' $$, 'TL001', null, 'clearing files needs a reason');
+select lives_ok($$ select set_config('app.reason', 'New layout', true);
+  update public.contractor_invoice set pdf_file_id = null, gdoc_file_id = null
+  where id = '90000000-0000-0000-0000-000000000023' $$, 'A-093: files cleared for a re-render with a reason');
 select lives_ok($$ update public.contractor_invoice set status = 'void', void_reason = 'Wrong month'
   where id = '90000000-0000-0000-0000-000000000023' $$, 'void with a reason');
 

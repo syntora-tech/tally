@@ -16,6 +16,7 @@ import {
   ContractorInvoiceDraftForm,
   DeleteContractorInvoiceForm,
   IssueContractorInvoiceForm,
+  RerenderContractorInvoiceForm,
   VoidContractorInvoiceForm,
 } from '../contractor-invoice-forms';
 
@@ -115,13 +116,15 @@ export default async function ContractorInvoicePage({
             <CardTitle className="text-base">{t('fileTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 text-sm">
-            {inv.documentId ? (
+            {inv.documentId && inv.pdfFileId ? (
               <Link className="hover:underline" href={`/documents/${inv.documentId}`}>
                 {t('openDocument')}
               </Link>
             ) : (
               <p className="text-muted-foreground">{t('fileRendering')}</p>
             )}
+            <p className="text-muted-foreground">{t('rerenderHint')}</p>
+            <RerenderContractorInvoiceForm id={inv.id} />
             <VoidContractorInvoiceForm id={inv.id} />
           </CardContent>
         </Card>

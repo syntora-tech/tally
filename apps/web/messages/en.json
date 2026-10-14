@@ -546,7 +546,8 @@
       "draftOnly": "Only a draft invoice can be changed or deleted",
       "notFound": "Contractor invoice not found",
       "numberTaken": "Number {number} is already used by this contractor",
-      "voidState": "Only an issued invoice can be voided"
+      "voidState": "Only an issued invoice can be voided",
+      "rerenderIssuedOnly": "Only an issued contractor invoice can be rendered again"
     }
   },
   "audit": {
@@ -2063,6 +2064,10 @@
     "draftHint": "Amount and hours follow the payout until the invoice is issued. The number is the invoice date (DDMMYYYY) unless you enter another.",
     "fileTitle": "File",
     "openDocument": "Open the invoice document",
-    "fileRendering": "The file is being generated…"
+    "fileRendering": "The file is being generated…",
+    "rerender": "Regenerate PDF",
+    "rerenderReason": "Reason for regenerating",
+    "rerendered": "PDF queued for regeneration",
+    "rerenderHint": "After changing the template layout: number and amounts stay, the new PDF becomes the next version of the document."
   }
 }
