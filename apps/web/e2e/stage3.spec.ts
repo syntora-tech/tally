@@ -244,7 +244,6 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   );
   await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
   await expect(page.getByRole('heading', { name: /Act No\. 94 - А1/ })).toBeVisible();
-  await page.reload();
   await expect(page.getByText('The act file is generated')).toBeVisible({ timeout: 15_000 });
 
   // 4. 50 % on 18.09 → the line waits until 21.09.

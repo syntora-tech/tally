@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
+import { AutoRefresh } from '@/components/auto-refresh';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -245,6 +246,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               <p className="text-sm">{t('fileReady', { revision: inv.revision })}</p>
             ) : rendering ? (
               <p className="text-sm text-muted-foreground">
+                <AutoRefresh />
                 {t('fileRendering')}
                 {render.lastError ? t('previousAttempt', { error: render.lastError }) : ''}
               </p>

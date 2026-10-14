@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { AutoRefresh } from '@/components/auto-refresh';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { OWNER_ROLES } from '@/lib/navigation';
@@ -139,6 +140,7 @@ export default async function SettingsPage() {
           <CardDescription>{t('jobsDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
+          {jobs.some((j) => j.status === 'queued' || j.status === 'running') && <AutoRefresh />}
           {jobs.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('noJobs')}</p>
           ) : (

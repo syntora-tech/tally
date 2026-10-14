@@ -120,7 +120,6 @@ test('stage 2: period → draft invoice → issue with number → revision keeps
   await expect(page.getByText('Client corrected hours')).toBeVisible();
   await expect(page.getByText(/7,990\.00/).first()).toBeVisible();
 
-  await page.reload();
   await expect(page.getByText('The file for revision 2 is generated')).toBeVisible({
     timeout: 15_000,
   });

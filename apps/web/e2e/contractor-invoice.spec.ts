@@ -95,12 +95,10 @@ test('a contractor abroad gets an invoice drafted from the payout and issued (A-
   await expect(
     page.getByRole('heading', { name: /Contractor invoice No\. 13102053/ }),
   ).toBeVisible();
-  await expect(async () => {
-    await page.reload();
-    await expect(page.getByRole('link', { name: 'Open the invoice document' })).toBeVisible({
-      timeout: 1_000,
-    });
-  }).toPass({ timeout: 20_000 });
+  // The page refreshes itself while the PDF is generated.
+  await expect(page.getByRole('link', { name: 'Open the invoice document' })).toBeVisible({
+    timeout: 20_000,
+  });
   await page.getByLabel('Reason for regenerating').fill('New layout');
   await page.getByRole('button', { name: 'Regenerate PDF' }).click();
   await expect(page.getByText('PDF queued for regeneration')).toBeVisible();
@@ -117,8 +115,9 @@ test('a contractor abroad gets an invoice drafted from the payout and issued (A-
       await client.end();
     }
   }).toPass({ timeout: 20_000 });
-  await page.reload();
-  await expect(page.getByRole('link', { name: 'Open the invoice document' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open the invoice document' })).toBeVisible({
+    timeout: 20_000,
+  });
   await page.goto(`/payroll?period=${ids.period}`);
   await expect(page.getByTestId('contractor-invoice')).toContainText('13102053');
 });

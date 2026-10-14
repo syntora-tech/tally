@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
+import { AutoRefresh } from '@/components/auto-refresh';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
@@ -9,7 +10,9 @@ import { requireRole } from '@/server/request-context';
 import {
   contractorInvoiceNumber,
   getContractorInvoice,
+  renderContractorInvoiceJob,
 } from '@/server/services/contractor-invoices';
+import { jobPending } from '@/server/services/settings';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 import type { LocalDate } from '@tally/domain';
 import {
@@ -33,6 +36,14 @@ export default async function ContractorInvoicePage({
   if (result.isErr()) notFound();
   const { invoice: inv, payeeName, contractNumber, personName, month } = result.value;
   const draft = inv.status === 'draft';
+  const rendering =
+    inv.status === 'issued' &&
+    !inv.pdfFileId &&
+    (
+      await jobPending.run(ctx, {
+        dedupeKeys: [renderContractorInvoiceJob(inv.id).dedupeKey ?? ''],
+      })
+    ).unwrapOr(false);
   const [t, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
     getTranslations('contractorInvoice'),
     getFormat(),
@@ -123,6 +134,7 @@ export default async function ContractorInvoicePage({
             ) : (
               <p className="text-muted-foreground">{t('fileRendering')}</p>
             )}
+            {rendering && <AutoRefresh />}
             <p className="text-muted-foreground">{t('rerenderHint')}</p>
             <RerenderContractorInvoiceForm id={inv.id} />
             <VoidContractorInvoiceForm id={inv.id} />

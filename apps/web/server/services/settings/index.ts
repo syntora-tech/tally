@@ -1,6 +1,6 @@
 import { contract, job, numberSequence, workCalendarException } from '@tally/db/schema';
 import { formatSequenceNumber } from '@tally/domain';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -150,4 +150,20 @@ export const listJobs = defineService({
         tx.select().from(job).orderBy(desc(job.createdAt)).limit(limit),
       ),
     ),
+});
+
+/** Whether a job is still queued or running for any of these keys (e.g. `render_act:<id>`). */
+export const jobPending = defineService({
+  name: 'settings.jobs.pending',
+  input: z.object({ dedupeKeys: z.array(z.string().min(1)).min(1).max(50) }),
+  handler: async (ctx, { dedupeKeys }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .select({ id: job.id })
+        .from(job)
+        .where(and(inArray(job.dedupeKey, dedupeKeys), inArray(job.status, ['queued', 'running'])))
+        .limit(1),
+    );
+    return ok(!!row);
+  },
 });

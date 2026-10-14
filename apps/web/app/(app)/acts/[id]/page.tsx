@@ -2,12 +2,14 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
+import { AutoRefresh } from '@/components/auto-refresh';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { getAct } from '@/server/services/acts';
+import { getAct, renderActJob } from '@/server/services/acts';
+import { jobPending } from '@/server/services/settings';
 import {
   ActDraftForm,
   DeleteDraftActForm,
@@ -26,6 +28,12 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
   if (result.isErr()) notFound();
   const { act: a, payeeName, contract } = result.value;
   const draft = a.status === 'draft';
+  const rendering =
+    a.status === 'issued' &&
+    !a.pdfFileId &&
+    (await jobPending.run(ctx, { dedupeKeys: [renderActJob(a.id).dedupeKey ?? ''] })).unwrapOr(
+      false,
+    );
   const [t, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
     getTranslations('act'),
     getFormat(),
@@ -112,6 +120,7 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
             <p className="text-sm text-muted-foreground">
               {a.pdfFileId ? t('fileReady') : t('fileRendering')}
             </p>
+            {rendering && <AutoRefresh />}
             <SignedUrlForm id={a.id} value={a.signedUrl} />
             <VoidActForm id={a.id} />
           </CardContent>
