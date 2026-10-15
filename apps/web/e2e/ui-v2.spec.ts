@@ -88,6 +88,16 @@ test('A-102: every module opens in the v2 shell; the system theme follows the OS
   await expect(page.locator('html')).toHaveClass(/\bdark\b/);
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+
+  // Switching to "system" from the menu applies at once, without a reload.
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name: 'Account and preferences' }).click();
+  await page.getByRole('menuitemradio', { name: 'Light' }).click();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+  await page.getByRole('button', { name: 'Account and preferences' }).click();
+  await page.getByRole('menuitemradio', { name: 'System' }).click();
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
 });
 
 test('A-102: the v2 sidebar keeps the role matrix', async ({ page }) => {

@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale } from 'next-intl/server';
 import { Geist, Manrope } from 'next/font/google';
+import Script from 'next/script';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ThemeSync } from '@/components/v2/theme-sync';
 import { cn } from '@/lib/utils';
 import { getUiPrefs } from '@/server/ui-prefs';
 import './globals.css';
@@ -16,8 +18,8 @@ export const metadata: Metadata = {
   description: 'Back-office Syntora.Tech',
 };
 
-// Runs before paint so a "system" theme never flashes light; toggles on OS changes too.
-const SYSTEM_THEME_SCRIPT = `(function(){var m=window.matchMedia('(prefers-color-scheme: dark)');function a(){document.documentElement.classList.toggle('dark',m.matches)}a();m.addEventListener('change',a)})()`;
+// Runs before paint so a "system" theme never flashes light; ThemeSync follows OS changes.
+const SYSTEM_THEME_SCRIPT = `document.documentElement.classList.toggle('dark',window.matchMedia('(prefers-color-scheme: dark)').matches)`;
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await getLocale();
@@ -34,12 +36,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       )}
       suppressHydrationWarning={v2}
     >
-      {v2 && theme === 'system' ? (
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: SYSTEM_THEME_SCRIPT }} />
-        </head>
-      ) : null}
       <body className="min-h-screen antialiased">
+        {v2 && theme === 'system' && (
+          <Script id="system-theme" strategy="beforeInteractive">
+            {SYSTEM_THEME_SCRIPT}
+          </Script>
+        )}
+        {v2 && <ThemeSync theme={theme} />}
         <NextIntlClientProvider>
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster richColors position="top-right" {...(v2 ? { theme } : {})} />
