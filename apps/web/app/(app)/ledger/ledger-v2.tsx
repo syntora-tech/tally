@@ -56,7 +56,7 @@ export async function LedgerHeader({
   const t = await getTranslations('ledger');
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title={title ?? 'Ledger'} help={help}>
+      <PageHeader title={title ?? (section === 'journal' ? 'Ledger' : t(section))} help={help}>
         {children ?? (
           <Button render={<Link href="/ledger/new" />}>+ {t('v2.newTransaction')}</Button>
         )}

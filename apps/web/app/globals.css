@@ -259,6 +259,20 @@
   .v2 [data-slot='native-select'] {
     padding-inline-end: 2rem;
   }
+  /* Phone width: fixed-width fields shrink and form rows wrap instead of widening the page. */
+  .v2 :is([data-slot='input'], [data-slot='native-select'], select) {
+    max-width: 100%;
+  }
+  .v2 [data-slot='native-select'][class~='min-w-56'] {
+    min-width: min(14rem, 100%);
+  }
+  .v2 :is([data-form-card], [data-slot='dialog-content']) form .flex:not(.flex-col) {
+    flex-wrap: wrap;
+  }
+  .v2 form.flex-wrap > *,
+  .v2 form .flex-wrap > * {
+    max-width: 100%;
+  }
   .v2 table [data-slot='input'] {
     height: 2.25rem;
   }

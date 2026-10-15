@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV_ICONS } from '@/components/nav-icons';
+import { cn } from 'cn';
 import {
   Sidebar,
   SidebarContent,
@@ -31,7 +31,7 @@ export function V2AppSidebar({ sections, user }: { sections: NavSection[]; user:
   );
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -65,19 +65,23 @@ export function V2AppSidebar({ sections, user }: { sections: NavSection[]; user:
               <SidebarGroupContent>
                 <SidebarMenu>
                   {section.items.map((item) => {
-                    const Icon = NAV_ICONS[item.icon];
                     const isActive = active?.href === item.href;
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
                           isActive={isActive}
-                          tooltip={t(item.title)}
-                          className="data-active:font-medium data-active:[&_svg]:text-neon"
+                          className="h-9 data-active:font-medium"
                           render={
                             <Link href={item.href} aria-current={isActive ? 'page' : undefined} />
                           }
                         >
-                          <Icon />
+                          <span
+                            aria-hidden
+                            className={cn(
+                              'size-1.5 shrink-0 rounded-full',
+                              isActive ? 'bg-neon' : 'bg-[#4A4A4F]',
+                            )}
+                          />
                           <span>{t(item.title)}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
