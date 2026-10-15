@@ -5,7 +5,17 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display, var(--font-sans));
+  --color-neon: var(--neon);
+  --color-link: var(--link);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --font-sans: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -114,6 +124,87 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* UX v2 (A-102), syntora.tech palette. Scoped to html.v2 so v1 is untouched while the redesign is opt-in. */
+.v2 {
+  --background: #fcfcfc;
+  --foreground: #0e0e11;
+  --card: #ffffff;
+  --card-foreground: #0e0e11;
+  --popover: #ffffff;
+  --popover-foreground: #0e0e11;
+  --primary: #0e0e11;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f1ef;
+  --secondary-foreground: #0e0e11;
+  --muted: #f1f1ef;
+  --muted-foreground: #696969;
+  --accent: #f1f1ef;
+  --accent-foreground: #0e0e11;
+  --destructive: #b42318;
+  --border: #ecece9;
+  --input: #e2e2df;
+  --ring: #2863e2;
+  --chart-1: #0e0e11;
+  --chart-2: #65ffac;
+  --chart-3: #2863e2;
+  --chart-4: #f57c00;
+  --chart-5: #a3a3a3;
+  --radius: 0.5rem;
+  --sidebar: #0e0e11;
+  --sidebar-foreground: #c9c9c9;
+  --sidebar-primary: #65ffac;
+  --sidebar-primary-foreground: #0e0e11;
+  --sidebar-accent: rgb(101 255 172 / 12%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #222228;
+  --sidebar-ring: #65ffac;
+  --neon: #65ffac;
+  --link: #2863e2;
+  --success: #d8f9e7;
+  --success-foreground: #0b5a33;
+  --warning: #fff1dc;
+  --warning-foreground: #8a4b00;
+  --danger: #fdecec;
+  --danger-foreground: #b42318;
+  --info: #e7eefd;
+  --info-foreground: #1f4fb8;
+  color-scheme: light;
+}
+
+.v2.dark {
+  --background: #0e0e11;
+  --foreground: #f2f2f0;
+  --card: #16161a;
+  --card-foreground: #f2f2f0;
+  --popover: #1c1c21;
+  --popover-foreground: #f2f2f0;
+  --primary: #65ffac;
+  --primary-foreground: #0e0e11;
+  --secondary: #24242a;
+  --secondary-foreground: #f2f2f0;
+  --muted: #24242a;
+  --muted-foreground: #a3a3a3;
+  --accent: #24242a;
+  --accent-foreground: #f2f2f0;
+  --destructive: #ff8a8a;
+  --border: #26262c;
+  --input: #34343b;
+  --ring: #8fb0ff;
+  --chart-1: #f2f2f0;
+  --sidebar: #0b0b0d;
+  --sidebar-border: #1f1f24;
+  --link: #8fb0ff;
+  --success: #123a26;
+  --success-foreground: #65ffac;
+  --warning: #3a2a12;
+  --warning-foreground: #ffb74d;
+  --danger: #3a1616;
+  --danger-foreground: #ff8a8a;
+  --info: #18233f;
+  --info-foreground: #9db8ff;
+  color-scheme: dark;
 }
 
 @layer base {

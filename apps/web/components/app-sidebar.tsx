@@ -1,23 +1,10 @@
 'use client';
 
-import {
-  Building2,
-  CalendarRange,
-  FileText,
-  FolderOpen,
-  LayoutDashboard,
-  Landmark,
-  LogOut,
-  Plane,
-  ScrollText,
-  Settings,
-  Users,
-  Wallet,
-  type LucideIcon,
-} from 'lucide-react';
+import { LogOut, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTransition } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -31,22 +18,10 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import type { Locale } from '@/i18n/locales';
-import type { NavIcon, NavItem } from '@/lib/navigation';
+import type { NavItem } from '@/lib/navigation';
+import { setUiVersionAction } from '@/server/actions/ui-prefs';
 import { LanguageSwitcher } from './language-switcher';
-
-const ICONS: Record<NavIcon, LucideIcon> = {
-  dashboard: LayoutDashboard,
-  people: Users,
-  clients: Building2,
-  periods: CalendarRange,
-  invoices: FileText,
-  payroll: Wallet,
-  acts: ScrollText,
-  ledger: Landmark,
-  trips: Plane,
-  documents: FolderOpen,
-  settings: Settings,
-};
+import { NAV_ICONS } from './nav-icons';
 
 type Props = {
   items: NavItem[];
@@ -59,6 +34,7 @@ type Props = {
 export function AppSidebar({ items, email, roleLabel, locale, signOutAction }: Props) {
   const pathname = usePathname();
   const t = useTranslations('nav');
+  const [pending, startTransition] = useTransition();
 
   return (
     <Sidebar collapsible="icon">
@@ -79,7 +55,7 @@ export function AppSidebar({ items, email, roleLabel, locale, signOutAction }: P
           <SidebarGroupContent>
             <SidebarMenu aria-label={t('modules')}>
               {items.map((item) => {
-                const Icon = ICONS[item.icon];
+                const Icon = NAV_ICONS[item.icon];
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -106,6 +82,20 @@ export function AppSidebar({ items, email, roleLabel, locale, signOutAction }: P
           <span className="text-muted-foreground">{roleLabel}</span>
         </div>
         <LanguageSwitcher locale={locale} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip={t('tryNewDesign')}
+              onClick={() => {
+                startTransition(() => setUiVersionAction('v2'));
+              }}
+              disabled={pending}
+            >
+              <Sparkles />
+              <span>{t('tryNewDesign')}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <form action={signOutAction}>
           <SidebarMenu>
             <SidebarMenuItem>

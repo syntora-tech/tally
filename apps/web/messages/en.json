@@ -34,7 +34,24 @@
     "documents": "Documents",
     "settings": "Settings",
     "signOut": "Sign out",
-    "language": "Language"
+    "language": "Language",
+    "tryNewDesign": "Try the new design",
+    "newDesign": "New design (beta)",
+    "userMenu": "Account and preferences",
+    "theme": "Theme",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "breadcrumbs": "Breadcrumbs",
+    "groups": {
+      "overview": "Overview",
+      "month": "Month",
+      "money": "Money",
+      "directory": "Directory",
+      "system": "System"
+    }
   },
   "roles": {
     "owner": "Owner",

@@ -34,7 +34,24 @@
     "documents": "Документи",
     "settings": "Налаштування",
     "signOut": "Вийти",
-    "language": "Мова"
+    "language": "Мова",
+    "tryNewDesign": "Спробувати новий дизайн",
+    "newDesign": "Новий дизайн (бета)",
+    "userMenu": "Обліковий запис і налаштування",
+    "theme": "Тема",
+    "themes": {
+      "light": "Світла",
+      "dark": "Темна",
+      "system": "Як у системі"
+    },
+    "breadcrumbs": "Навігація",
+    "groups": {
+      "overview": "Огляд",
+      "month": "Місяць",
+      "money": "Гроші",
+      "directory": "Довідники",
+      "system": "Система"
+    }
   },
   "roles": {
     "owner": "Власник",
