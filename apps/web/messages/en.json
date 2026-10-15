@@ -462,8 +462,10 @@
       "documentOverrideField": "Enter why it is paid before the document is signed",
       "documentOwnerOnly": "Only the owner can pay before the document is signed",
       "lineNotFound": "Payout line not found",
-      "lineItemPaid": "The payout has payments: its lines stay",
-      "lineActIssued": "The payout has an issued act: void it to change its lines"
+      "lineItemPaid": "The payout has payments: it no longer changes",
+      "lineActIssued": "The payout has an issued act: void it to change the payout",
+      "adjustPersonOnly": "Only a person's payout takes adjustments",
+      "adjustOpenPeriod": "The month is open: add the adjustment in the period"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1633,7 +1635,12 @@
     "salaryGross": "gross {amount}",
     "salaryPaid": "paid",
     "salarySkipped": "skipped",
-    "salaryPlanned": "Planned payments →"
+    "salaryPlanned": "Planned payments →",
+    "adjustClosed": "Adjustment after the close",
+    "adjustAmount": "Amount, e.g. -0.27",
+    "adjustReason": "Reason",
+    "adjustSubmit": "Add adjustment",
+    "adjusted": "Adjustment added"
   },
   "payDialog": {
     "paid": "Payout recorded",

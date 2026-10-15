@@ -1,4 +1,5 @@
 import {
+  adjustment,
   assignment,
   company,
   contract,
@@ -12,7 +13,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
-import { removePayoutLine } from './lines';
+import { adjustClosedPayout, removePayoutLine } from './lines';
 
 const h = intHarness('2045-11-10');
 let finance: Awaited<ReturnType<typeof h.user>>;
@@ -116,6 +117,7 @@ afterAll(() =>
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
       await tx.delete(supplierAct).where(eq(supplierAct.contractId, ids.contract));
+      await tx.delete(adjustment).where(eq(adjustment.periodId, ids.period));
       await tx.delete(payrollLine).where(eq(payrollLine.payrollItemId, ids.item));
       await tx.delete(payrollItem).where(eq(payrollItem.periodId, ids.period));
     });
@@ -154,6 +156,23 @@ describe('a line out of a closed payout (A-097)', () => {
     expect(act?.amountUah).toBe('40000.00');
   });
 
+  it('the owner corrects the closed payout by an adjustment; the draft act follows (A-099)', async () => {
+    const input = { itemId: ids.item, amount: '-0.27', reason: 'CTO is 803.73 USD' };
+    expect((await adjustClosedPayout.run(h.ctxFor(finance), input))._unsafeUnwrapErr().code).toBe(
+      'forbidden',
+    );
+    const ctx = h.ctxFor(owner);
+    const preview = (await adjustClosedPayout.run(ctx, { ...input, dryRun: true }))._unsafeUnwrap();
+    expect(preview).toMatchObject({ dryRun: true, totalUah: '39989.20' });
+    (await adjustClosedPayout.run(ctx, input))._unsafeUnwrap();
+    const [item] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item));
+    expect(item).toMatchObject({ totalUsd: '999.73000000', totalUah: '39989.20' });
+    const [act] = await h.db.select().from(supplierAct).where(eq(supplierAct.id, ids.act));
+    expect(act?.amountUah).toBe('39989.20');
+    const added = await h.db.select().from(adjustment).where(eq(adjustment.periodId, ids.period));
+    expect(added).toMatchObject([{ kind: 'correction', amount: '-0.27000000', currency: 'USD' }]);
+  });
+
   it('refuses once the act is issued', async () => {
     await h.db
       .update(supplierAct)
@@ -164,5 +183,11 @@ describe('a line out of a closed payout (A-097)', () => {
       reason: 'Test',
     });
     expect(result._unsafeUnwrapErr().message).toBe('payroll.lineActIssued');
+    const adjusted = await adjustClosedPayout.run(h.ctxFor(owner), {
+      itemId: ids.item,
+      amount: '1',
+      reason: 'Test',
+    });
+    expect(adjusted._unsafeUnwrapErr().message).toBe('payroll.lineActIssued');
   });
 });

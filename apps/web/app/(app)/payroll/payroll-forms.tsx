@@ -22,6 +22,7 @@ import { useLabels } from '@/lib/labels';
 import {
   changePayoutMethodAction,
   removePayoutLineAction,
+  adjustClosedPayoutAction,
   mergeActsAction,
   splitActAction,
   overridePayableAction,
@@ -446,6 +447,51 @@ export function RemoveLineForm({ lineId }: { lineId: string }) {
           {t('removeLine')}
         </Button>
         {error && <span className="text-destructive">{error.message}</span>}
+      </form>
+    </details>
+  );
+}
+
+/** Owner only: an adjustment of an unpaid payout of a closed month (A-099). */
+export function AdjustClosedForm({ itemId, fiat }: { itemId: string; fiat: boolean }) {
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    adjustClosedPayoutAction,
+    null,
+  );
+  const t = useTranslations('payroll');
+  const error = useResult(state, t('adjusted'));
+  const currencies = fiat ? ['USD', 'UAH'] : ['USD', 'USDT', 'USDC'];
+  return (
+    <details className="text-sm" data-testid="adjust-closed">
+      <summary className="cursor-pointer text-muted-foreground">{t('adjustClosed')}</summary>
+      <form action={action} className="mt-2 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="itemId" value={itemId} />
+        <input type="hidden" name="kind" value="correction" />
+        <Input
+          name="amount"
+          inputMode="decimal"
+          placeholder={t('adjustAmount')}
+          aria-label={t('adjustAmount')}
+          className="h-8 w-40"
+          required
+        />
+        <NativeSelect
+          name="currency"
+          aria-label="Currency"
+          className="h-8 w-24"
+          options={currencies.map((c) => ({ value: c, label: c }))}
+        />
+        <Input
+          name="reason"
+          placeholder={t('adjustReason')}
+          aria-label={t('adjustReason')}
+          className="h-8 w-64"
+          required
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={pending}>
+          {t('adjustSubmit')}
+        </Button>
+        {error && <span className="text-sm text-destructive">{error.message}</span>}
       </form>
     </details>
   );

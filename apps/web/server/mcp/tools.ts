@@ -55,7 +55,7 @@ import { listContractorInvoices } from '../services/contractor-invoices';
 import { addLegacyActs } from '../services/acts/legacy';
 import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
-import { removePayoutLine } from '../services/payroll/lines';
+import { adjustClosedPayout, removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
 
 export type ToolKind = 'read' | 'write';
@@ -863,6 +863,14 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       "Owner only, on an explicit request (A-097). Takes one line (lines[].id from get_payroll_queue) out of an unpaid payout of a closed month — e.g. a director's salary that is paid through planned payments and must not sit in the FOP payout and its act. Recomputes the payout totals and its draft act; a payout left empty is deleted. Refuses payouts with payments or an issued act. End the assignment (upsert_assignments endsOn) so later months do not accrue it again. Run dryRun first and show the line, payout and new total.",
     service: removePayoutLine,
+  }),
+  tool({
+    name: 'adjust_closed_payout',
+    title: 'Adjust an unpaid payout of a closed month',
+    kind: 'write',
+    description:
+      'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to an unpaid person payout of a closed month whose act is not issued — the month\'s adjustments are frozen otherwise. Recomputes the payout totals and its draft act at the payout rate. Refuses payouts with payments or an issued act; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
+    service: adjustClosedPayout,
   }),
 ];
 

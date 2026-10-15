@@ -75,6 +75,7 @@ export const listPayroll = defineService({
             feeStepFixed: payee.feeStepFixed,
           },
           month: period.month,
+          periodStatus: period.status,
         })
         .from(payrollItem)
         .leftJoin(person, eq(person.id, payrollItem.personId))

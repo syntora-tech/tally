@@ -554,6 +554,13 @@
       "when": 1792049615765,
       "tag": "20261015073335_act_payout_month",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792051633629,
+      "tag": "20261015080713_closed_payout_adjustment",
+      "breakpoints": true
     }
   ]
 }

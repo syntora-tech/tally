@@ -2,10 +2,12 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(13);
+select plan(15);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000c1', 'viewer11@t.local');
 insert into public.app_user (id, email, role) values ('00000000-0000-0000-0000-0000000000c1', 'viewer11@t.local', 'viewer');
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000c2', 'owner11@t.local');
+insert into public.app_user (id, email, role) values ('00000000-0000-0000-0000-0000000000c2', 'owner11@t.local', 'owner');
 
 insert into public.company (id, name_en, name_ua) values ('10000000-0000-0000-0000-000000000011', 'S', 'С');
 insert into public.client (id, legal_name) values ('40000000-0000-0000-0000-000000000011', 'Client 11');
@@ -46,6 +48,18 @@ select throws_ok($$ insert into public.adjustment (period_id, person_id, kind, a
   'TL030', null, 'I6: no adjustments in a closed period');
 select throws_ok($$ update public.payroll_line set amount = 900 where id = 'c1000000-0000-0000-0000-000000000011' $$,
   'TL030', null, 'I6: accrued amounts are frozen');
+
+-- A-099: the owner adds an adjustment to a closed month with a reason; nobody changes one.
+select set_config('request.jwt.claims', json_build_object('sub', '00000000-0000-0000-0000-0000000000c2')::text, true);
+select throws_ok($$ insert into public.adjustment (period_id, person_id, kind, amount, currency, reason)
+  values ('80000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000011', 'correction', -0.27, 'USD', 'cents') $$,
+  'TL030', null, 'the owner needs app.reason for an adjustment of a closed month');
+select set_config('app.reason', 'CTO is 803.73', true);
+select lives_ok($$ insert into public.adjustment (period_id, person_id, kind, amount, currency, reason)
+  values ('80000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000011', 'correction', -0.27, 'USD', 'cents') $$,
+  'the owner adds an adjustment to a closed month with a reason');
+select set_config('app.reason', '', true);
+select set_config('request.jwt.claims', '', true);
 select throws_ok($$ update public.payroll_line set status = 'payable' where id = 'c1000000-0000-0000-0000-000000000011' $$,
   '23514', null, 'a payable line needs a funding source');
 

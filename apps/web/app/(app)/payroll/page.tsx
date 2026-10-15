@@ -23,6 +23,7 @@ import { listPlannedPayments, plannedPaymentCandidates } from '@/server/services
 import { PaymentActions } from '../ledger/planned/planned-forms';
 import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-invoice-forms';
 import {
+  AdjustClosedForm,
   ChangeMethodForm,
   MergeActsButton,
   OverrideForm,
@@ -569,6 +570,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                         ))}
                       </ul>
                     )}
+                    {isOwner &&
+                      i.item.kind === 'person' &&
+                      i.periodStatus === 'closed' &&
+                      toDecimal(i.item.paidAmount).isZero() &&
+                      i.acts.every((a) => a.status === 'draft') && (
+                        <AdjustClosedForm itemId={i.item.id} fiat={fiat} />
+                      )}
                     {i.group !== 'paid' && (
                       <PayDialog
                         itemId={i.item.id}
