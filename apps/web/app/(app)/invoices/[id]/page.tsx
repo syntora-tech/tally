@@ -33,6 +33,8 @@ import {
   WriteOffForm,
 } from './invoice-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { InvoiceV2 } from './invoice-v2';
 
 export const generateMetadata = pageTitle('invoice');
 
@@ -75,6 +77,18 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       : [];
   const outstanding = toDecimal(inv.total).minus(inv.paidAmount).toFixed(2);
   const signedOutdated = latestSigned && (latestSigned.sourceRevision ?? 0) < inv.revision;
+  if ((await getUiPrefs()).version === 'v2') {
+    return (
+      <InvoiceV2
+        ctx={ctx}
+        data={result.value}
+        preview={preview}
+        render={render}
+        allocations={allocations}
+        candidates={candidates}
+      />
+    );
+  }
   const [t, tc, fmt, { INVOICE_STATUS_LABELS }] = await Promise.all([
     getTranslations('invoice'),
     getTranslations('common'),

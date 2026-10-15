@@ -24,7 +24,8 @@
     "previous": "Previous",
     "next": "Next",
     "chooseMonth": "Choose a month",
-    "allMonths": "All months"
+    "allMonths": "All months",
+    "clearFilters": "Clear filters"
   },
   "nav": {
     "modules": "Modules",
@@ -1575,7 +1576,22 @@
     "writeOff": "Write-off (bad debt)",
     "writeOffDescription": "The client will not pay the rest: {amount} goes to Bad Debt. Account balances do not change. Owner only, cannot be undone",
     "writtenOff": "Written off on {date}",
-    "badDebt": "Bad debt {amount}"
+    "badDebt": "Bad debt {amount}",
+    "v2": {
+      "overdue": "{days, plural, one {# day overdue} other {# days overdue}}",
+      "revise": "Change (new revision)…",
+      "voidAction": "Void…",
+      "writeOffAction": "Write off as bad debt…",
+      "allocate": "Record payment",
+      "allocateTitle": "Which incoming payment pays this invoice?",
+      "locked": "Paid in part: void and reissue to change",
+      "noPayments": "Not paid yet.",
+      "details": "Details",
+      "client": "Client",
+      "period": "Period",
+      "left": "Outstanding",
+      "pdfReady": "PDF of revision {revision} is in the documents below."
+    }
   },
   "invoiceForms": {
     "revisionSaved": "New revision saved",
@@ -1838,7 +1854,10 @@
     "yearHint": "Empty — all years",
     "withDrafts": "Show drafts and void acts",
     "subtotal": "Total {payee}",
-    "total": "Total: {count, plural, one {# act} other {# acts}}"
+    "total": "Total: {count, plural, one {# act} other {# acts}}",
+    "v2": {
+      "allYears": "All years"
+    }
   },
   "act": {
     "back": "← Acts registry",
@@ -1857,7 +1876,22 @@
     "newSubtitle": "Trip reimbursement or another service with a manual date",
     "deleteTitle": "Delete the draft",
     "fileOwn": "The act's document is in the documents below",
-    "signedDocument": "Signed copy uploaded"
+    "signedDocument": "Signed copy uploaded",
+    "v2": {
+      "deleteAction": "Delete the draft…",
+      "voidAction": "Void…",
+      "issueTitle": "Issue the act",
+      "issueMode": "How to issue",
+      "generate": "Generate",
+      "own": "My own PDF",
+      "signTitle": "Signing",
+      "details": "Details",
+      "payee": "Payee",
+      "contract": "Contract",
+      "nextTitle": "After issue",
+      "nextSign": "Sign in Vchasno or upload the signed PDF",
+      "nextPay": "Pay it in Payroll"
+    }
   },
   "actForms": {
     "draftSaved": "Draft saved",

@@ -23,6 +23,9 @@ import {
   SignContractorInvoiceForm,
   VoidContractorInvoiceForm,
 } from '../contractor-invoice-forms';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
+import { Status } from '@/components/v2/status';
 
 export const generateMetadata = pageTitle('contractorInvoice');
 
@@ -51,23 +54,39 @@ export default async function ContractorInvoicePage({
     getLabels(),
   ]);
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
-          {t('back')}
-        </Link>
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
-          {inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
-          <Badge variant={draft ? 'outline' : 'secondary'}>
-            {DOC_STATUS_LABELS[inv.status] ?? inv.status}
-          </Badge>
-        </h1>
-        <p className="text-muted-foreground">
-          {t('subtitle', { payee: payeeName, contract: contractNumber })}
-          {personName && month && ` · ${personName} · ${fmt.month(month)}`}
-        </p>
-      </div>
+      {v2 ? (
+        <PageHeader
+          title={inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
+          meta={
+            <span className="flex flex-wrap items-center gap-2">
+              <Status tone={draft ? 'neutral' : inv.status === 'void' ? 'danger' : 'info'}>
+                {DOC_STATUS_LABELS[inv.status] ?? inv.status}
+              </Status>
+              {t('subtitle', { payee: payeeName, contract: contractNumber })}
+              {personName && month && ` · ${personName} · ${fmt.month(month)}`}
+            </span>
+          }
+        />
+      ) : (
+        <div>
+          <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
+            {t('back')}
+          </Link>
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
+            {inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
+            <Badge variant={draft ? 'outline' : 'secondary'}>
+              {DOC_STATUS_LABELS[inv.status] ?? inv.status}
+            </Badge>
+          </h1>
+          <p className="text-muted-foreground">
+            {t('subtitle', { payee: payeeName, contract: contractNumber })}
+            {personName && month && ` · ${personName} · ${fmt.month(month)}`}
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-4">

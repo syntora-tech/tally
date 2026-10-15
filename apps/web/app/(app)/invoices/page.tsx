@@ -6,6 +6,9 @@ import { INVOICE_STATUSES, listInvoices } from '@/server/services/invoices';
 import { InvoicesTable } from './invoices-table';
 import { getTranslations } from 'next-intl/server';
 import { getLabels, localizeForUser, pageTitle } from '@/server/i18n';
+import { PageHeader } from '@/components/v2/page-header';
+import { TabsNav } from '@/components/v2/tabs-nav';
+import { getUiPrefs } from '@/server/ui-prefs';
 
 export const generateMetadata = pageTitle('invoices');
 
@@ -16,6 +19,34 @@ export default async function InvoicesPage({
 }) {
   const ctx = await requireRole(FINANCE_ROLES);
   const { status = '' } = await searchParams;
+  if ((await getUiPrefs()).version === 'v2') {
+    const [all, t, { INVOICE_STATUS_LABELS }] = await Promise.all([
+      listInvoices.run(ctx, { status: '' }),
+      getTranslations('invoices'),
+      getLabels(),
+    ]);
+    const rows = all.unwrapOr([]);
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader title={t('title')} help={t('subtitle')} />
+        <TabsNav
+          label={t('statusFilter')}
+          active={status || 'all'}
+          tabs={['', ...INVOICE_STATUSES].map((s) => ({
+            key: s || 'all',
+            label: s ? (INVOICE_STATUS_LABELS[s] ?? s) : t('all'),
+            href: s ? `/invoices?status=${s}` : '/invoices',
+            count: s ? rows.filter((r) => r.status === s).length : rows.length,
+          }))}
+        />
+        {all.isErr() ? (
+          <p className="text-destructive">{(await localizeForUser(all.error)).message}</p>
+        ) : (
+          <InvoicesTable rows={status ? rows.filter((r) => r.status === status) : rows} />
+        )}
+      </div>
+    );
+  }
   const result = await listInvoices.run(ctx, { status });
   const t = await getTranslations('invoices');
   const { INVOICE_STATUS_LABELS } = await getLabels();

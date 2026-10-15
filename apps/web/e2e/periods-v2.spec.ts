@@ -60,16 +60,41 @@ test.afterAll(async () => {
           where c.legal_name = ${clientName})
       `);
       await tx.execute(sql`
-        delete from public.document d using public.document_link l, public.client c
-        where l.document_id = d.id and l.entity_id = c.id and c.legal_name = ${clientName}
+        create temp table own_docs on commit drop as
+        select l.document_id as id from public.document_link l join public.client c
+        on l.entity_id = c.id where c.legal_name = ${clientName}
       `);
+      await tx.execute(
+        sql`delete from public.document_link where document_id in (select id from own_docs)`,
+      );
+      await tx.execute(sql`delete from public.document where id in (select id from own_docs)`);
+      for (const child of ['invoice_line', 'invoice_revision']) {
+        await tx.execute(sql`
+          delete from ${sql.identifier(child)} x using public.invoice i, public.client c
+          where x.invoice_id = i.id and c.id = i.client_id and c.legal_name = ${clientName}
+        `);
+      }
       await tx.execute(sql`
         delete from public.invoice i using public.client c
         where c.id = i.client_id and c.legal_name = ${clientName}
       `);
+      // Closing the month drafts FOP acts for every active payee, real ones included.
+      await tx.execute(sql`delete from public.supplier_act
+        where period_from >= ${`${MONTH}-01`} and period_from < ${`${MONTH}-01`}::date + interval '1 month'`);
+      // Replica mode skips FK cascades: payouts of the month go before the period.
+      await tx.execute(sql`delete from public.payroll_line l using public.payroll_item i, public.period p
+        where l.payroll_item_id = i.id and i.period_id = p.id and p.month = ${`${MONTH}-01`}`);
+      await tx.execute(sql`delete from public.payroll_item i using public.period p
+        where i.period_id = p.id and p.month = ${`${MONTH}-01`}`);
       await tx.execute(sql`delete from public.timesheet t using public.period p
         where p.id = t.period_id and p.month = ${`${MONTH}-01`}`);
       await tx.execute(sql`delete from public.period where month = ${`${MONTH}-01`}`);
+      for (const terms of ['billing_terms', 'pay_terms']) {
+        await tx.execute(sql`
+          delete from ${sql.identifier(terms)} x using public.assignment a, public.person p
+          where x.assignment_id = a.id and p.id = a.person_id and p.full_name = ${personName}
+        `);
+      }
       await tx.execute(sql`
         delete from public.assignment a using public.person p
         where p.id = a.person_id and p.full_name = ${personName}
