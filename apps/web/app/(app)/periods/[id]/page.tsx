@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
-import { getPeriodOverview, periodDocuments } from '@/server/services/periods';
+import { getPeriodOverview, listPeriods, periodDocuments } from '@/server/services/periods';
 import {
   AdjustmentForm,
   CloseForm,
@@ -31,6 +31,12 @@ import {
 } from './period-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 import { MergeActsButton, SplitActForm } from '../../payroll/payroll-forms';
+import { RowMenu } from '@/components/v2/form-dialog';
+import { MonthStepper } from '@/components/v2/month-stepper';
+import { PageHeader } from '@/components/v2/page-header';
+import { Status } from '@/components/v2/status';
+import { Wizard } from '@/components/v2/wizard';
+import { getUiPrefs } from '@/server/ui-prefs';
 
 export const generateMetadata = pageTitle('period');
 
@@ -58,7 +64,13 @@ function Step({
   );
 }
 
-export default async function PeriodPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PeriodPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await requireRole(FINANCE_ROLES);
   const { id } = await params;
   const [result, documents] = await Promise.all([
@@ -95,6 +107,415 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
     return `${BILLING_TYPE_LABELS[b.type] ?? b.type} ${fmt.amount(b.rate, b.currency)}`;
   };
 
+  const paramsStep = (
+    <ParamsForm
+      periodId={p.id}
+      workHours={p.workHours}
+      referenceFx={p.referenceFxUsdUah}
+      disabled={closed}
+    />
+  );
+  const hoursStep = (
+    <div className="flex flex-col gap-4">
+      <HoursForm
+        periodId={p.id}
+        disabled={closed}
+        rows={assignments.map((a) => ({
+          assignmentId: a.assignmentId,
+          personName: a.personName,
+          clientName: a.clientName,
+          roleTitle: a.roleTitle,
+          billing: billingText(a),
+          hours: a.hours,
+          payHours: a.payHours ?? null,
+          note: a.note ?? null,
+        }))}
+      />
+      {!closed && <HoursCsvForm periodId={p.id} />}
+    </div>
+  );
+  const calcStep = (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('col.person')}</TableHead>
+            <TableHead>{t('col.client')}</TableHead>
+            <TableHead>{t('col.hours')}</TableHead>
+            <TableHead>{t('col.payHours')}</TableHead>
+            <TableHead>{t('col.invoice')}</TableHead>
+            <TableHead>{t('col.payUsd')}</TableHead>
+            <TableHead>{t('col.payUah')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {preview.rows.map((r) => (
+            <TableRow key={r.assignmentId}>
+              <TableCell>{r.personName}</TableCell>
+              <TableCell>
+                {r.clientName ?? tc('internal')}
+                {notes.get(r.assignmentId) && (
+                  <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
+                )}
+              </TableCell>
+              <TableCell>{fmt.amount(r.hours)}</TableCell>
+              <TableCell className={r.payHours === r.hours ? 'text-muted-foreground' : undefined}>
+                {fmt.amount(r.payHours)}
+              </TableCell>
+              <TableCell>
+                {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
+              </TableCell>
+              <TableCell>{fmt.amount(r.pay, r.payCurrency)}</TableCell>
+              <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={4}>{tc('total')}</TableCell>
+            <TableCell data-testid="total-invoice">
+              {fmt.amount(preview.totals.invoiceUsd)}
+            </TableCell>
+            <TableCell data-testid="total-pay">
+              {[
+                !toDecimal(preview.totals.payUsd).isZero() ||
+                toDecimal(preview.totals.payUah).isZero()
+                  ? fmt.amount(preview.totals.payUsd, 'USD')
+                  : null,
+                toDecimal(preview.totals.payUah).isZero()
+                  ? null
+                  : fmt.amount(preview.totals.payUah, 'UAH'),
+              ]
+                .filter(Boolean)
+                .join(' + ')}
+            </TableCell>
+            <TableCell>
+              {preview.totals.payUahApprox ? fmt.amount(preview.totals.payUahApprox) : '—'}
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+      {docs && (docs.invoices.length > 0 || docs.acts.length > 0) && (
+        <div className="mt-6 flex flex-col gap-4">
+          <div>
+            <h3 className="font-medium">{t('earlyDocs')}</h3>
+            <p className="text-sm text-muted-foreground">{t('earlyDocsDescription')}</p>
+          </div>
+          {docs.invoices.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('earlyInvoice')}</TableHead>
+                  <TableHead>{t('col.person')}</TableHead>
+                  <TableHead>{t('earlyState')}</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {docs.invoices.map((g) => (
+                  <TableRow key={`${g.contractId}:${g.annexId ?? ''}`}>
+                    <TableCell>{g.label}</TableCell>
+                    <TableCell className="text-muted-foreground">{g.people.join(', ')}</TableCell>
+                    <TableCell>
+                      {g.invoice ? (
+                        <Link className="hover:underline" href={`/invoices/${g.invoice.id}`}>
+                          {g.invoice.number ?? t('draft')} ·{' '}
+                          {fmt.amount(g.invoice.total, g.invoice.currency)} ·{' '}
+                          {INVOICE_STATUS_LABELS[g.invoice.status]}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {docs.open && (!g.invoice || g.invoice.status === 'draft') && (
+                        <EarlyInvoiceButton
+                          periodId={p.id}
+                          contractId={g.contractId}
+                          annexId={g.annexId}
+                          label={g.invoice ? t('recalculate') : t('createInvoice')}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {docs.acts.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('earlyAct')}</TableHead>
+                  <TableHead>{t('earlyPay')}</TableHead>
+                  <TableHead>{t('earlyState')}</TableHead>
+                  <TableHead>{t('earlyRate')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {docs.acts.map((a) => (
+                  <TableRow key={a.personId}>
+                    <TableCell>
+                      {a.personName}
+                      <div className="text-xs text-muted-foreground">{a.payeeName}</div>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {[
+                        toDecimal(a.usd).isZero() ? null : fmt.amount(a.usd, 'USD'),
+                        toDecimal(a.uah).isZero() ? null : fmt.amount(a.uah, 'UAH'),
+                      ]
+                        .filter(Boolean)
+                        .join(' + ') || '—'}
+                    </TableCell>
+                    <TableCell>
+                      {a.acts.length === 0 && '—'}
+                      <ul className="flex flex-col gap-1">
+                        {a.acts.map((act, n) => {
+                          const next = a.acts[n + 1];
+                          const activities = [
+                            ...a.lines
+                              .filter((l) => act.assignmentIds.includes(l.assignmentId))
+                              .map((l) => ({
+                                id: l.assignmentId,
+                                kind: 'assignment' as const,
+                                label: `${l.clientName ?? tc('internal')}${l.roleTitle ? ` · ${l.roleTitle}` : ''} · ${fmt.amount(l.amount, l.currency)}`,
+                              })),
+                            ...a.adjustments
+                              .filter((j) => act.adjustmentIds.includes(j.id))
+                              .map((j) => ({
+                                id: j.id,
+                                kind: 'adjustment' as const,
+                                label: `${ADJUSTMENT_KIND_LABELS[j.kind] ?? j.kind}: ${fmt.amount(j.amount, j.currency)} — ${j.reason}`,
+                              })),
+                          ];
+                          const splittable =
+                            docs.open &&
+                            act.status === 'draft' &&
+                            act.payrollItemId === null &&
+                            act.periodFrom !== null &&
+                            act.periodTo !== null &&
+                            act.periodFrom < act.periodTo;
+                          const byAmount =
+                            !toDecimal(a.usd).isZero() && (act.isRest || activities.length === 0);
+                          return (
+                            <li key={act.id} className="flex flex-wrap items-center gap-2">
+                              <Link className="hover:underline" href={`/acts/${act.id}`}>
+                                {act.number ?? t('draft')} · {fmt.amount(act.amountUah, 'UAH')}
+                                {act.fxRate && ` · ${act.fxRate}`}
+                              </Link>
+                              {a.acts.length > 1 && act.periodFrom && act.periodTo && (
+                                <span className="text-xs text-muted-foreground">
+                                  {fmt.date(act.periodFrom)}–{fmt.date(act.periodTo)}
+                                  {activities.length > 0 &&
+                                    ` · ${activities.map((x) => x.label.split(' · ').slice(0, -1).join(' · ') || x.label).join(', ')}`}
+                                </span>
+                              )}
+                              {docs.open &&
+                                next &&
+                                act.status === 'draft' &&
+                                next.status === 'draft' && (
+                                  <MergeActsButton firstId={act.id} secondId={next.id} />
+                                )}
+                              {splittable &&
+                                act.periodFrom &&
+                                act.periodTo &&
+                                (activities.length > 1 || byAmount) && (
+                                  <SplitActForm
+                                    actId={act.id}
+                                    periodFrom={act.periodFrom}
+                                    periodTo={act.periodTo}
+                                    activities={activities}
+                                    byAmount={byAmount}
+                                  />
+                                )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </TableCell>
+                    <TableCell>
+                      {docs.open && (!a.act || a.acts.some((x) => x.status === 'draft')) && (
+                        <EarlyActForm
+                          periodId={p.id}
+                          personId={a.personId}
+                          usd={a.usd}
+                          uah={a.uah}
+                          needsRate={a.needsRate}
+                          defaultRate={a.act?.fxRate ?? docs.nbuRate}
+                          label={a.act ? t('updateAct') : t('createAct')}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      )}
+    </>
+  );
+  const adjustStep = (
+    <div className="flex flex-col gap-4">
+      {adjustments.length > 0 && (
+        <ul className="flex flex-col gap-1 text-sm">
+          {adjustments.map(({ adjustment: a, personName }) => (
+            <li key={a.id} className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{personName}</span>
+              <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
+              <span className="tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
+              {a.payoutMethod !== 'fiat' && (
+                <Badge variant="outline">{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Badge>
+              )}
+              <span className="text-muted-foreground">{a.reason}</span>
+              {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!closed && (
+        <AdjustmentForm
+          periodId={p.id}
+          people={[...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries()]
+            .filter(([id]) => id)
+            .map(([id, name]) => ({ id, name }))}
+        />
+      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('planCol.payout')}</TableHead>
+            <TableHead>{t('planCol.method')}</TableHead>
+            <TableHead>{t('planCol.usd')}</TableHead>
+            <TableHead>{t('planCol.uah')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {plan.map((i) => (
+            <TableRow key={`${i.personId}:${i.payoutMethod}`}>
+              <TableCell>{i.personName}</TableCell>
+              <TableCell>{PAYOUT_METHOD_LABELS[i.payoutMethod]}</TableCell>
+              <TableCell>{fmt.amount(i.totalUsd)}</TableCell>
+              <TableCell>{i.totalUahApprox ? fmt.amount(i.totalUahApprox) : '—'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={2}>{t('totalToPay')}</TableCell>
+            <TableCell>{fmt.amount(sum(plan.map((i) => i.totalUsd)))}</TableCell>
+            <TableCell data-testid="total-pay-uah">
+              {p.referenceFxUsdUah
+                ? fmt.amount(sum(plan.map((i) => i.totalUahApprox ?? '0')))
+                : '—'}
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </div>
+  );
+  const closeStep = (
+    <div className="flex flex-col gap-4">
+      {closed ? (
+        ctx.actor.role === 'owner' && <ReopenForm periodId={p.id} />
+      ) : (
+        <CloseForm periodId={p.id} />
+      )}
+      {payroll.length > 0 && (
+        <p className="text-sm">
+          {t('payoutsCreated', { count: payroll.length })}{' '}
+          <Link href={`/payroll?period=${p.id}`} className="underline">
+            {t('toPayroll')}
+          </Link>
+        </p>
+      )}
+      {invoices.length > 0 && (
+        <ul className="flex flex-col gap-1 text-sm">
+          {invoices.map((i) => (
+            <li key={i.id} className="flex items-center gap-2">
+              <Link href={`/invoices/${i.id}`} className="font-medium hover:underline">
+                {i.clientName} — {i.number ?? t('draft')}
+              </Link>
+              <span>{fmt.amount(i.total, i.currency)}</span>
+              <Badge variant="outline">{INVOICE_STATUS_LABELS[i.status]}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  if ((await getUiPrefs()).version === 'v2') {
+    const periods = (await listPeriods.run(ctx, {})).unwrapOr([]);
+    const requested = Number((await searchParams).step);
+    const step = requested >= 1 && requested <= 5 ? requested : closed ? 5 : 2;
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title={fmt.month(p.month)}
+          meta={
+            <span className="flex flex-wrap items-center gap-2">
+              <Status tone={closed ? 'success' : 'info'} testId="period-status">
+                {closed ? tp('statusClosed') : tp('statusOpen')}
+              </Status>
+              {closed &&
+                p.closedAt &&
+                t('closedOn', { date: fmt.date(p.closedAt.toISOString().slice(0, 10)) })}
+            </span>
+          }
+        >
+          <MonthStepper
+            options={periods.map(({ period: x }) => ({
+              key: x.id,
+              label: fmt.month(x.month),
+              href: `/periods/${x.id}`,
+            }))}
+            current={p.id}
+            labels={{ previous: tc('previous'), next: tc('next'), choose: tc('chooseMonth') }}
+          />
+          <RowMenu
+            label={tc('actions')}
+            entries={[
+              { label: t('hoursTemplate'), href: `/api/periods/${p.id}/hours`, download: true },
+              payroll.length > 0 && { label: t('toPayroll'), href: `/payroll?period=${p.id}` },
+              isEmpty && {
+                label: t('v2.delete'),
+                destructive: true,
+                dialog: { title: t('v2.delete'), content: <DeletePeriodForm periodId={p.id} /> },
+              },
+            ]}
+          />
+        </PageHeader>
+        <Wizard
+          current={step}
+          allDone={closed}
+          hrefOf={(n) => `/periods/${p.id}?step=${String(n)}`}
+          labels={{
+            steps: t('v2.steps'),
+            back: tc('back'),
+            next: (title) => t('v2.next', { step: title }),
+            help: tc('help'),
+          }}
+          steps={[
+            { title: t('step1'), help: t('step1Description'), content: paramsStep },
+            {
+              title: t('step2'),
+              help: `${t('step2Description')}. ${t('v2.emptyHours')}`,
+              content: hoursStep,
+            },
+            { title: t('step3'), help: t('step3Description'), content: calcStep },
+            { title: t('step4'), help: t('step4Description'), content: adjustStep },
+            {
+              title: closed ? t('step5Closed') : t('step5'),
+              help: closed ? t('step5ClosedDescription') : t('step5Description'),
+              content: closeStep,
+            },
+          ]}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -120,314 +541,19 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
       </div>
 
       <Step n={1} title={t('step1')} description={t('step1Description')}>
-        <ParamsForm
-          periodId={p.id}
-          workHours={p.workHours}
-          referenceFx={p.referenceFxUsdUah}
-          disabled={closed}
-        />
+        {paramsStep}
       </Step>
 
       <Step n={2} title={t('step2')} description={t('step2Description')}>
-        <div className="flex flex-col gap-4">
-          <HoursForm
-            periodId={p.id}
-            disabled={closed}
-            rows={assignments.map((a) => ({
-              assignmentId: a.assignmentId,
-              personName: a.personName,
-              clientName: a.clientName,
-              roleTitle: a.roleTitle,
-              billing: billingText(a),
-              hours: a.hours,
-              payHours: a.payHours ?? null,
-              note: a.note ?? null,
-            }))}
-          />
-          {!closed && <HoursCsvForm periodId={p.id} />}
-        </div>
+        {hoursStep}
       </Step>
 
       <Step n={3} title={t('step3')} description={t('step3Description')}>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('col.person')}</TableHead>
-              <TableHead>{t('col.client')}</TableHead>
-              <TableHead>{t('col.hours')}</TableHead>
-              <TableHead>{t('col.payHours')}</TableHead>
-              <TableHead>{t('col.invoice')}</TableHead>
-              <TableHead>{t('col.payUsd')}</TableHead>
-              <TableHead>{t('col.payUah')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {preview.rows.map((r) => (
-              <TableRow key={r.assignmentId}>
-                <TableCell>{r.personName}</TableCell>
-                <TableCell>
-                  {r.clientName ?? tc('internal')}
-                  {notes.get(r.assignmentId) && (
-                    <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
-                  )}
-                </TableCell>
-                <TableCell>{fmt.amount(r.hours)}</TableCell>
-                <TableCell className={r.payHours === r.hours ? 'text-muted-foreground' : undefined}>
-                  {fmt.amount(r.payHours)}
-                </TableCell>
-                <TableCell>
-                  {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
-                </TableCell>
-                <TableCell>{fmt.amount(r.pay, r.payCurrency)}</TableCell>
-                <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-          <TableFooter>
-            <TableRow>
-              <TableCell colSpan={4}>{tc('total')}</TableCell>
-              <TableCell data-testid="total-invoice">
-                {fmt.amount(preview.totals.invoiceUsd)}
-              </TableCell>
-              <TableCell data-testid="total-pay">
-                {[
-                  !toDecimal(preview.totals.payUsd).isZero() ||
-                  toDecimal(preview.totals.payUah).isZero()
-                    ? fmt.amount(preview.totals.payUsd, 'USD')
-                    : null,
-                  toDecimal(preview.totals.payUah).isZero()
-                    ? null
-                    : fmt.amount(preview.totals.payUah, 'UAH'),
-                ]
-                  .filter(Boolean)
-                  .join(' + ')}
-              </TableCell>
-              <TableCell>
-                {preview.totals.payUahApprox ? fmt.amount(preview.totals.payUahApprox) : '—'}
-              </TableCell>
-            </TableRow>
-          </TableFooter>
-        </Table>
-        {docs && (docs.invoices.length > 0 || docs.acts.length > 0) && (
-          <div className="mt-6 flex flex-col gap-4">
-            <div>
-              <h3 className="font-medium">{t('earlyDocs')}</h3>
-              <p className="text-sm text-muted-foreground">{t('earlyDocsDescription')}</p>
-            </div>
-            {docs.invoices.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('earlyInvoice')}</TableHead>
-                    <TableHead>{t('col.person')}</TableHead>
-                    <TableHead>{t('earlyState')}</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {docs.invoices.map((g) => (
-                    <TableRow key={`${g.contractId}:${g.annexId ?? ''}`}>
-                      <TableCell>{g.label}</TableCell>
-                      <TableCell className="text-muted-foreground">{g.people.join(', ')}</TableCell>
-                      <TableCell>
-                        {g.invoice ? (
-                          <Link className="hover:underline" href={`/invoices/${g.invoice.id}`}>
-                            {g.invoice.number ?? t('draft')} ·{' '}
-                            {fmt.amount(g.invoice.total, g.invoice.currency)} ·{' '}
-                            {INVOICE_STATUS_LABELS[g.invoice.status]}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {docs.open && (!g.invoice || g.invoice.status === 'draft') && (
-                          <EarlyInvoiceButton
-                            periodId={p.id}
-                            contractId={g.contractId}
-                            annexId={g.annexId}
-                            label={g.invoice ? t('recalculate') : t('createInvoice')}
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            {docs.acts.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('earlyAct')}</TableHead>
-                    <TableHead>{t('earlyPay')}</TableHead>
-                    <TableHead>{t('earlyState')}</TableHead>
-                    <TableHead>{t('earlyRate')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {docs.acts.map((a) => (
-                    <TableRow key={a.personId}>
-                      <TableCell>
-                        {a.personName}
-                        <div className="text-xs text-muted-foreground">{a.payeeName}</div>
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {[
-                          toDecimal(a.usd).isZero() ? null : fmt.amount(a.usd, 'USD'),
-                          toDecimal(a.uah).isZero() ? null : fmt.amount(a.uah, 'UAH'),
-                        ]
-                          .filter(Boolean)
-                          .join(' + ') || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {a.acts.length === 0 && '—'}
-                        <ul className="flex flex-col gap-1">
-                          {a.acts.map((act, n) => {
-                            const next = a.acts[n + 1];
-                            const activities = [
-                              ...a.lines
-                                .filter((l) => act.assignmentIds.includes(l.assignmentId))
-                                .map((l) => ({
-                                  id: l.assignmentId,
-                                  kind: 'assignment' as const,
-                                  label: `${l.clientName ?? tc('internal')}${l.roleTitle ? ` · ${l.roleTitle}` : ''} · ${fmt.amount(l.amount, l.currency)}`,
-                                })),
-                              ...a.adjustments
-                                .filter((j) => act.adjustmentIds.includes(j.id))
-                                .map((j) => ({
-                                  id: j.id,
-                                  kind: 'adjustment' as const,
-                                  label: `${ADJUSTMENT_KIND_LABELS[j.kind] ?? j.kind}: ${fmt.amount(j.amount, j.currency)} — ${j.reason}`,
-                                })),
-                            ];
-                            const splittable =
-                              docs.open &&
-                              act.status === 'draft' &&
-                              act.payrollItemId === null &&
-                              act.periodFrom !== null &&
-                              act.periodTo !== null &&
-                              act.periodFrom < act.periodTo;
-                            const byAmount =
-                              !toDecimal(a.usd).isZero() && (act.isRest || activities.length === 0);
-                            return (
-                              <li key={act.id} className="flex flex-wrap items-center gap-2">
-                                <Link className="hover:underline" href={`/acts/${act.id}`}>
-                                  {act.number ?? t('draft')} · {fmt.amount(act.amountUah, 'UAH')}
-                                  {act.fxRate && ` · ${act.fxRate}`}
-                                </Link>
-                                {a.acts.length > 1 && act.periodFrom && act.periodTo && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {fmt.date(act.periodFrom)}–{fmt.date(act.periodTo)}
-                                    {activities.length > 0 &&
-                                      ` · ${activities.map((x) => x.label.split(' · ').slice(0, -1).join(' · ') || x.label).join(', ')}`}
-                                  </span>
-                                )}
-                                {docs.open &&
-                                  next &&
-                                  act.status === 'draft' &&
-                                  next.status === 'draft' && (
-                                    <MergeActsButton firstId={act.id} secondId={next.id} />
-                                  )}
-                                {splittable &&
-                                  act.periodFrom &&
-                                  act.periodTo &&
-                                  (activities.length > 1 || byAmount) && (
-                                    <SplitActForm
-                                      actId={act.id}
-                                      periodFrom={act.periodFrom}
-                                      periodTo={act.periodTo}
-                                      activities={activities}
-                                      byAmount={byAmount}
-                                    />
-                                  )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </TableCell>
-                      <TableCell>
-                        {docs.open && (!a.act || a.acts.some((x) => x.status === 'draft')) && (
-                          <EarlyActForm
-                            periodId={p.id}
-                            personId={a.personId}
-                            usd={a.usd}
-                            uah={a.uah}
-                            needsRate={a.needsRate}
-                            defaultRate={a.act?.fxRate ?? docs.nbuRate}
-                            label={a.act ? t('updateAct') : t('createAct')}
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        )}
+        {calcStep}
       </Step>
 
       <Step n={4} title={t('step4')} description={t('step4Description')}>
-        <div className="flex flex-col gap-4">
-          {adjustments.length > 0 && (
-            <ul className="flex flex-col gap-1 text-sm">
-              {adjustments.map(({ adjustment: a, personName }) => (
-                <li key={a.id} className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{personName}</span>
-                  <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
-                  <span className="tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
-                  {a.payoutMethod !== 'fiat' && (
-                    <Badge variant="outline">{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Badge>
-                  )}
-                  <span className="text-muted-foreground">{a.reason}</span>
-                  {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
-                </li>
-              ))}
-            </ul>
-          )}
-          {!closed && (
-            <AdjustmentForm
-              periodId={p.id}
-              people={[
-                ...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries(),
-              ]
-                .filter(([id]) => id)
-                .map(([id, name]) => ({ id, name }))}
-            />
-          )}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('planCol.payout')}</TableHead>
-                <TableHead>{t('planCol.method')}</TableHead>
-                <TableHead>{t('planCol.usd')}</TableHead>
-                <TableHead>{t('planCol.uah')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plan.map((i) => (
-                <TableRow key={`${i.personId}:${i.payoutMethod}`}>
-                  <TableCell>{i.personName}</TableCell>
-                  <TableCell>{PAYOUT_METHOD_LABELS[i.payoutMethod]}</TableCell>
-                  <TableCell>{fmt.amount(i.totalUsd)}</TableCell>
-                  <TableCell>{i.totalUahApprox ? fmt.amount(i.totalUahApprox) : '—'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell colSpan={2}>{t('totalToPay')}</TableCell>
-                <TableCell>{fmt.amount(sum(plan.map((i) => i.totalUsd)))}</TableCell>
-                <TableCell data-testid="total-pay-uah">
-                  {p.referenceFxUsdUah
-                    ? fmt.amount(sum(plan.map((i) => i.totalUahApprox ?? '0')))
-                    : '—'}
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
+        {adjustStep}
       </Step>
 
       <Step
@@ -435,34 +561,7 @@ export default async function PeriodPage({ params }: { params: Promise<{ id: str
         title={closed ? t('step5Closed') : t('step5')}
         description={closed ? t('step5ClosedDescription') : t('step5Description')}
       >
-        <div className="flex flex-col gap-4">
-          {closed ? (
-            ctx.actor.role === 'owner' && <ReopenForm periodId={p.id} />
-          ) : (
-            <CloseForm periodId={p.id} />
-          )}
-          {payroll.length > 0 && (
-            <p className="text-sm">
-              {t('payoutsCreated', { count: payroll.length })}{' '}
-              <Link href={`/payroll?period=${p.id}`} className="underline">
-                {t('toPayroll')}
-              </Link>
-            </p>
-          )}
-          {invoices.length > 0 && (
-            <ul className="flex flex-col gap-1 text-sm">
-              {invoices.map((i) => (
-                <li key={i.id} className="flex items-center gap-2">
-                  <Link href={`/invoices/${i.id}`} className="font-medium hover:underline">
-                    {i.clientName} — {i.number ?? t('draft')}
-                  </Link>
-                  <span>{fmt.amount(i.total, i.currency)}</span>
-                  <Badge variant="outline">{INVOICE_STATUS_LABELS[i.status]}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {closeStep}
       </Step>
     </div>
   );

@@ -1431,7 +1431,13 @@
     "step5Description": "Creates invoice drafts (one per contract) and payouts; line statuses follow client payment (5.3)",
     "payoutsCreated": "Payouts created: {count}.",
     "toPayroll": "Go to payroll",
-    "draft": "draft"
+    "draft": "draft",
+    "v2": {
+      "steps": "Month close steps",
+      "next": "Next: {step}",
+      "delete": "Delete the period…",
+      "emptyHours": "An empty cell counts as 0 hours; empty person hours equal the client hours."
+    }
   },
   "periodForms": {
     "paramsSaved": "Parameters saved",

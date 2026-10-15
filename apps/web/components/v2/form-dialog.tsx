@@ -102,7 +102,7 @@ export function DialogButton({
 
 type MenuItem =
   | { label: string; dialog: DialogSpec; destructive?: boolean }
-  | { label: string; href: string }
+  | { label: string; href: string; download?: boolean }
   | 'separator';
 
 /** Falsy entries are skipped, so conditional actions read as `cond && {…}`. */
@@ -134,7 +134,10 @@ export function RowMenu({ label, entries }: { label: string; entries: MenuEntry[
             e === 'separator' ? (
               <DropdownMenuSeparator key={`sep-${String(i)}`} />
             ) : 'href' in e ? (
-              <DropdownMenuItem key={e.label} render={<Link href={e.href} />}>
+              <DropdownMenuItem
+                key={e.label}
+                render={e.download ? <a href={e.href} /> : <Link href={e.href} />}
+              >
                 {e.label}
               </DropdownMenuItem>
             ) : (
