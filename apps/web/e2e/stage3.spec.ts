@@ -92,9 +92,15 @@ test.afterAll(() =>
         sql`delete from public.posting p using public.account ac where ac.id = p.account_id and ac.name like ${like}`,
       );
       await tx.execute(sql`delete from public.account where name like ${like}`);
+      // Replica mode skips FK cascades: the documents' links go with them.
       await tx.execute(sql`
-        delete from public.document d using public.document_link l, public.payee pe
-        where l.document_id = d.id and l.entity_id = pe.id and pe.legal_name_ua = ${fop}`);
+        create temp table payee_docs on commit drop as select l.document_id as id
+        from public.document_link l join public.payee pe on l.entity_id = pe.id
+        where pe.legal_name_ua = ${fop}`);
+      await tx.execute(
+        sql`delete from public.document_link where document_id in (select id from payee_docs)`,
+      );
+      await tx.execute(sql`delete from public.document where id in (select id from payee_docs)`);
       await tx.execute(
         sql`delete from public.supplier_act s using public.payee pe where pe.id = s.payee_id and pe.legal_name_ua = ${fop}`,
       );
@@ -111,8 +117,13 @@ test.afterAll(() =>
         sql`delete from public.job where payload ->> 'invoiceId' in (select id::text from public.invoice where period_id in ${periodIds})`,
       );
       await tx.execute(sql`
-        delete from public.document d using public.document_link l, public.invoice i
-        where l.document_id = d.id and l.entity_id = i.id and i.period_id in ${periodIds}`);
+        create temp table invoice_docs on commit drop as select l.document_id as id
+        from public.document_link l join public.invoice i on l.entity_id = i.id
+        where i.period_id in ${periodIds}`);
+      await tx.execute(
+        sql`delete from public.document_link where document_id in (select id from invoice_docs)`,
+      );
+      await tx.execute(sql`delete from public.document where id in (select id from invoice_docs)`);
       await tx.execute(
         sql`delete from public.invoice_line where invoice_id in (select id from public.invoice where period_id in ${periodIds})`,
       );
