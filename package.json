@@ -22,6 +22,7 @@
     "db:reset": "./scripts/supabase.sh db reset",
     "db:test": "./scripts/supabase.sh test db",
     "db:generate": "pnpm --filter @tally/db generate",
+    "db:purge-e2e": "node packages/db/scripts/purge-e2e.ts",
     "db:migration": "pnpm --filter @tally/db migration",
     "test:int": "pnpm -r --workspace-concurrency=1 --if-present test:int",
     "env:local": "node scripts/setup-env.mjs",
