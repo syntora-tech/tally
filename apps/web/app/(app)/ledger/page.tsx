@@ -26,6 +26,8 @@ import {
 } from '@/server/services/ledger';
 import { DeleteTransactionButton } from './ledger-forms';
 import { getFormat, getLabels, localizeForUser, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { LEDGER_PAGE, LedgerV2 } from './ledger-v2';
 
 export const generateMetadata = pageTitle('ledger');
 
@@ -46,10 +48,15 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     accountId: first(params.accountId),
     unallocated: first(params.unallocated),
   };
+  const v2 = (await getUiPrefs()).version === 'v2';
+  // v2 pages the journal: the newest LEDGER_PAGE rows, "Show more" grows the limit.
+  const limit = v2
+    ? Math.min(JOURNAL_LIMIT, Math.max(LEDGER_PAGE, Number(first(params.limit)) || LEDGER_PAGE))
+    : JOURNAL_LIMIT;
   const [accounts, categories, journal] = await Promise.all([
     listAccounts.run(ctx, {}),
     listCategories.run(ctx, {}),
-    listTransactions.run(ctx, { ...filters, limit: JOURNAL_LIMIT }),
+    listTransactions.run(ctx, { ...filters, limit }),
   ]);
   const accountRows = accounts.unwrapOr([]);
   const [t, fmt, { TX_TYPE_LABELS }] = await Promise.all([
@@ -57,6 +64,22 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     getFormat(),
     getLabels(),
   ]);
+
+  if (v2 && journal.isOk()) {
+    const more = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) if (v) more.set(k, v);
+    more.set('limit', String(Math.min(JOURNAL_LIMIT, limit + LEDGER_PAGE)));
+    return (
+      <LedgerV2
+        accounts={accountRows}
+        categories={categories.unwrapOr([])}
+        journal={journal.value}
+        filters={filters}
+        limit={limit}
+        moreHref={`/ledger?${more.toString()}`}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

@@ -31,8 +31,10 @@ import {
   uploadHoursCsvAction,
   type PeriodFormState,
 } from '@/server/actions/periods';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useResult(state: PeriodFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
   }, [state, success]);

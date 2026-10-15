@@ -30,8 +30,10 @@ import {
   writeOffInvoiceAction,
   type InvoiceFormState,
 } from '@/server/actions/invoices';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useResult(state: InvoiceFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
   }, [state, success]);

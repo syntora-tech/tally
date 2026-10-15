@@ -15,6 +15,10 @@ import { requireRole } from '@/server/request-context';
 import { listRates, suggestRate } from '@/server/services/fx';
 import { ManualRateForm } from '../ledger-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { DialogButton } from '@/components/v2/form-dialog';
+import { Status } from '@/components/v2/status';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { LedgerHeader } from '../ledger-v2';
 
 export const generateMetadata = pageTitle('rates');
 
@@ -28,6 +32,58 @@ export default async function RatesPage() {
   const t = await getTranslations('rates');
   const fmt = await getFormat();
   const { FX_SOURCE_LABELS } = await getLabels();
+  if ((await getUiPrefs()).version === 'v2') {
+    const tl = await getTranslations('ledgerForms');
+    return (
+      <div className="flex flex-col gap-5">
+        <LedgerHeader section="rates" title={t('title')} help={t('subtitle')}>
+          <DialogButton title={tl('saveManualRate')} content={<ManualRateForm today={ctx.today} />}>
+            + {tl('saveManualRate')}
+          </DialogButton>
+        </LedgerHeader>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3">
+          <span className="text-sm text-muted-foreground">{t('todayRate')}</span>
+          {today ? (
+            <>
+              <span
+                className="font-heading text-xl font-bold tabular-nums"
+                data-testid="today-rate"
+              >
+                {today.rate}
+              </span>
+              <Status tone="info">{FX_SOURCE_LABELS[today.source]}</Status>
+            </>
+          ) : (
+            <span>{t('noData')}</span>
+          )}
+        </div>
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('date')}</TableHead>
+                <TableHead>{t('pair')}</TableHead>
+                <TableHead className="text-right">{t('rate')}</TableHead>
+                <TableHead>{t('source')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rates.unwrapOr([]).map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{fmt.date(r.onDate)}</TableCell>
+                  <TableCell>
+                    {r.base}/{r.quote}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{r.rate}</TableCell>
+                  <TableCell>{FX_SOURCE_LABELS[r.source]}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <div>

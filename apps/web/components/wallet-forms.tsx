@@ -12,10 +12,12 @@ import {
   updateWalletAction,
   type WalletFormState,
 } from '@/server/actions/wallets';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 export type WalletOwnerField = { name: 'personId' | 'clientId'; value: string };
 
 function useFeedback(state: WalletFormState, success: string, onSuccess?: () => void) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) {
       toast.success(success);

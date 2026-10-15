@@ -1295,7 +1295,25 @@
     "editTransaction": "Edit transaction",
     "editAllocated": "This transaction is allocated to invoices or payouts: changing its type, accounts or amounts needs a reason, and allocations must still fit.",
     "reconcile": "Reconcile",
-    "planned": "Planned expenses"
+    "planned": "Planned expenses",
+    "v2": {
+      "newTransaction": "Transaction",
+      "sections": "Ledger sections",
+      "journal": "Transactions",
+      "allAccounts": "All accounts",
+      "accountsCount": "{count, plural, one {# account} other {# accounts}}",
+      "clear": "Clear filters",
+      "amount": "Amount",
+      "allocated": "Allocated",
+      "notAllocated": "Not allocated",
+      "allocationHelp": "Every income and expense is allocated to what it settles: a client invoice, a payout, a trip or a planned payment — that is how Tally knows what is paid. Allocate from that document's page. Exchanges and transfers are not allocated.",
+      "fee": "fee {amount}",
+      "showMore": "Show more",
+      "inactive": "inactive",
+      "noAccounts": "No accounts yet",
+      "newCategory": "New category",
+      "categoriesHelp": "Each category belongs to one transaction type; a transaction picks a category of its own type."
+    }
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",

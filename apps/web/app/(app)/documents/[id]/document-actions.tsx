@@ -14,8 +14,10 @@ import {
   type UploadState,
 } from '@/server/actions/documents';
 import { LinkTargetSelect, type LinkTargets } from '../link-target-select';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useToast(state: UploadState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
     else if (state) toast.error(state.error.message);

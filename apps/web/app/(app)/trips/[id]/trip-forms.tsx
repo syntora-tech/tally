@@ -15,10 +15,12 @@ import {
   payReimbursementAction,
   type TripFormState,
 } from '@/server/actions/trips';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 type Option = { value: string; label: string };
 
 function useOutcome(state: TripFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
   }, [state, success]);

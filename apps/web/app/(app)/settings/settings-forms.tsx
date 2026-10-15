@@ -13,8 +13,10 @@ import {
   saveSequenceAction,
   type SettingsFormState,
 } from '@/server/actions/settings';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useFeedback(state: SettingsFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
     else if (state && !state.error.fieldErrors) toast.error(state.error.message);

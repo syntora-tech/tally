@@ -17,8 +17,10 @@ import {
   saveManualRateAction,
   type LedgerFormState,
 } from '@/server/actions/ledger';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useFeedback(state: LedgerFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
     else if (state && !state.error.fieldErrors) toast.error(state.error.message);
@@ -27,10 +29,15 @@ function useFeedback(state: LedgerFormState, success: string) {
 }
 
 export function DeleteTransactionButton({ id }: { id: string }) {
-  const [state, action, pending] = useActionState(deleteTransactionAction, null);
   const t = useTranslations('ledgerForms');
   const tc = useTranslations('common');
-  useFeedback(state, t('txDeleted'));
+  // The row goes away with the deleted transaction, so the toast fires from the action itself.
+  const [, action, pending] = useActionState<LedgerFormState, FormData>(async (prev, formData) => {
+    const result = await deleteTransactionAction(prev, formData);
+    if (result?.ok) toast.success(t('txDeleted'));
+    else if (result) toast.error(result.error.message);
+    return result;
+  }, null);
   return (
     <form
       action={action}

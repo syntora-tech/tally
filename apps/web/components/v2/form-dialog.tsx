@@ -31,7 +31,21 @@ export function useDialogScope() {
   return useContext(DialogScope);
 }
 
-export type DialogSpec = { title: string; description?: string; content: ReactNode };
+/** Closes the surrounding v2 dialog once its form succeeds; no-op outside a dialog (v1). */
+export function useCloseOnSuccess(state: { ok: boolean } | null | undefined) {
+  const dialog = useDialogScope();
+  useEffect(() => {
+    if (state?.ok) dialog?.close();
+  }, [state, dialog]);
+}
+
+export type DialogSpec = {
+  title: string;
+  description?: string;
+  content: ReactNode;
+  /** For forms laid out in a grid of many fields. */
+  wide?: boolean;
+};
 
 function FormDialog({
   spec,
@@ -57,7 +71,7 @@ function FormDialog({
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={spec.wide ? 'max-w-3xl' : undefined}>
         <DialogTitle>{spec.title}</DialogTitle>
         {spec.description && <DialogDescription>{spec.description}</DialogDescription>}
         <DialogScope.Provider value={scope}>{open && spec.content}</DialogScope.Provider>

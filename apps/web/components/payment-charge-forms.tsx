@@ -14,8 +14,10 @@ import {
   savePaymentChargeAction,
   type PlannedFormState,
 } from '@/server/actions/planned';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 export function usePlannedFeedback(state: PlannedFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
     else if (state && !state.error.fieldErrors) toast.error(state.error.message);

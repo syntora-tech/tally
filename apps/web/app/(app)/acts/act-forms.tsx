@@ -18,8 +18,10 @@ import {
   voidActAction,
   type ActFormState,
 } from '@/server/actions/acts';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 function useResult(state: ActFormState, success: string) {
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok) toast.success(success);
   }, [state, success]);

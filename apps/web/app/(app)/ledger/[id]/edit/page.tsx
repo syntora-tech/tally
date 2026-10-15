@@ -8,6 +8,8 @@ import { getTransaction } from '@/server/services/ledger';
 import { pageTitle } from '@/server/i18n';
 import { TransactionForm } from '../../new/transaction-form';
 import { transactionFormData } from '../../transaction-form-data';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('editTransaction');
 
@@ -19,15 +21,23 @@ export default async function EditTransactionPage({ params }: { params: Promise<
   const { transaction: tx, postings, allocated } = found.value;
   const options = await transactionFormData(ctx, true);
   const t = await getTranslations('ledger');
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
-          ← Ledger
-        </Link>
-        <h1 className="text-2xl font-semibold">{t('editTransaction')}</h1>
-        {allocated && <p className="text-muted-foreground">{t('editAllocated')}</p>}
-      </div>
+      {v2 ? (
+        <PageHeader
+          title={t('editTransaction')}
+          meta={allocated ? t('editAllocated') : undefined}
+        />
+      ) : (
+        <div>
+          <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
+            ← Ledger
+          </Link>
+          <h1 className="text-2xl font-semibold">{t('editTransaction')}</h1>
+          {allocated && <p className="text-muted-foreground">{t('editAllocated')}</p>}
+        </div>
+      )}
       <TransactionForm
         today={ctx.today}
         {...options}

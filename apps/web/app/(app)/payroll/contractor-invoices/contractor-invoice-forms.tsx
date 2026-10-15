@@ -17,6 +17,7 @@ import {
   voidContractorInvoiceAction,
   type ContractorInvoiceFormState,
 } from '@/server/actions/contractor-invoices';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 type Action = (
   prev: ContractorInvoiceFormState,
@@ -25,6 +26,7 @@ type Action = (
 
 function useForm(action: Action, success?: string) {
   const [state, run, pending] = useActionState<ContractorInvoiceFormState, FormData>(action, null);
+  useCloseOnSuccess(state);
   useEffect(() => {
     if (state?.ok && success) toast.success(success);
   }, [state, success]);

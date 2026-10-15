@@ -9,6 +9,8 @@ import { requireRole } from '@/server/request-context';
 import { listAccounts, reconcileAccount } from '@/server/services/ledger';
 import { toDecimal } from '@tally/domain';
 import { getFormat, localizeForUser, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { LedgerHeader } from '../ledger-v2';
 
 export const generateMetadata = pageTitle('reconcile');
 
@@ -40,15 +42,20 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Se
   const error = result?.isErr() ? await localizeForUser(result.error) : null;
   const value = result?.isOk() ? result.value : null;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
-          ← Ledger
-        </Link>
-        <h1 className="text-2xl font-semibold">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('subtitle')}</p>
-      </div>
+      {v2 ? (
+        <LedgerHeader section="reconcile" title={t('title')} help={t('subtitle')} />
+      ) : (
+        <div>
+          <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">
+            ← Ledger
+          </Link>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
+        </div>
+      )}
       <form method="get" className="flex flex-wrap items-end gap-3 rounded-md border p-4">
         <FormField label={t('account')} htmlFor="r-account" error={error?.fieldErrors?.accountId}>
           <NativeSelect
