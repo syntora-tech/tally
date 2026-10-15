@@ -5,12 +5,15 @@ import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { FileInput } from '@/components/file-input';
+import { useIsV2 } from '@/components/v2/ui-version';
 import { uploadPersonCv, type UploadState } from '@/server/actions/documents';
 
 export function CvUpload({ personId }: { personId: string }) {
   const [state, action, pending] = useActionState<UploadState, FormData>(uploadPersonCv, null);
   const formRef = useRef<HTMLFormElement>(null);
   const t = useTranslations('cv');
+  const v2 = useIsV2();
 
   useEffect(() => {
     if (!state) return;
@@ -25,14 +28,24 @@ export function CvUpload({ personId }: { personId: string }) {
   return (
     <form ref={formRef} action={action} className="flex items-center gap-2">
       <input type="hidden" name="personId" value={personId} />
-      <input
-        type="file"
-        name="file"
-        accept="application/pdf,.pdf"
-        required
-        aria-label={t('file')}
-        className="max-w-48 text-xs file:mr-2 file:rounded file:border file:bg-transparent file:px-2 file:py-1 file:text-xs"
-      />
+      {v2 ? (
+        <FileInput
+          compact
+          name="file"
+          accept="application/pdf,.pdf"
+          required
+          aria-label={t('file')}
+        />
+      ) : (
+        <input
+          type="file"
+          name="file"
+          accept="application/pdf,.pdf"
+          required
+          aria-label={t('file')}
+          className="max-w-48 text-xs file:mr-2 file:rounded file:border file:bg-transparent file:px-2 file:py-1 file:text-xs"
+        />
+      )}
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         <Upload className="size-4" />
         {pending ? t('uploading') : t('new')}

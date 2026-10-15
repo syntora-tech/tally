@@ -1,5 +1,7 @@
 'use client';
 
+import { FileInput } from '@/components/file-input';
+import { useIsV2 } from '@/components/v2/ui-version';
 import { useTranslations } from 'next-intl';
 import { parseDecimal, payrollTotalUah } from '@tally/domain';
 import { useActionState, useEffect, useState } from 'react';
@@ -205,6 +207,21 @@ export function HoursCsvForm({ periodId }: { periodId: string }) {
   );
   const t = useTranslations('periodForms');
   const error = useResult(state, t('csvImported'));
+  const v2 = useIsV2();
+  if (v2) {
+    return (
+      <form action={action} className="flex flex-col gap-3">
+        <input type="hidden" name="periodId" value={periodId} />
+        <FileInput name="file" accept=".csv,text/csv" required aria-label={t('csvFile')} />
+        <ErrorAlert message={error?.message} />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={pending}>
+            {t('importCsv')}
+          </Button>
+        </div>
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="periodId" value={periodId} />

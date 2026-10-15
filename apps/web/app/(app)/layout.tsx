@@ -3,6 +3,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { V2AppHeader } from '@/components/v2/app-header';
 import { V2AppSidebar } from '@/components/v2/app-sidebar';
+import { UiVersionProvider } from '@/components/v2/ui-version';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { ALL_ROLES, navItemsFor, navSectionsFor } from '@/lib/navigation';
 import { signOut } from '@/server/actions/auth';
@@ -31,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SidebarInset className="min-w-0">
           <V2AppHeader items={navItemsFor(actor.role)} />
           <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-8">
-            {children}
+            <UiVersionProvider>{children}</UiVersionProvider>
           </div>
         </SidebarInset>
       </SidebarProvider>

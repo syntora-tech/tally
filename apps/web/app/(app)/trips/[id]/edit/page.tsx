@@ -9,6 +9,7 @@ import { pageTitle } from '@/server/i18n';
 import { TripForm } from '../../trip-form';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('editTrip');
 
@@ -27,24 +28,29 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href={`/trips/${id}`} className="text-sm text-muted-foreground hover:underline">
-          ← {trip.title}
-        </Link>
         {v2 ? (
-          <PageHeader title={t('edit')} />
+          <PageHeader
+            title={t('edit')}
+            crumbParents={[{ label: trip.title, href: `/trips/${id}` }]}
+          />
         ) : (
           <>
+            <Link href={`/trips/${id}`} className="text-sm text-muted-foreground hover:underline">
+              ← {trip.title}
+            </Link>
             <h1 className="text-2xl font-semibold">{t('edit')}</h1>
           </>
         )}
       </div>
-      <TripForm
-        value={{ ...trip, participantIds: ids }}
-        people={people
-          .unwrapOr([])
-          .filter((p) => p.status !== 'inactive' || ids.includes(p.id))
-          .map((p) => ({ id: p.id, name: p.fullName }))}
-      />
+      <FormCard>
+        <TripForm
+          value={{ ...trip, participantIds: ids }}
+          people={people
+            .unwrapOr([])
+            .filter((p) => p.status !== 'inactive' || ids.includes(p.id))
+            .map((p) => ({ id: p.id, name: p.fullName }))}
+        />
+      </FormCard>
     </div>
   );
 }

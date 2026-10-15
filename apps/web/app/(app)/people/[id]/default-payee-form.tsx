@@ -6,6 +6,7 @@ import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { NativeSelect } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 import { saveDefaultPayee, type PayeeFormState } from '@/server/actions/payees';
 
 type Props = {
@@ -18,6 +19,7 @@ export function DefaultPayeeForm({ personId, currentPayeeId, options }: Props) {
   const [state, action, pending] = useActionState<PayeeFormState, FormData>(saveDefaultPayee, null);
   const t = useTranslations('defaultPayee');
   const tc = useTranslations('common');
+  useCloseOnSuccess(state);
 
   useEffect(() => {
     if (state?.ok) toast.success(t('saved'));

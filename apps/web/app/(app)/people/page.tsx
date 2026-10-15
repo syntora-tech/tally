@@ -76,42 +76,54 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
           {canWrite && <Button render={<Link href="/people/new" />}>+ {t('add')}</Button>}
         </PageHeader>
         {canWrite && <PeopleTabs active="people" />}
-        <AutoFilters
-          label={t('filters')}
-          clearLabel={tc('clearFilters')}
-          fields={[
-            { kind: 'text', name: 'stack', label: t('stack'), placeholder: 'Solidity, React' },
-            { kind: 'text', name: 'seniority', label: t('seniority'), placeholder: 'Senior' },
-            { kind: 'text', name: 'maxRate', label: t('maxRate'), inputMode: 'decimal' },
-            { kind: 'text', name: 'location', label: t('location') },
-            {
-              kind: 'select',
-              name: 'bench',
-              label: t('bench'),
-              allLabel: t('anyFem'),
-              options: option(BENCH_LABELS),
-            },
-            {
-              kind: 'select',
-              name: 'allocation',
-              label: t('allocation'),
-              allLabel: t('anyMasc'),
-              options: option(ALLOCATION_LABELS),
-            },
-            {
-              kind: 'select',
-              name: 'status',
-              label: t('status'),
-              allLabel: t('anyMasc'),
-              options: option(PERSON_STATUS_LABELS),
-            },
-            { kind: 'date', name: 'availableOn', label: t('availableOn') },
-          ]}
-        />
         {result.isErr() ? (
           <p className="text-destructive">{(await localizeForUser(result.error)).message}</p>
         ) : (
-          <PeopleTable rows={rows} />
+          <PeopleTable
+            rows={rows}
+            toolbar={
+              <AutoFilters
+                label={t('filters')}
+                clearLabel={tc('clearFilters')}
+                moreLabel={tc('moreFilters')}
+                fields={[
+                  {
+                    kind: 'select',
+                    name: 'bench',
+                    label: t('bench'),
+                    allLabel: t('anyFem'),
+                    options: option(BENCH_LABELS),
+                  },
+                  {
+                    kind: 'select',
+                    name: 'status',
+                    label: t('status'),
+                    allLabel: t('anyMasc'),
+                    options: option(PERSON_STATUS_LABELS),
+                  },
+                ]}
+                more={[
+                  {
+                    kind: 'text',
+                    name: 'stack',
+                    label: t('stack'),
+                    placeholder: 'Solidity, React',
+                  },
+                  { kind: 'text', name: 'seniority', label: t('seniority'), placeholder: 'Senior' },
+                  { kind: 'text', name: 'maxRate', label: t('maxRate'), inputMode: 'decimal' },
+                  { kind: 'text', name: 'location', label: t('location') },
+                  {
+                    kind: 'select',
+                    name: 'allocation',
+                    label: t('allocation'),
+                    allLabel: t('anyMasc'),
+                    options: option(ALLOCATION_LABELS),
+                  },
+                  { kind: 'date', name: 'availableOn', label: t('availableOn') },
+                ]}
+              />
+            }
+          />
         )}
       </div>
     );

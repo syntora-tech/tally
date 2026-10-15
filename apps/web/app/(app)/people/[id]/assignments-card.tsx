@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ServiceContext } from '@/server/services/context';
 import { listPersonAssignments } from '@/server/services/assignments';
 import { getFormat } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { Panel } from '@/components/v2/panel';
+import { Status } from '@/components/v2/status';
 
 /** Current and past assignments with margin by terms (finance+; spec 6.2 card, 6.3 AC). */
 export async function AssignmentsCard({
@@ -19,6 +22,56 @@ export async function AssignmentsCard({
   const rows = (await listPersonAssignments.run(ctx, { personId })).unwrapOr([]);
   const t = await getTranslations('personAssignments');
   const fmt = await getFormat();
+
+  if ((await getUiPrefs()).version === 'v2') {
+    return (
+      <Panel title={t('title')}>
+        {rows.length === 0 ? (
+          <p className="text-muted-foreground">{t('empty')}</p>
+        ) : (
+          <ul className="-mx-5 -mb-4 flex flex-col divide-y border-t">
+            {rows.map(({ assignment: a, clientName, contractNumber, annexLabel, margin }) => {
+              const active = isAssignmentActive(
+                { startsOn: a.startsOn as LocalDate, endsOn: a.endsOn as LocalDate | null },
+                ctx.today,
+              );
+              return (
+                <li key={a.id}>
+                  <Link
+                    href={`/people/assignments/${a.id}`}
+                    className="flex flex-col gap-1 px-5 py-3 hover:bg-muted/40"
+                  >
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {[a.isInternal ? t('internal') : clientName, a.roleTitle]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      <Status tone={active ? 'success' : 'neutral'}>
+                        {active ? t('active') : t('inactive')}
+                      </Status>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {[
+                        `${fmt.date(a.startsOn)} — ${a.endsOn ? fmt.date(a.endsOn) : '…'}`,
+                        `FTE ${a.fte}`,
+                        annexLabel ?? a.sowRef,
+                        contractNumber,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      {margin &&
+                        t('margin', { amount: fmt.amount(margin.margin, margin.currency) })}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
+    );
+  }
 
   return (
     <Card>

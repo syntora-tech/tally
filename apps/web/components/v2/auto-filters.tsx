@@ -3,7 +3,8 @@
 import { cn } from 'cn';
 import { X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 
 export type FilterField =
@@ -24,11 +25,16 @@ export type FilterField =
  */
 export function AutoFilters({
   fields,
+  more = [],
+  moreLabel,
   label,
   clearLabel,
   resets = [],
 }: {
   fields: FilterField[];
+  /** Rarely used filters, folded behind a "More filters" button (open while one is set). */
+  more?: FilterField[];
+  moreLabel?: string;
   label: string;
   clearLabel: string;
   resets?: string[];
@@ -49,7 +55,10 @@ export function AutoFilters({
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     });
   };
-  const active = fields.some((f) => params.get(f.name));
+  const all = [...fields, ...more];
+  const active = all.some((f) => params.get(f.name));
+  const moreActive = more.filter((f) => params.get(f.name)).length;
+  const [showMore, setShowMore] = useState(moreActive > 0);
   const control =
     'h-9 rounded-full border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
   return (
@@ -59,7 +68,7 @@ export function AutoFilters({
       aria-busy={pending}
       className={cn('flex flex-wrap items-center gap-2', pending && 'opacity-70')}
     >
-      {fields.map((f) => {
+      {[...fields, ...(showMore ? more : [])].map((f) => {
         const value = params.get(f.name) ?? '';
         if (f.kind === 'toggle') {
           const on = value === 'on';
@@ -137,12 +146,30 @@ export function AutoFilters({
           </select>
         );
       })}
+      {more.length > 0 && moreLabel && (
+        <button
+          type="button"
+          aria-expanded={showMore}
+          onClick={() => {
+            setShowMore(!showMore);
+          }}
+          className={cn(control, 'inline-flex items-center gap-1.5 font-medium')}
+        >
+          <SlidersHorizontal className="size-3.5" aria-hidden />
+          {moreLabel}
+          {moreActive > 0 && (
+            <span className="rounded-full bg-foreground px-1.5 text-xs text-background">
+              {moreActive}
+            </span>
+          )}
+        </button>
+      )}
       {active && (
         <Button
           size="sm"
           variant="ghost"
           onClick={() => {
-            set(Object.fromEntries(fields.map((f) => [f.name, ''])));
+            set(Object.fromEntries(all.map((f) => [f.name, ''])));
           }}
         >
           <X />

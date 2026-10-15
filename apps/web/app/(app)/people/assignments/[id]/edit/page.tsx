@@ -8,6 +8,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('editAssignment');
 
@@ -26,29 +27,37 @@ export default async function EditAssignmentPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       {v2 ? (
-        <PageHeader title={t('editTitle')} />
+        <PageHeader
+          title={t('editTitle')}
+          crumbParents={[
+            { label: personName, href: `/people/${a.personId}` },
+            { label: a.roleTitle ?? t('editTitle'), href: `/people/assignments/${a.id}` },
+          ]}
+        />
       ) : (
         <>
           <h1 className="text-2xl font-semibold">{t('editTitle')}</h1>
         </>
       )}
-      <AssignmentForm
-        personName={personName}
-        contracts={[]}
-        annexes={annexes}
-        assignment={{
-          id: a.id,
-          personId: a.personId,
-          isInternal: a.isInternal,
-          contractId: a.contractId,
-          annexId: a.annexId,
-          sowRef: a.sowRef,
-          roleTitle: a.roleTitle,
-          fte: a.fte,
-          startsOn: a.startsOn,
-          endsOn: a.endsOn,
-        }}
-      />
+      <FormCard>
+        <AssignmentForm
+          personName={personName}
+          contracts={[]}
+          annexes={annexes}
+          assignment={{
+            id: a.id,
+            personId: a.personId,
+            isInternal: a.isInternal,
+            contractId: a.contractId,
+            annexId: a.annexId,
+            sowRef: a.sowRef,
+            roleTitle: a.roleTitle,
+            fte: a.fte,
+            startsOn: a.startsOn,
+            endsOn: a.endsOn,
+          }}
+        />
+      </FormCard>
     </div>
   );
 }

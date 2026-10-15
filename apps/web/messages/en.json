@@ -25,7 +25,13 @@
     "next": "Next",
     "chooseMonth": "Choose a month",
     "allMonths": "All months",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "open": "Open",
+    "editing": "Editing",
+    "chooseFile": "Choose a file",
+    "dropFile": "Drop a file here or choose one",
+    "dropFileHint": "Click or drag the file into this box",
+    "moreFilters": "More filters"
   },
   "nav": {
     "modules": "Modules",
@@ -1002,7 +1008,8 @@
       "allocation": "Format",
       "availableFrom": "Available from",
       "now": "now",
-      "location": "Location"
+      "location": "Location",
+      "person": "Person"
     },
     "search": "Search by name, stack…",
     "empty": "Nobody found"
@@ -1052,7 +1059,14 @@
         "money": "Wallets and taxes",
         "documents": "Documents",
         "history": "History"
-      }
+      },
+      "editProfile": "Edit profile",
+      "newAssignment": "Assignment",
+      "changePayee": "Change",
+      "choosePayee": "Choose",
+      "payeeWho": "Who",
+      "payeeKind": "Type",
+      "noPayee": "Not chosen"
     }
   },
   "personAssignments": {
@@ -1112,7 +1126,10 @@
     "agencyEnded": "ended",
     "versionClosed": "Closed",
     "v2": {
-      "addVersion": "+ New version from a month…"
+      "addVersion": "+ New version from a month…",
+      "inForce": "In force",
+      "noAgency": "None",
+      "hoursInWizard": "Enter in the month wizard →"
     }
   },
   "assignmentForm": {
@@ -1283,7 +1300,12 @@
     "partOf": "Part (pages {pages}) of the signed package",
     "packageParts": "Documents in this package; the signature covers this file:",
     "pages": "pages {pages}",
-    "historical": "History"
+    "historical": "History",
+    "openFile": "Open file",
+    "type": "Type",
+    "number": "Number",
+    "date": "Date",
+    "packageTitle": "Package"
   },
   "ledger": {
     "subtitle": "Accounts, transactions and payment allocation",
@@ -1617,7 +1639,13 @@
       "client": "Client",
       "period": "Period",
       "left": "Outstanding",
-      "pdfReady": "PDF of revision {revision} is in the documents below."
+      "flowLabel": "Invoice state",
+      "uploadSigned": "Upload",
+      "uploadSignedTitle": "Signed copy of the invoice",
+      "contract": "Contract",
+      "files": "Documents",
+      "pdf": "PDF, revision {revision}",
+      "signedCopy": "Signed copy"
     }
   },
   "invoiceForms": {
@@ -1883,7 +1911,8 @@
     "subtotal": "Total {payee}",
     "total": "Total: {count, plural, one {# act} other {# acts}}",
     "v2": {
-      "allYears": "All years"
+      "allYears": "All years",
+      "exportExcel": "Export to Excel"
     }
   },
   "act": {
@@ -1917,7 +1946,8 @@
       "contract": "Contract",
       "nextTitle": "After issue",
       "nextSign": "Sign in Vchasno or upload the signed PDF",
-      "nextPay": "Pay it in Payroll"
+      "nextPay": "Pay it in Payroll",
+      "flowLabel": "Act state"
     }
   },
   "actForms": {
@@ -1955,7 +1985,12 @@
     "signedFile": "Or the signed PDF",
     "signedFileSave": "Upload signed",
     "signedFileSaved": "Signed act uploaded",
-    "ownDate": "Date on the document"
+    "ownDate": "Date on the document",
+    "v2": {
+      "addOverride": "+ The date is a non-working day: give the reason",
+      "saveDraft": "Save changes",
+      "numberHint": "The number is assigned on issue, by the contract's rule"
+    }
   },
   "settings": {
     "title": "Settings",

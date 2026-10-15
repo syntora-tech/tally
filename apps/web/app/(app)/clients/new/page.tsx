@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('newClient');
 
@@ -21,7 +22,9 @@ export default async function NewClientPage() {
           <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
         </>
       )}
-      <ClientForm />
+      <FormCard>
+        <ClientForm />
+      </FormCard>
     </div>
   );
 }

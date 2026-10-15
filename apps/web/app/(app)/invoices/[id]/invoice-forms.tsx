@@ -9,6 +9,7 @@ import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileInput } from '@/components/file-input';
 import {
   Table,
   TableBody,
@@ -372,7 +373,7 @@ export function SignedCopyForm({ invoiceId }: { invoiceId: string }) {
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="invoiceId" value={invoiceId} />
       <FormField label={t('signedFile')} htmlFor="signed-file" error={error?.fieldErrors?.file}>
-        <Input id="signed-file" name="file" type="file" accept="application/pdf,image/*" />
+        <FileInput id="signed-file" name="file" accept="application/pdf,image/*" />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
         {t('uploadSigned')}

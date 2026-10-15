@@ -19,6 +19,7 @@ export function LinkTargetSelect({
   const t = useTranslations('documents');
   return (
     <select
+      data-slot="native-select"
       className={cn(
         'h-9 min-w-56 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs',
         className,

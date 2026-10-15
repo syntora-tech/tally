@@ -23,6 +23,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { cn } from 'cn';
+import { useIsV2 } from '@/components/v2/ui-version';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -74,6 +76,8 @@ type Props<T extends RowData> = {
   emptyText?: string;
   /** Row click navigates here (kept as a link for keyboard users in the first cell). */
   rowHref?: (row: T) => string;
+  /** v2: filters shown on the search row. */
+  toolbar?: React.ReactNode;
 };
 
 export function DataTable<T extends RowData>({
@@ -82,9 +86,11 @@ export function DataTable<T extends RowData>({
   searchPlaceholder,
   emptyText,
   rowHref,
+  toolbar,
 }: Props<T>) {
   const t = useTranslations('common');
   const router = useRouter();
+  const v2 = useIsV2();
   const [search, setSearch] = useState('');
   const table = useTable({
     features: tableFeatureSet,
@@ -95,20 +101,43 @@ export function DataTable<T extends RowData>({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            table.setGlobalFilter(e.target.value);
-          }}
-          placeholder={searchPlaceholder ?? t('search')}
-          aria-label={searchPlaceholder ?? t('search')}
-          className="pl-8"
-        />
-      </div>
-      <div className="overflow-x-auto rounded-md border">
+      {toolbar ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                table.setGlobalFilter(e.target.value);
+              }}
+              placeholder={searchPlaceholder ?? t('search')}
+              aria-label={searchPlaceholder ?? t('search')}
+              className="pl-8"
+            />
+          </div>
+          {toolbar}
+        </div>
+      ) : (
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              table.setGlobalFilter(e.target.value);
+            }}
+            placeholder={searchPlaceholder ?? t('search')}
+            aria-label={searchPlaceholder ?? t('search')}
+            className="pl-8"
+          />
+        </div>
+      )}
+      <div
+        className={
+          v2 ? 'overflow-x-auto rounded-lg border bg-card' : 'overflow-x-auto rounded-md border'
+        }
+      >
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
@@ -120,7 +149,10 @@ export function DataTable<T extends RowData>({
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 hover:text-foreground"
+                          className={cn(
+                            'inline-flex items-center gap-1 hover:text-foreground',
+                            v2 && 'group/sort',
+                          )}
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           <table.FlexRender header={header} />
@@ -129,7 +161,12 @@ export function DataTable<T extends RowData>({
                           ) : sorted === 'desc' ? (
                             <ArrowDown className="size-3.5" />
                           ) : (
-                            <ArrowUpDown className="size-3.5 opacity-40" />
+                            <ArrowUpDown
+                              className={cn(
+                                'size-3.5 opacity-40',
+                                v2 && 'opacity-0 group-hover/sort:opacity-40',
+                              )}
+                            />
                           )}
                         </button>
                       ) : (

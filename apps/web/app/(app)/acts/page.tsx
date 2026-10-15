@@ -20,7 +20,11 @@ import { getFormat, getLabels, localizeForUser, pageTitle } from '@/server/i18n'
 import { requireRole } from '@/server/request-context';
 import { actsRegistry } from '@/server/services/acts/registry';
 import { AutoFilters } from '@/components/v2/auto-filters';
+import { cn } from 'cn';
+import { RowMenu } from '@/components/v2/form-dialog';
 import { PageHeader } from '@/components/v2/page-header';
+import { EmptyState } from '@/components/v2/panel';
+import { Status } from '@/components/v2/status';
 import { getUiPrefs } from '@/server/ui-prefs';
 
 export const generateMetadata = pageTitle('acts');
@@ -159,12 +163,16 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
     return (
       <div className="flex flex-col gap-5">
         <PageHeader title={t('title')} help={t('subtitle')}>
-          <Button
-            variant="outline"
-            render={<a href={`/api/acts/registry?${exportQuery.toString()}`} />}
-          >
-            <Download className="size-4" /> {t('export')}
-          </Button>
+          <RowMenu
+            label={tc('actions')}
+            entries={[
+              {
+                label: t('v2.exportExcel'),
+                href: `/api/acts/registry?${exportQuery.toString()}`,
+                download: true,
+              },
+            ]}
+          />
           <Button render={<Link href="/acts/new" />}>+ {t('newAct')}</Button>
         </PageHeader>
         <AutoFilters
@@ -194,7 +202,103 @@ export default async function ActsPage({ searchParams }: { searchParams: SearchP
             { kind: 'toggle', name: 'all', label: t('withDrafts') },
           ]}
         />
-        <div className="overflow-x-auto rounded-lg border bg-card">{table}</div>
+        {groups.length === 0 ? (
+          <EmptyState title={t('empty')} />
+        ) : (
+          <section className="overflow-x-auto rounded-lg border bg-card">
+            <table className="w-full min-w-[46rem] text-sm" data-testid="acts-registry">
+              <thead className="text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-2.5 text-left font-normal">{t('col.date')}</th>
+                  <th className="px-3 py-2.5 text-left font-normal">{t('col.number')}</th>
+                  <th className="px-3 py-2.5 text-left font-normal">{t('col.period')}</th>
+                  <th className="px-3 py-2.5 text-left font-normal">{t('col.contract')}</th>
+                  <th className="px-3 py-2.5 text-right font-normal">{t('col.amount')}</th>
+                  <th className="px-5 py-2.5 text-left font-normal">{t('col.status')}</th>
+                </tr>
+              </thead>
+              {groups.map((g) => (
+                <tbody key={g.payeeId}>
+                  <tr className="border-t bg-muted/50" data-testid="acts-subtotal">
+                    <td colSpan={4} className="px-5 py-2">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/people/payees/${g.payeeId}`}
+                          className="font-semibold hover:underline"
+                        >
+                          {g.payeeName}
+                        </Link>
+                        {g.missing.length > 0 && (
+                          <Status tone="warning" testId="missing-periods">
+                            {t('missing', {
+                              months: g.missing.map((m) => fmt.month(`${m}-01`)).join(', '),
+                            })}
+                          </Status>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {fmt.amount(g.total, 'UAH')}
+                    </td>
+                    <td />
+                  </tr>
+                  {g.acts.map((a) => (
+                    <tr
+                      key={a.id}
+                      className={cn(
+                        'border-t hover:bg-muted/40',
+                        a.status !== 'issued' && 'text-muted-foreground',
+                      )}
+                    >
+                      <td className="px-5 py-2.5 tabular-nums">{fmt.date(a.actDate)}</td>
+                      <td className="px-3 py-2.5">
+                        <Link href={`/acts/${a.id}`} className="font-medium hover:underline">
+                          {a.number ?? t('draft')}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {actType(a.type)}
+                        {a.periodFrom && a.periodTo && (
+                          <span className="text-muted-foreground">
+                            {' · '}
+                            {fmt.date(a.periodFrom)} – {fmt.date(a.periodTo)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{a.contractNumber}</td>
+                      <td
+                        className={cn(
+                          'px-3 py-2.5 text-right font-medium tabular-nums',
+                          a.status === 'void' && 'line-through',
+                        )}
+                      >
+                        {fmt.amount(a.amountUah, 'UAH')}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        {a.status !== 'issued' ? (
+                          <Status>{DOC_STATUS_LABELS[a.status] ?? a.status}</Status>
+                        ) : a.signed ? (
+                          <Status tone="success">{t('signed')}</Status>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
+              <tfoot>
+                <tr className="border-t font-bold">
+                  <td colSpan={4} className="px-5 py-3">
+                    {t('total', { count })}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums" data-testid="acts-total">
+                    {fmt.amount(total, 'UAH')}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </section>
+        )}
       </div>
     );
   }

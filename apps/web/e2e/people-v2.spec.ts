@@ -4,7 +4,8 @@ import { sql } from 'drizzle-orm';
 import { E2E_OWNER_EMAIL } from '../playwright.config';
 import { localEnv, signIn, unique } from './helpers';
 
-// v2 people directory (A-102): filters apply on Enter, a person's card is split into tabs.
+// v2 people directory (A-102): rarer filters fold under "More filters" and apply on Enter, a
+// person's card is split into tabs.
 const solidityDev = unique('E2E PV2 Solidity');
 const rustDev = unique('E2E PV2 Rust');
 
@@ -46,6 +47,7 @@ test('v2 people: a person is added, found by filters and opened by tabs', async 
 
   await page.goto('/people');
   const filters = page.getByRole('group', { name: 'Filters' });
+  await filters.getByRole('button', { name: 'More filters' }).click();
   await filters.getByRole('searchbox', { name: 'Stack' }).fill('Solidity');
   await filters.getByRole('searchbox', { name: 'Stack' }).press('Enter');
   await expect(page).toHaveURL(/stack=Solidity/);

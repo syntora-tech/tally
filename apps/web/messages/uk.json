@@ -25,7 +25,13 @@
     "next": "Наступний",
     "chooseMonth": "Обрати місяць",
     "allMonths": "Усі місяці",
-    "clearFilters": "Скинути фільтри"
+    "clearFilters": "Скинути фільтри",
+    "open": "Відкрити",
+    "editing": "Редагування",
+    "chooseFile": "Обрати файл",
+    "dropFile": "Перетягніть файл сюди або оберіть",
+    "dropFileHint": "Клацніть або перетягніть файл у цю рамку",
+    "moreFilters": "Ще фільтри"
   },
   "nav": {
     "modules": "Модулі",
@@ -1002,7 +1008,8 @@
       "allocation": "Формат",
       "availableFrom": "Доступний з",
       "now": "зараз",
-      "location": "Локація"
+      "location": "Локація",
+      "person": "Людина"
     },
     "search": "Пошук за ім’ям, стеком…",
     "empty": "Нікого не знайдено"
@@ -1052,7 +1059,14 @@
         "money": "Гаманці й податки",
         "documents": "Документи",
         "history": "Історія"
-      }
+      },
+      "editProfile": "Редагувати профіль",
+      "newAssignment": "Залучення",
+      "changePayee": "Змінити",
+      "choosePayee": "Обрати",
+      "payeeWho": "Хто",
+      "payeeKind": "Тип",
+      "noPayee": "Не обрано"
     }
   },
   "personAssignments": {
@@ -1112,7 +1126,10 @@
     "agencyEnded": "припинено",
     "versionClosed": "Закрито",
     "v2": {
-      "addVersion": "+ Нова версія з місяця…"
+      "addVersion": "+ Нова версія з місяця…",
+      "inForce": "Діє",
+      "noAgency": "Немає",
+      "hoursInWizard": "Внести в майстрі місяця →"
     }
   },
   "assignmentForm": {
@@ -1283,7 +1300,12 @@
     "partOf": "Частина (стор. {pages}) підписаного пакета",
     "packageParts": "Документи в цьому пакеті; підпис діє на цей файл:",
     "pages": "стор. {pages}",
-    "historical": "Історія"
+    "historical": "Історія",
+    "openFile": "Відкрити файл",
+    "type": "Тип",
+    "number": "Номер",
+    "date": "Дата",
+    "packageTitle": "Пакет"
   },
   "ledger": {
     "subtitle": "Рахунки, транзакції та розподіл оплат",
@@ -1617,7 +1639,13 @@
       "client": "Клієнт",
       "period": "Період",
       "left": "Залишок",
-      "pdfReady": "PDF редакції {revision} — у документах нижче."
+      "flowLabel": "Стан інвойсу",
+      "uploadSigned": "Завантажити",
+      "uploadSignedTitle": "Підписана копія інвойсу",
+      "contract": "Договір",
+      "files": "Документи",
+      "pdf": "PDF, редакція {revision}",
+      "signedCopy": "Підписана копія"
     }
   },
   "invoiceForms": {
@@ -1883,7 +1911,8 @@
     "subtotal": "Разом {payee}",
     "total": "Разом: {count, plural, one {# акт} few {# акти} many {# актів} other {# акта}}",
     "v2": {
-      "allYears": "Усі роки"
+      "allYears": "Усі роки",
+      "exportExcel": "Експорт в Excel"
     }
   },
   "act": {
@@ -1917,7 +1946,8 @@
       "contract": "Договір",
       "nextTitle": "Після випуску",
       "nextSign": "Підписати у Вчасно або завантажити підписаний PDF",
-      "nextPay": "Виплатити у «Виплатах»"
+      "nextPay": "Виплатити у «Виплатах»",
+      "flowLabel": "Стан акту"
     }
   },
   "actForms": {
@@ -1955,7 +1985,12 @@
     "signedFile": "Або підписаний PDF",
     "signedFileSave": "Завантажити підписаний",
     "signedFileSaved": "Підписаний акт завантажено",
-    "ownDate": "Дата в документі"
+    "ownDate": "Дата в документі",
+    "v2": {
+      "addOverride": "+ Дата неробоча — вказати причину",
+      "saveDraft": "Зберегти зміни",
+      "numberHint": "Номер присвоїться при випуску за правилом договору"
+    }
   },
   "settings": {
     "title": "Налаштування",

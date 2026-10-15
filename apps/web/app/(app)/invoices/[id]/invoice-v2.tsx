@@ -2,14 +2,15 @@ import { diffDays, toDecimal, type LocalDate } from '@tally/domain';
 import type { Result } from 'neverthrow';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { AuditHistory } from '@/components/audit-history';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DialogButton, RowMenu } from '@/components/v2/form-dialog';
 import { PageHeader } from '@/components/v2/page-header';
-import { Status, type Tone } from '@/components/v2/status';
+import { CardLayout, Fact, Facts, FactsRule, Panel } from '@/components/v2/panel';
+import { INVOICE_TONES, Status } from '@/components/v2/status';
+import { Steps } from '@/components/v2/steps';
 import { getFormat, getLabels } from '@/server/i18n';
 import type { requireRole } from '@/server/request-context';
 import type { invoiceAllocations, paymentCandidates } from '@/server/services/allocations';
@@ -29,14 +30,18 @@ import {
 type OkOf<T> = T extends Result<infer V, unknown> ? V : never;
 type Okd<F extends (...a: never[]) => unknown> = OkOf<Awaited<ReturnType<F>>>;
 
-export const INVOICE_TONES: Record<string, Tone> = {
-  draft: 'neutral',
-  issued: 'info',
-  partially_paid: 'warning',
-  paid: 'success',
-  void: 'neutral',
-  written_off: 'danger',
-};
+/** ✓ when the document exists, ○ while it is still to come. */
+function Mark({ done }: { done: boolean }) {
+  return done ? (
+    <span className="font-bold text-success-foreground" aria-hidden>
+      ✓
+    </span>
+  ) : (
+    <span className="text-muted-foreground" aria-hidden>
+      ○
+    </span>
+  );
+}
 
 const dateTime = new Intl.DateTimeFormat('uk-UA', {
   dateStyle: 'short',
@@ -100,45 +105,41 @@ export async function InvoiceV2({
   );
 
   const linesTable = (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-muted-foreground">
-          <tr className="border-b">
-            <th className="py-2 pr-3 text-left font-medium">{t('col.description')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('col.quantity')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('col.price')}</th>
-            <th className="py-2 pl-3 text-right font-medium">{t('col.amount')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {lines.map((l) => (
-            <tr key={l.id}>
-              <td className="py-2 pr-3">
-                {l.descriptionEn}
+    <table className="w-full min-w-[34rem] text-sm tabular-nums">
+      <thead className="text-xs text-muted-foreground">
+        <tr>
+          <th className="px-5 py-2.5 text-left font-medium">{t('col.description')}</th>
+          <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
+            {t('col.quantity')}
+          </th>
+          <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">{t('col.price')}</th>
+          <th className="px-5 py-2.5 text-right font-medium">{t('col.amount')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lines.map((l) => (
+          <tr key={l.id} className="border-t">
+            <td className="px-5 py-3">
+              {l.descriptionEn}
+              {l.descriptionUa !== l.descriptionEn && (
                 <div className="text-xs text-muted-foreground">{l.descriptionUa}</div>
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">{fmt.amount(l.quantity)}</td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {fmt.amount(l.unitPrice, inv.currency)}
-              </td>
-              <td className="py-2 pl-3 text-right tabular-nums">
-                {fmt.amount(l.amount, inv.currency)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t font-semibold">
-            <td colSpan={3} className="py-2 pr-3">
-              {tc('total')}
+              )}
             </td>
-            <td className="py-2 pl-3 text-right tabular-nums" data-testid="invoice-total">
-              {fmt.amount(inv.total, inv.currency)}
-            </td>
+            <td className="px-3 py-3 text-right">{fmt.amount(l.quantity)}</td>
+            <td className="px-3 py-3 text-right">{fmt.amount(l.unitPrice, inv.currency)}</td>
+            <td className="px-5 py-3 text-right">{fmt.amount(l.amount, inv.currency)}</td>
           </tr>
-        </tfoot>
-      </table>
-    </div>
+        ))}
+        <tr className="border-t font-bold">
+          <td colSpan={3} className="px-5 py-3">
+            {tc('total')}
+          </td>
+          <td className="px-5 py-3 text-right" data-testid="invoice-total">
+            {fmt.amount(inv.total, inv.currency)}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   );
 
   const editForm = (
@@ -158,35 +159,22 @@ export async function InvoiceV2({
     />
   );
 
-  const panel = (title: string, body: ReactNode, aside?: ReactNode, testId?: string) => (
-    <section className="rounded-lg border bg-card" aria-label={title} data-testid={testId}>
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-        <h2 className="font-heading font-semibold">{title}</h2>
-        {aside}
-      </div>
-      <div className="px-4 py-3">{body}</div>
-    </section>
-  );
-
-  const fact = (label: string, value: ReactNode, strong = false) => (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={strong ? 'font-semibold tabular-nums' : 'text-right tabular-nums'}>{value}</dd>
-    </div>
-  );
+  const flowStep = isDraft ? 1 : inv.status === 'paid' ? 3 : 2;
+  const showFlow = !['void', 'written_off'].includes(inv.status);
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title={inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
-        meta={
-          <span className="flex flex-wrap items-center gap-2">
+        crumb={inv.number ?? t('titleDraft')}
+        badges={
+          <>
             <Status tone={INVOICE_TONES[inv.status] ?? 'neutral'} testId="invoice-status">
               {INVOICE_STATUS_LABELS[inv.status] ?? inv.status}
             </Status>
             {inv.revision > 1 && <Status>{t('revision', { revision: inv.revision })}</Status>}
             {overdue > 0 && <Status tone="danger">{tv('overdue', { days: overdue })}</Status>}
-          </span>
+          </>
         }
       >
         <RowMenu
@@ -237,165 +225,209 @@ export async function InvoiceV2({
         {inv.status === 'void' && <ReissueForm invoiceId={inv.id} />}
       </PageHeader>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex min-w-0 flex-col gap-5">
-          {isDraft &&
-            preview &&
-            panel(
-              t('issue'),
-              <IssueForm invoiceId={inv.id} issueDate={inv.issueDate} preview={preview} />,
-              undefined,
-              'issue-panel',
+      {showFlow && (
+        <Steps
+          label={tv('flowLabel')}
+          current={flowStep}
+          steps={[
+            INVOICE_STATUS_LABELS.draft ?? 'draft',
+            INVOICE_STATUS_LABELS.issued ?? 'issued',
+            INVOICE_STATUS_LABELS.paid ?? 'paid',
+          ]}
+        />
+      )}
+
+      <CardLayout
+        main={
+          <>
+            {isDraft && preview && (
+              <Panel title={t('issue')} emphasis testId="issue-panel">
+                <IssueForm invoiceId={inv.id} issueDate={inv.issueDate} preview={preview} />
+              </Panel>
             )}
-          {panel(
-            t('lines'),
-            isDraft ? editForm : linesTable,
-            !isDraft && !revisable && !['void', 'written_off'].includes(inv.status) ? (
-              <span className="text-xs text-muted-foreground">{tv('locked')}</span>
-            ) : undefined,
-          )}
-          {payable &&
-            panel(
-              t('payments'),
-              allocations.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{tv('noPayments')}</p>
-              ) : (
-                <ul className="flex flex-col divide-y text-sm" data-testid="allocations">
-                  {allocations.map((a) => (
-                    <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-                      <span className="w-24 tabular-nums text-muted-foreground">
-                        {fmt.date(a.occurredOn)}
-                      </span>
-                      <span className="font-medium tabular-nums">
-                        {fmt.amount(a.amount, a.currency)}
-                      </span>
-                      {a.fxRate && (
-                        <span className="text-muted-foreground">
-                          {t('rate', { rate: a.fxRate })}
+            {isDraft ? (
+              <Panel title={t('lines')}>{editForm}</Panel>
+            ) : (
+              <Panel
+                title={t('lines')}
+                flush
+                action={
+                  !revisable && !['void', 'written_off'].includes(inv.status) ? (
+                    <span className="text-xs text-muted-foreground">{tv('locked')}</span>
+                  ) : undefined
+                }
+              >
+                {linesTable}
+              </Panel>
+            )}
+            {payable && (
+              <Panel title={t('payments')}>
+                {allocations.length === 0 ? (
+                  <p className="text-muted-foreground">{tv('noPayments')}</p>
+                ) : (
+                  <ul className="-mx-5 flex flex-col divide-y border-t" data-testid="allocations">
+                    {allocations.map((a) => (
+                      <li
+                        key={a.id}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5"
+                      >
+                        <span className="w-24 text-muted-foreground tabular-nums">
+                          {fmt.date(a.occurredOn)}
                         </span>
-                      )}
-                      <span className="flex-1 truncate text-muted-foreground">
-                        {a.counterparty}
+                        <span className="font-semibold tabular-nums">
+                          {fmt.amount(a.amount, a.currency)}
+                        </span>
+                        {a.fxRate && (
+                          <span className="text-muted-foreground">
+                            {t('rate', { rate: a.fxRate })}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {a.counterparty}
+                        </span>
+                        <RemoveAllocationButton id={a.id} invoiceId={inv.id} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            )}
+            {revisions.length > 0 && (
+              <Panel title={t('revisions')}>
+                <ul className="-mx-5 flex flex-col divide-y border-t">
+                  {revisions.map((r) => (
+                    <li key={r.id} className="flex flex-wrap gap-x-3 px-5 py-2.5">
+                      <span className="font-medium">{t('revision', { revision: r.revision })}</span>
+                      <span className="text-muted-foreground">{fmt.date(r.issueDate)}</span>
+                      <span className="tabular-nums">{fmt.amount(r.total, inv.currency)}</span>
+                      <span className="flex-1">{r.reason}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {dateTime.format(r.createdAt)}
                       </span>
-                      <RemoveAllocationButton id={a.id} invoiceId={inv.id} />
                     </li>
                   ))}
                 </ul>
-              ),
+              </Panel>
             )}
-          {revisions.length > 0 &&
-            panel(
-              t('revisions'),
-              <ul className="flex flex-col divide-y text-sm">
-                {revisions.map((r) => (
-                  <li key={r.id} className="flex flex-wrap gap-x-3 py-2">
-                    <span className="font-medium">{t('revision', { revision: r.revision })}</span>
-                    <span className="text-muted-foreground">{fmt.date(r.issueDate)}</span>
-                    <span className="tabular-nums">{fmt.amount(r.total, inv.currency)}</span>
-                    <span className="flex-1">{r.reason}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {dateTime.format(r.createdAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>,
-            )}
-        </div>
-
-        <aside className="flex flex-col gap-5">
-          {panel(
-            tv('details'),
-            <dl className="text-sm">
-              {fact(
-                tv('client'),
-                <Link href={`/clients/${inv.clientId}`} className="text-link hover:underline">
-                  {clientName}
-                </Link>,
-              )}
-              {fact(
-                t('contract'),
-                <Link
-                  href={`/clients/contracts/${contract.id}`}
-                  className="text-link hover:underline"
-                >
-                  {contractNumber}
-                </Link>,
-              )}
-              {periodMonth &&
-                periodId &&
-                fact(
-                  tv('period'),
-                  <Link href={`/periods/${periodId}`} className="text-link hover:underline">
-                    {fmt.month(periodMonth)}
-                  </Link>,
+            <AuditHistory ctx={ctx} tableName="invoice" rowId={inv.id} />
+          </>
+        }
+        aside={
+          <>
+            <Panel>
+              <Facts>
+                <Fact label={tv('client')}>
+                  <Link href={`/clients/${inv.clientId}`} className="text-link hover:underline">
+                    {clientName}
+                  </Link>
+                </Fact>
+                <Fact label={tv('contract')}>
+                  <Link
+                    href={`/clients/contracts/${contract.id}`}
+                    className="text-link hover:underline"
+                  >
+                    {contractNumber}
+                  </Link>
+                </Fact>
+                {periodMonth && periodId && (
+                  <Fact label={tv('period')}>
+                    <Link href={`/periods/${periodId}`} className="text-link hover:underline">
+                      {fmt.month(periodMonth)}
+                    </Link>
+                  </Fact>
                 )}
-              {fact(t('date'), fmt.date(inv.issueDate))}
-              {fact(t('due'), fmt.date(inv.dueDate))}
-              <div className="my-2 border-t" />
-              {fact(t('total'), fmt.amount(inv.total, inv.currency), true)}
-              {fact(t('paid'), fmt.amount(inv.paidAmount, inv.currency))}
-              {payable && fact(tv('left'), amountLeft, true)}
+                <Fact label={t('date')}>{fmt.date(inv.issueDate)}</Fact>
+                <Fact label={t('due')} tone={overdue > 0 ? 'danger' : undefined}>
+                  {fmt.date(inv.dueDate)}
+                </Fact>
+                <FactsRule />
+                <Fact label={t('total')}>{fmt.amount(inv.total, inv.currency)}</Fact>
+                <Fact label={t('paid')}>{fmt.amount(inv.paidAmount, inv.currency)}</Fact>
+                {payable && (
+                  <Fact label={tv('left')} strong>
+                    {amountLeft}
+                  </Fact>
+                )}
+              </Facts>
               {inv.status === 'written_off' && (
-                <p className="mt-2 text-sm" data-testid="write-off">
+                <p data-testid="write-off">
                   {t('writtenOff', { date: fmt.date(inv.writtenOffOn ?? '') })}:{' '}
                   {t('badDebt', { amount: amountLeft })} · {inv.writeOffReason}
                 </p>
               )}
               {inv.voidReason && (
-                <p className="mt-2 text-sm">
+                <p>
                   <span className="text-muted-foreground">{t('voidReason')}:</span> {inv.voidReason}
                 </p>
               )}
-            </dl>,
-          )}
-          {!isDraft &&
-            inv.status !== 'void' &&
-            panel(
-              t('fileTitle'),
-              <div className="flex flex-col gap-3 text-sm">
-                {inv.pdfFileId ? (
-                  <p>{tv('pdfReady', { revision: inv.revision })}</p>
-                ) : rendering ? (
-                  <p className="text-muted-foreground">
-                    <AutoRefresh />
-                    {t('fileRendering')}
-                    {render.lastError ? t('previousAttempt', { error: render.lastError }) : ''}
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-muted-foreground">
-                      {render?.status === 'failed'
-                        ? t('renderFailed', { error: render.lastError ?? t('unknownError') })
-                        : t('noFile')}
-                    </p>
-                    <RegeneratePdfForm invoiceId={inv.id} />
+            </Panel>
+            <LinkedDocuments
+              ctx={ctx}
+              entityType="invoice"
+              entityId={inv.id}
+              canAdd
+              leading={
+                !isDraft && inv.status !== 'void' ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Mark done={Boolean(inv.pdfFileId)} />
+                      <span className="min-w-0 flex-1">
+                        {tv('pdf', { revision: inv.revision })}
+                        {inv.pdfFileId ? null : rendering ? (
+                          <span className="block text-xs text-muted-foreground">
+                            <AutoRefresh />
+                            {t('fileRendering')}
+                            {render.lastError
+                              ? t('previousAttempt', { error: render.lastError })
+                              : ''}
+                          </span>
+                        ) : (
+                          render?.status === 'failed' && (
+                            <span className="block text-xs text-danger-foreground">
+                              {t('renderFailed', { error: render.lastError ?? t('unknownError') })}
+                            </span>
+                          )
+                        )}
+                      </span>
+                      {!inv.pdfFileId && !rendering && <RegeneratePdfForm invoiceId={inv.id} />}
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <Mark done={Boolean(latestSigned)} />
+                      <span className="min-w-0 flex-1">
+                        {tv('signedCopy')}
+                        {latestSigned && (
+                          <span className="block text-xs text-muted-foreground">
+                            {t('signed', {
+                              date: latestSigned.signedAt
+                                ? dateTime.format(latestSigned.signedAt)
+                                : '',
+                            })}
+                            {latestSigned.sourceRevision
+                              ? t('signedRevision', { revision: latestSigned.sourceRevision })
+                              : ''}
+                          </span>
+                        )}
+                      </span>
+                      <DialogButton
+                        variant="outline"
+                        title={tv('uploadSignedTitle')}
+                        content={<SignedCopyForm invoiceId={inv.id} />}
+                      >
+                        {tv('uploadSigned')}
+                      </DialogButton>
+                    </div>
+                    {signedOutdated && (
+                      <Alert role="status">
+                        <AlertDescription>{t('signedOutdated')}</AlertDescription>
+                      </Alert>
+                    )}
                   </div>
-                )}
-                {latestSigned ? (
-                  <p>
-                    {t('signed', {
-                      date: latestSigned.signedAt ? dateTime.format(latestSigned.signedAt) : '',
-                    })}
-                    {latestSigned.sourceRevision
-                      ? t('signedRevision', { revision: latestSigned.sourceRevision })
-                      : ''}
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">{t('noSigned')}</p>
-                )}
-                {signedOutdated && (
-                  <Alert role="status">
-                    <AlertDescription>{t('signedOutdated')}</AlertDescription>
-                  </Alert>
-                )}
-                <SignedCopyForm invoiceId={inv.id} />
-              </div>,
-            )}
-        </aside>
-      </div>
-
-      <LinkedDocuments ctx={ctx} entityType="invoice" entityId={inv.id} canAdd />
-      <AuditHistory ctx={ctx} tableName="invoice" rowId={inv.id} />
+                ) : undefined
+              }
+            />
+          </>
+        }
+      />
     </div>
   );
 }

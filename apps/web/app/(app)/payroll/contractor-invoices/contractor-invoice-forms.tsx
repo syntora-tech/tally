@@ -7,6 +7,7 @@ import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileInput } from '@/components/file-input';
 import {
   deleteContractorInvoiceAction,
   draftContractorInvoiceAction,
@@ -131,7 +132,7 @@ export function SignContractorInvoiceForm({ id }: { id: string }) {
         <Input id="ci-signed-url" name="signedUrl" type="url" className="w-80" />
       </FormField>
       <FormField label={t('signedFile')} htmlFor="ci-signed-file" error={error?.fieldErrors?.file}>
-        <Input id="ci-signed-file" name="file" type="file" accept="application/pdf,image/*" />
+        <FileInput id="ci-signed-file" name="file" accept="application/pdf,image/*" />
       </FormField>
       <Button type="submit" disabled={pending}>
         {t('markSigned')}

@@ -8,6 +8,7 @@ import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileInput } from '@/components/file-input';
 import {
   addTripExpenseAction,
   createReimbursementAction,
@@ -165,7 +166,7 @@ export function ExpenseForm(p: {
           </>
         )}
         <FormField label={t('expense.receipt')} htmlFor="exp-receipt" error={errors?.receipt}>
-          <Input id="exp-receipt" name="receipt" type="file" accept="image/*,application/pdf" />
+          <FileInput id="exp-receipt" name="receipt" accept="image/*,application/pdf" />
         </FormField>
       </div>
       {errors?.allowDuplicate && (

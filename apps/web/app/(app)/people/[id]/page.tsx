@@ -16,7 +16,9 @@ import { CvUpload } from './cv-upload';
 import { DefaultPayeeForm } from './default-payee-form';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { DialogButton, RowMenu } from '@/components/v2/form-dialog';
 import { PageHeader } from '@/components/v2/page-header';
+import { KeyValue, KeyValues, Panel } from '@/components/v2/panel';
 import { Status } from '@/components/v2/status';
 import { TabsNav } from '@/components/v2/tabs-nav';
 import { getUiPrefs } from '@/server/ui-prefs';
@@ -49,9 +51,13 @@ export default async function PersonPage({
   const payeeOptions = payees?.isOk()
     ? payees.value.map((py) => ({ value: py.id, label: py.name }))
     : [];
-  const [t, tc, fmt, { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS }] = await Promise.all(
-    [getTranslations('personCard'), getTranslations('common'), getFormat(), getLabels()],
-  );
+  const [t, tc, fmt, { ALLOCATION_LABELS, BENCH_LABELS, PAYEE_KIND_LABELS, PERSON_STATUS_LABELS }] =
+    await Promise.all([
+      getTranslations('personCard'),
+      getTranslations('common'),
+      getFormat(),
+      getLabels(),
+    ]);
 
   if ((await getUiPrefs()).version === 'v2') {
     const tv = await getTranslations('personCard.v2');
@@ -71,16 +77,20 @@ export default async function PersonPage({
       .slice(0, 2)
       .map((w) => w[0]?.toUpperCase() ?? '')
       .join('');
-    const fact = (label: string, value: React.ReactNode) => (
-      <div className="flex items-baseline justify-between gap-4 py-1.5">
-        <dt className="text-muted-foreground">{label}</dt>
-        <dd className="text-right">{value}</dd>
-      </div>
+    const current = payees?.isOk()
+      ? payees.value.find((py) => py.id === p.defaultPayee?.id)
+      : undefined;
+    const payeeForm = (
+      <DefaultPayeeForm
+        personId={p.id}
+        currentPayeeId={p.defaultPayee?.id ?? null}
+        options={payeeOptions}
+      />
     );
     return (
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-muted font-heading text-lg font-bold">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-success font-heading text-lg font-bold text-success-foreground">
             {initials}
           </span>
           <div className="min-w-0 flex-1">
@@ -95,7 +105,7 @@ export default async function PersonPage({
                     {PERSON_STATUS_LABELS[p.status]}
                   </Status>
                   <Status
-                    tone={p.bench === 'free' ? 'info' : p.bench === 'busy' ? 'neutral' : 'warning'}
+                    tone={p.bench === 'free' ? 'success' : p.bench === 'busy' ? 'neutral' : 'info'}
                   >
                     {BENCH_LABELS[p.bench]} · FTE {p.load}
                   </Status>
@@ -103,9 +113,15 @@ export default async function PersonPage({
               }
             >
               {isFinance && (
-                <Button variant="outline" render={<Link href={`/people/${p.id}/edit`} />}>
-                  {tc('edit')}
-                </Button>
+                <>
+                  <RowMenu
+                    label={tc('actions')}
+                    entries={[{ label: tv('editProfile'), href: `/people/${p.id}/edit` }]}
+                  />
+                  <Button render={<Link href={`/people/${p.id}/assignments/new`} />}>
+                    + {tv('newAssignment')}
+                  </Button>
+                </>
               )}
             </PageHeader>
           </div>
@@ -121,43 +137,71 @@ export default async function PersonPage({
         />
         {tab === 'overview' && (
           <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
-            <section className="rounded-lg border bg-card" aria-label={t('profile')}>
-              <h2 className="border-b px-4 py-3 font-heading font-semibold">{t('profile')}</h2>
-              <dl className="px-4 py-3 text-sm">
-                {fact(
-                  t('stack'),
-                  <span className="flex flex-wrap justify-end gap-1">
-                    {p.stack.length ? p.stack.map((tag) => <Status key={tag}>{tag}</Status>) : '—'}
-                  </span>,
+            <Panel title={t('profile')}>
+              <KeyValues>
+                <KeyValue label={t('stack')}>
+                  {p.stack.length ? (
+                    <span className="flex flex-wrap gap-1">
+                      {p.stack.map((tag) => (
+                        <span key={tag} className="rounded bg-muted px-2 py-0.5 text-xs">
+                          {tag}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </KeyValue>
+                <KeyValue label={t('domains')}>{p.domains.join(', ') || null}</KeyValue>
+                <KeyValue label={t('marketRate')}>
+                  {p.marketRateUsd ? t('perHour', { amount: fmt.amount(p.marketRateUsd) }) : null}
+                </KeyValue>
+                <KeyValue label={t('allocation')}>
+                  {p.allocation ? ALLOCATION_LABELS[p.allocation] : null}
+                </KeyValue>
+                <KeyValue label={t('availableFrom')}>
+                  {p.availabilityFrom ? fmt.date(p.availabilityFrom) : t('now')}
+                </KeyValue>
+                <KeyValue label={t('location')}>
+                  {[p.location, p.timezone].filter(Boolean).join(', ') || null}
+                </KeyValue>
+                <KeyValue label={t('contactOwner')}>{p.contactOwner}</KeyValue>
+                {p.notes && (
+                  <KeyValue label={t('notes')}>
+                    <span className="whitespace-pre-line">{p.notes}</span>
+                  </KeyValue>
                 )}
-                {fact(t('domains'), p.domains.join(', ') || '—')}
-                {fact(
-                  t('marketRate'),
-                  p.marketRateUsd ? t('perHour', { amount: fmt.amount(p.marketRateUsd) }) : '—',
-                )}
-                {fact(t('allocation'), p.allocation ? ALLOCATION_LABELS[p.allocation] : '—')}
-                {fact(
-                  t('availableFrom'),
-                  p.availabilityFrom ? fmt.date(p.availabilityFrom) : t('now'),
-                )}
-                {fact(t('location'), [p.location, p.timezone].filter(Boolean).join(', ') || '—')}
-                {fact(t('contactOwner'), p.contactOwner ?? '—')}
-                {p.notes && fact(t('notes'), p.notes)}
-              </dl>
-            </section>
+              </KeyValues>
+            </Panel>
             <div className="flex flex-col gap-5">
               {isFinance && <AssignmentsCard ctx={ctx} personId={p.id} />}
               {isFinance && (
-                <section className="rounded-lg border bg-card" aria-label={t('payee')}>
-                  <h2 className="border-b px-4 py-3 font-heading font-semibold">{t('payee')}</h2>
-                  <div className="px-4 py-3">
-                    <DefaultPayeeForm
-                      personId={p.id}
-                      currentPayeeId={p.defaultPayee?.id ?? null}
-                      options={payeeOptions}
-                    />
-                  </div>
-                </section>
+                <Panel
+                  title={t('payee')}
+                  action={
+                    <DialogButton variant="outline" title={t('payee')} content={payeeForm}>
+                      {p.defaultPayee ? tv('changePayee') : tv('choosePayee')}
+                    </DialogButton>
+                  }
+                >
+                  {p.defaultPayee ? (
+                    <KeyValues>
+                      <KeyValue label={tv('payeeWho')}>
+                        <Link
+                          href={`/people/payees/${p.defaultPayee.id}`}
+                          className="text-link hover:underline"
+                        >
+                          {p.defaultPayee.name}
+                        </Link>
+                      </KeyValue>
+                      {current && (
+                        <KeyValue label={tv('payeeKind')}>
+                          {PAYEE_KIND_LABELS[current.kind]}
+                        </KeyValue>
+                      )}
+                    </KeyValues>
+                  ) : (
+                    <p className="text-muted-foreground">{tv('noPayee')}</p>
+                  )}
+                </Panel>
               )}
             </div>
           </div>
@@ -177,7 +221,7 @@ export default async function PersonPage({
             action={isFinance ? <CvUpload personId={p.id} /> : undefined}
           />
         )}
-        {tab === 'history' && <AuditHistory ctx={ctx} tableName="person" rowId={p.id} />}
+        {tab === 'history' && <AuditHistory ctx={ctx} tableName="person" rowId={p.id} open />}
       </div>
     );
   }

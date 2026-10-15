@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileInput } from '@/components/file-input';
 import { Textarea } from '@/components/ui/textarea';
 import { toOptions, useLabels } from '@/lib/labels';
 import { createDocumentAction, type UploadState } from '@/server/actions/documents';
@@ -74,7 +75,7 @@ export function DocumentForm({ targets, initialLinks, initialType, cancelHref }:
         <Input id="docDate" name="docDate" type="date" />
       </FormField>
       <FormField label={t('file')} htmlFor="file" error={errors?.file}>
-        <Input id="file" name="file" type="file" />
+        <FileInput id="file" name="file" />
       </FormField>
       <FormField label={t('url')} htmlFor="url" hint={t('urlHint')} error={errors?.url}>
         <Input id="url" name="url" type="url" placeholder="https://" />

@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { appColumnHelper, DataTable, type AppColumnDef } from '@/components/data-table';
 import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
+import { INVOICE_TONES, Status } from '@/components/v2/status';
+import { useIsV2 } from '@/components/v2/ui-version';
 
 export type InvoiceRow = {
   id: string;
@@ -27,6 +29,7 @@ export function InvoicesTable({ rows }: { rows: InvoiceRow[] }) {
   const t = useTranslations('invoices');
   const fmt = useFormat();
   const { INVOICE_STATUS_LABELS } = useLabels();
+  const v2 = useIsV2();
   const columns: AppColumnDef<InvoiceRow>[] = [
     col.accessor((r) => r.number ?? t('draft'), { id: 'number', header: t('col.number') }),
     col.accessor('clientName', { header: t('col.client') }),
@@ -59,17 +62,27 @@ export function InvoicesTable({ rows }: { rows: InvoiceRow[] }) {
     col.accessor((r) => INVOICE_STATUS_LABELS[r.status] ?? r.status, {
       id: 'status',
       header: t('col.status'),
-      cell: ({ row, getValue }) => (
-        <span className="flex flex-wrap gap-1">
-          <Badge variant={row.original.status === 'draft' ? 'outline' : 'secondary'}>
-            {getValue<string>()}
-          </Badge>
-          {row.original.revision > 1 && (
-            <Badge variant="outline">{t('revision', { revision: row.original.revision })}</Badge>
-          )}
-          {row.original.isLegacy && <Badge variant="outline">{t('legacy')}</Badge>}
-        </span>
-      ),
+      cell: ({ row, getValue }) =>
+        v2 ? (
+          <span className="flex flex-wrap gap-1">
+            <Status tone={INVOICE_TONES[row.original.status] ?? 'neutral'}>
+              {getValue<string>()}
+            </Status>
+            {row.original.revision > 1 && (
+              <Status>{t('revision', { revision: row.original.revision })}</Status>
+            )}
+          </span>
+        ) : (
+          <span className="flex flex-wrap gap-1">
+            <Badge variant={row.original.status === 'draft' ? 'outline' : 'secondary'}>
+              {getValue<string>()}
+            </Badge>
+            {row.original.revision > 1 && (
+              <Badge variant="outline">{t('revision', { revision: row.original.revision })}</Badge>
+            )}
+            {row.original.isLegacy && <Badge variant="outline">{t('legacy')}</Badge>}
+          </span>
+        ),
     }),
   ];
   return (

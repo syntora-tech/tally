@@ -35,6 +35,7 @@ export function V2AppHeader({ items }: { items: NavItem[] }) {
             </span>
           )
         ) : null}
+        <span id="v2-crumb" data-nested={nested} className="contents" />
       </nav>
     </header>
   );

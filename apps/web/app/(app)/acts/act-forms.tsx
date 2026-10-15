@@ -1,12 +1,13 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileInput } from '@/components/file-input';
 import {
   attachSignedActAction,
   createActAction,
@@ -19,6 +20,7 @@ import {
   type ActFormState,
 } from '@/server/actions/acts';
 import { useCloseOnSuccess } from '@/components/v2/form-dialog';
+import { useIsV2 } from '@/components/v2/ui-version';
 
 function useResult(state: ActFormState, success: string) {
   useCloseOnSuccess(state);
@@ -26,6 +28,30 @@ function useResult(state: ActFormState, success: string) {
     if (state?.ok) toast.success(success);
   }, [state, success]);
   return state && !state.ok ? state.error : null;
+}
+
+/** v2: the owner's reason for a non-working date stays folded until it is needed. */
+function OverrideReason({ id, defaultValue }: { id: string; defaultValue: string | null }) {
+  const t = useTranslations('actForms');
+  const [open, setOpen] = useState(Boolean(defaultValue));
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="self-start text-sm font-medium text-link hover:underline"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        {t('v2.addOverride')}
+      </button>
+    );
+  }
+  return (
+    <FormField label={t('nonWorkingReason')} htmlFor={id}>
+      <Input id={id} name="dateOverrideReason" defaultValue={defaultValue ?? ''} />
+    </FormField>
+  );
 }
 
 function ErrorAlert({ message }: { message: string | undefined }) {
@@ -48,6 +74,39 @@ export function ActDraftForm(props: {
   const t = useTranslations('actForms');
   const tc = useTranslations('common');
   const error = useResult(state, t('draftSaved'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="flex flex-col gap-3">
+        <input type="hidden" name="id" value={props.id} />
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <FormField label={t('actDate')} htmlFor="act-date" error={error?.fieldErrors?.actDate}>
+            <Input id="act-date" name="actDate" type="date" defaultValue={props.actDate} />
+          </FormField>
+          {props.editableAmount ? (
+            <FormField
+              label={t('amountUah')}
+              htmlFor="act-amount"
+              error={error?.fieldErrors?.amountUah}
+            >
+              <Input
+                id="act-amount"
+                name="amountUah"
+                inputMode="decimal"
+                defaultValue={props.amountUah}
+              />
+            </FormField>
+          ) : (
+            <span />
+          )}
+          <Button type="submit" variant="outline" disabled={pending}>
+            {t('v2.saveDraft')}
+          </Button>
+        </div>
+        <OverrideReason id="act-override" defaultValue={props.dateOverrideReason} />
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="id" value={props.id} />
@@ -90,6 +149,20 @@ export function IssueActForm({ id }: { id: string }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(issueActAction, null);
   const t = useTranslations('actForms');
   const error = useResult(state, t('issued'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="flex flex-col gap-2 border-t pt-4">
+        <input type="hidden" name="id" value={id} />
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">{t('v2.numberHint')}</span>
+          <Button type="submit" disabled={pending} className="ml-auto">
+            {t('issue')}
+          </Button>
+        </div>
+        <ErrorAlert message={error?.message} />
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={id} />
@@ -154,6 +227,30 @@ export function SignedUrlForm({ id, value }: { id: string; value: string | null 
   const t = useTranslations('actForms');
   const tc = useTranslations('common');
   const error = useResult(state, t('linkSaved'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="flex flex-col gap-1.5">
+        <input type="hidden" name="id" value={id} />
+        <FormField
+          label={t('signedLink')}
+          htmlFor="act-signed"
+          error={error?.fieldErrors?.signedUrl}
+        >
+          <div className="flex gap-2">
+            <Input
+              id="act-signed"
+              name="signedUrl"
+              defaultValue={value ?? ''}
+              placeholder="https://vchasno.ua/…"
+            />
+            <Button type="submit" variant="outline" disabled={pending}>
+              {tc('save')}
+            </Button>
+          </div>
+        </FormField>
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
@@ -181,6 +278,50 @@ export function OwnDocumentActForm({ id, actDate }: { id: string; actDate: strin
   );
   const t = useTranslations('actForms');
   const error = useResult(state, t('ownIssued'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="flex flex-col gap-3">
+        <input type="hidden" name="id" value={id} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField
+            label={t('ownNumber')}
+            htmlFor="act-own-number"
+            error={error?.fieldErrors?.number}
+          >
+            <Input id="act-own-number" name="number" required />
+          </FormField>
+          <FormField
+            label={t('ownDate')}
+            htmlFor="act-own-date"
+            error={error?.fieldErrors?.actDate}
+          >
+            <Input id="act-own-date" name="actDate" type="date" defaultValue={actDate} />
+          </FormField>
+        </div>
+        <OverrideReason id="act-own-override" defaultValue={null} />
+        <FormField label={t('ownFile')} htmlFor="act-own-file" error={error?.fieldErrors?.file}>
+          <FileInput id="act-own-file" name="file" accept="application/pdf" required />
+        </FormField>
+        <FormField
+          label={t('signedLink')}
+          htmlFor="act-own-link"
+          error={error?.fieldErrors?.signedUrl}
+        >
+          <Input id="act-own-link" name="signedUrl" placeholder="https://vchasno.ua/…" />
+        </FormField>
+        <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="signed" className="size-4 accent-foreground" />
+            {t('ownSigned')}
+          </label>
+          <Button type="submit" disabled={pending} className="ml-auto">
+            {t('ownIssue')}
+          </Button>
+        </div>
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="id" value={id} />
@@ -195,7 +336,7 @@ export function OwnDocumentActForm({ id, actDate }: { id: string; actDate: strin
         <Input id="act-own-override" name="dateOverrideReason" className="w-72" />
       </FormField>
       <FormField label={t('ownFile')} htmlFor="act-own-file" error={error?.fieldErrors?.file}>
-        <Input id="act-own-file" name="file" type="file" accept="application/pdf" required />
+        <FileInput id="act-own-file" name="file" accept="application/pdf" required />
       </FormField>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="signed" />
@@ -231,11 +372,31 @@ export function SignedFileForm({ id }: { id: string }) {
   );
   const t = useTranslations('actForms');
   const error = useResult(state, t('signedFileSaved'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="flex flex-col gap-2">
+        <input type="hidden" name="id" value={id} />
+        <FormField
+          label={t('signedFile')}
+          htmlFor="act-signed-file"
+          error={error?.fieldErrors?.file}
+        >
+          <FileInput id="act-signed-file" name="file" accept="application/pdf" required />
+        </FormField>
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+        <div className="flex">
+          <Button type="submit" variant="outline" disabled={pending} className="ml-auto">
+            {t('signedFileSave')}
+          </Button>
+        </div>
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
       <FormField label={t('signedFile')} htmlFor="act-signed-file" error={error?.fieldErrors?.file}>
-        <Input id="act-signed-file" name="file" type="file" accept="application/pdf" required />
+        <FileInput id="act-signed-file" name="file" accept="application/pdf" required />
       </FormField>
       <Button type="submit" variant="outline" disabled={pending}>
         {t('signedFileSave')}

@@ -11,6 +11,15 @@ const TONES: Record<Tone, string> = {
   danger: 'bg-danger text-danger-foreground',
 };
 
+export const INVOICE_TONES: Record<string, Tone> = {
+  draft: 'neutral',
+  issued: 'info',
+  partially_paid: 'warning',
+  paid: 'success',
+  void: 'neutral',
+  written_off: 'danger',
+};
+
 export function Status({
   tone = 'neutral',
   children,

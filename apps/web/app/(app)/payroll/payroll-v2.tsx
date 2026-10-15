@@ -544,6 +544,7 @@ export async function PayrollV2(p: PayrollV2Props) {
             <span className="col-start-2 overflow-x-auto md:col-start-auto">
               {doc && i.group !== 'paid' ? (
                 <Steps
+                  compact
                   label={t('v2.stepsLabel')}
                   current={step}
                   steps={[t('v2.steps.document'), t('v2.steps.signature'), t('v2.steps.payment')]}

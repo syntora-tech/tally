@@ -10,6 +10,7 @@ import { TransactionForm } from '../../new/transaction-form';
 import { transactionFormData } from '../../transaction-form-data';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('editTransaction');
 
@@ -38,28 +39,30 @@ export default async function EditTransactionPage({ params }: { params: Promise<
           {allocated && <p className="text-muted-foreground">{t('editAllocated')}</p>}
         </div>
       )}
-      <TransactionForm
-        today={ctx.today}
-        {...options}
-        value={{
-          id: tx.id,
-          type: tx.type,
-          occurredOn: tx.occurredOn,
-          categoryId: tx.categoryId,
-          description: tx.description,
-          counterparty: tx.counterparty,
-          externalRef: tx.externalRef,
-          personId: tx.personId,
-          clientId: tx.clientId,
-          counterpartyAddress: tx.counterpartyAddress,
-          postings: postings.map((p) => ({
-            accountId: p.accountId,
-            amount: p.amount,
-            isFee: p.isFee,
-          })),
-          allocated,
-        }}
-      />
+      <FormCard>
+        <TransactionForm
+          today={ctx.today}
+          {...options}
+          value={{
+            id: tx.id,
+            type: tx.type,
+            occurredOn: tx.occurredOn,
+            categoryId: tx.categoryId,
+            description: tx.description,
+            counterparty: tx.counterparty,
+            externalRef: tx.externalRef,
+            personId: tx.personId,
+            clientId: tx.clientId,
+            counterpartyAddress: tx.counterpartyAddress,
+            postings: postings.map((p) => ({
+              accountId: p.accountId,
+              amount: p.amount,
+              isFee: p.isFee,
+            })),
+            allocated,
+          }}
+        />
+      </FormCard>
       <AuditHistory ctx={ctx} tableName="transaction" rowId={tx.id} />
     </div>
   );

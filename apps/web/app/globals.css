@@ -218,3 +218,162 @@
     @apply font-sans;
   }
 }
+
+/*
+ * v2 primitives (A-104): the shared shadcn parts take the design-system measures (fields 40px,
+ * radius 6px, cards 8px, Manrope section titles, quiet table heads), so every v2 screen shares them.
+ * Selectors carry .v2 for specificity over the components' own utilities.
+ */
+@layer utilities {
+  .v2 [data-slot='button'] {
+    border-radius: 6px;
+  }
+  .v2 [data-slot='button']:is([class~='h-8'], [class~='h-9']) {
+    height: 2.5rem;
+    padding-inline: 1rem;
+  }
+  .v2 [data-slot='button'][class~='h-7'] {
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .v2 [data-slot='button']:is([class~='size-8'], [class~='size-9']) {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .v2 [data-slot='button'][class~='border-border'] {
+    border-color: var(--input);
+    background: var(--card);
+  }
+  .v2 :is([data-slot='input'], [data-slot='native-select'], [data-slot='select-trigger']) {
+    height: 2.5rem;
+    border-radius: 6px;
+    border-color: var(--input);
+    background-color: var(--card);
+    font-size: 0.875rem;
+    box-shadow: none;
+  }
+  .v2 :is([data-slot='input'], [data-slot='native-select']):not([class*='pl-']) {
+    padding-inline-start: 0.625rem;
+  }
+  .v2 [data-slot='native-select'] {
+    padding-inline-end: 2rem;
+  }
+  .v2 [data-slot='input'][type='file'] {
+    height: auto;
+    padding: 0.5rem 0.625rem;
+    border-style: dashed;
+    cursor: pointer;
+  }
+  .v2 [data-slot='input'][type='file']::file-selector-button {
+    height: 2rem;
+    margin-inline-end: 0.75rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--foreground);
+    font-weight: 500;
+  }
+  .v2 [data-slot='textarea'] {
+    border-radius: 6px;
+    border-color: var(--input);
+    background-color: var(--card);
+    font-size: 0.875rem;
+  }
+  .v2 [data-slot='label'] {
+    font-weight: 500;
+  }
+  .v2 [data-slot='card'] {
+    border-radius: 8px;
+    --tw-ring-color: var(--border);
+    box-shadow: 0 0 0 1px var(--border);
+    --card-spacing: 1.25rem;
+  }
+  .v2 [data-slot='card'][data-size='sm'] {
+    --card-spacing: 1rem;
+  }
+  .v2 [data-slot='card-title'] {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.0625rem;
+    letter-spacing: -0.01em;
+  }
+  .v2 [data-slot='card-header'][class~='border-b'] {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .v2 [data-slot='table-head'] {
+    height: 2.5rem;
+    padding-inline: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--muted-foreground);
+  }
+  .v2 [data-slot='table-cell'] {
+    padding: 0.625rem 0.75rem;
+  }
+  .v2 :is([data-slot='table-head'], [data-slot='table-cell']):first-child {
+    padding-inline-start: 1.25rem;
+  }
+  .v2 :is([data-slot='table-head'], [data-slot='table-cell']):last-child {
+    padding-inline-end: 1.25rem;
+  }
+  .v2 [data-slot='table-row'] {
+    border-color: var(--border);
+  }
+  .v2 [data-slot='table-row']:hover {
+    background: color-mix(in srgb, var(--muted) 50%, transparent);
+  }
+  .v2 [data-slot='badge'],
+  .v2 span[class~='group/badge'] {
+    height: auto;
+    border-radius: 4px;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .v2 [data-page-actions] [data-slot='button']:is([class~='h-7'], [class~='h-8']) {
+    height: 2.5rem;
+    padding-inline: 1rem;
+    font-size: 0.875rem;
+  }
+  .v2
+    [data-page-actions]
+    :is([data-slot='button'], [aria-haspopup='menu']):is([class~='size-7'], [class~='size-8']) {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-color: var(--input);
+    background: var(--card);
+  }
+  /* Form footers: Cancel first, the primary action last on the right, under a rule. */
+  .v2 [data-form-card] form {
+    max-width: none;
+  }
+  .v2 [data-form-card] [data-slot='native-select'] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .v2 [data-form-card] form > div:has(> [type='submit']):last-child {
+    display: flex;
+    gap: 0.5rem;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .v2
+    :is([data-form-card], [data-slot='dialog-content'])
+    form
+    > div:has(> [type='submit']):last-child
+    > a[data-slot='button'] {
+    border-color: var(--input);
+    background: var(--card);
+  }
+  .v2 [data-slot='dialog-content'] form > div:has(> [type='submit']):last-child {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+  }
+}

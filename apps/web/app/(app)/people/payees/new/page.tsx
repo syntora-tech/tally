@@ -6,6 +6,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('newPayee');
 
@@ -27,10 +28,12 @@ export default async function NewPayeePage({
           <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
         </>
       )}
-      <PayeeForm
-        people={await peopleOptions(ctx)}
-        {...(personId ? { defaultPersonId: personId } : {})}
-      />
+      <FormCard>
+        <PayeeForm
+          people={await peopleOptions(ctx)}
+          {...(personId ? { defaultPersonId: personId } : {})}
+        />
+      </FormCard>
     </div>
   );
 }

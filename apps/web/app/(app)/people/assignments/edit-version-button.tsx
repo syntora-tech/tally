@@ -2,7 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useIsV2 } from '@/components/v2/ui-version';
 import {
   Sheet,
   SheetContent,
@@ -22,6 +24,7 @@ export function EditVersionButton(props: Props) {
   const [open, setOpen] = useState(false);
   const t = useTranslations('terms');
   const tc = useTranslations('common');
+  const v2 = useIsV2();
   const close = useCallback(() => {
     setOpen(false);
   }, []);
@@ -34,16 +37,30 @@ export function EditVersionButton(props: Props) {
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-label={t('editVersionAria', { month: props.label })}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        {tc('edit')}
-      </Button>
+      {v2 ? (
+        <Button
+          size="icon-sm"
+          variant="outline"
+          aria-label={t('editVersionAria', { month: props.label })}
+          title={tc('edit')}
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          <Pencil />
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={t('editVersionAria', { month: props.label })}
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          {tc('edit')}
+        </Button>
+      )}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="overflow-y-auto sm:max-w-lg">
           <SheetHeader>

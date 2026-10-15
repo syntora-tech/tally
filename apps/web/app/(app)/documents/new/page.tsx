@@ -7,6 +7,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('newDocument');
 
@@ -42,14 +43,16 @@ export default async function NewDocumentPage({
           <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
         </>
       )}
-      <DocumentForm
-        targets={targets}
-        initialLinks={validEntity ? [`${validEntity.type}:${validEntity.id}`] : []}
-        {...(type ? { initialType: type } : {})}
-        cancelHref={
-          validEntity ? (BACK[validEntity.type]?.(validEntity.id) ?? '/documents') : '/documents'
-        }
-      />
+      <FormCard>
+        <DocumentForm
+          targets={targets}
+          initialLinks={validEntity ? [`${validEntity.type}:${validEntity.id}`] : []}
+          {...(type ? { initialType: type } : {})}
+          cancelHref={
+            validEntity ? (BACK[validEntity.type]?.(validEntity.id) ?? '/documents') : '/documents'
+          }
+        />
+      </FormCard>
     </div>
   );
 }

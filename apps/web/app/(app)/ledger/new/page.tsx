@@ -7,6 +7,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('newTransaction');
 
@@ -29,7 +30,9 @@ export default async function NewTransactionPage() {
           <p className="text-muted-foreground">{t('subtitle')}</p>
         </div>
       )}
-      <TransactionForm today={ctx.today} {...options} />
+      <FormCard>
+        <TransactionForm today={ctx.today} {...options} />
+      </FormCard>
     </div>
   );
 }

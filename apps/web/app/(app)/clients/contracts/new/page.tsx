@@ -8,6 +8,7 @@ import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { FormCard } from '@/components/v2/form-card';
 
 export const generateMetadata = pageTitle('newContract');
 
@@ -46,24 +47,26 @@ export default async function NewContractPage({
           <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
         </>
       )}
-      <ContractForm
-        counterpartyName={counterpartyName}
-        contract={{
-          kind: clientId ? 'client' : 'fop',
-          number: '',
-          signedOn: null,
-          clientId: clientId ?? null,
-          payeeId: payeeId ?? null,
-          currency,
-          paymentDueRule: { type: 'day_of_month', day: 20 },
-          invoiceDateRule: { type: 'first_working_day_after_period' },
-          actDateRule: { type: 'last_working_day_of_period' },
-          invoiceTemplateFileId: null,
-          actTemplateFileId: null,
-          numberSequenceKey: null,
-          status: 'active',
-        }}
-      />
+      <FormCard>
+        <ContractForm
+          counterpartyName={counterpartyName}
+          contract={{
+            kind: clientId ? 'client' : 'fop',
+            number: '',
+            signedOn: null,
+            clientId: clientId ?? null,
+            payeeId: payeeId ?? null,
+            currency,
+            paymentDueRule: { type: 'day_of_month', day: 20 },
+            invoiceDateRule: { type: 'first_working_day_after_period' },
+            actDateRule: { type: 'last_working_day_of_period' },
+            invoiceTemplateFileId: null,
+            actTemplateFileId: null,
+            numberSequenceKey: null,
+            status: 'active',
+          }}
+        />
+      </FormCard>
     </div>
   );
 }
