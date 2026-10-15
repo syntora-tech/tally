@@ -441,14 +441,15 @@ export const payItem = defineService({
       const allReady = lines.every((l) => l.status === 'payable' || l.status === 'paid');
       const total = fiat ? item.item.totalUah : item.item.totalUsd;
       if (total === null) return err(serviceError('validation_error', 'payroll.rateFirst'));
-      const released = lines.filter((l) => l.status === 'payable' || l.status === 'paid');
-      const payableUsd = sum(released.filter((l) => l.currency !== 'UAH').map((l) => l.amount));
-      const payableUah = sum(released.filter((l) => l.currency === 'UAH').map((l) => l.amount));
+      // The lines still held back come off the total, so adjustments count as payable.
+      const held = lines.filter((l) => l.status !== 'payable' && l.status !== 'paid');
+      const heldUsd = sum(held.filter((l) => l.currency !== 'UAH').map((l) => l.amount));
+      const heldUah = sum(held.filter((l) => l.currency === 'UAH').map((l) => l.amount));
       const payable = allReady
         ? toDecimal(total)
-        : fiat
-          ? payableUsd.times(toDecimal(item.item.payoutFxRate ?? '0')).plus(payableUah)
-          : payableUsd;
+        : toDecimal(total).minus(
+            fiat ? heldUsd.times(toDecimal(item.item.payoutFxRate ?? '0')).plus(heldUah) : heldUsd,
+          );
       const after = toDecimal(item.item.paidAmount).plus(input.amount);
       if (after.gt(payable.toDecimalPlaces(2)) && !input.overrideReason) {
         return err(
