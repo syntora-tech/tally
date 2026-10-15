@@ -15,11 +15,12 @@ export type FilterField =
       options: { value: string; label: string }[];
     }
   | { kind: 'date'; name: string; label: string }
+  | { kind: 'text'; name: string; label: string; placeholder?: string; inputMode?: 'decimal' }
   | { kind: 'toggle'; name: string; label: string };
 
 /**
- * Filters that apply as soon as they change: each one rewrites its query parameter, and `reset`
- * drops the listed ones. Parameters named in `resets` (e.g. a page size) go back to default.
+ * Filters that apply as soon as they change (text ones on Enter or leaving the field): each one
+ * rewrites its query parameter. Parameters named in `resets` (e.g. a page size) go back to default.
  */
 export function AutoFilters({
   fields,
@@ -78,6 +79,27 @@ export function AutoFilters({
             >
               {f.label}
             </button>
+          );
+        }
+        if (f.kind === 'text') {
+          return (
+            <input
+              key={`${f.name}:${value}`}
+              type="search"
+              aria-label={f.label}
+              placeholder={f.placeholder ?? f.label}
+              inputMode={f.inputMode}
+              defaultValue={value}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') set({ [f.name]: e.currentTarget.value.trim() });
+              }}
+              onBlur={(e) => {
+                if (e.currentTarget.value.trim() !== value) {
+                  set({ [f.name]: e.currentTarget.value.trim() });
+                }
+              }}
+              className={cn(control, 'w-40', value && 'border-foreground')}
+            />
           );
         }
         if (f.kind === 'date') {

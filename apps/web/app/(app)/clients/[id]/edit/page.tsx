@@ -4,6 +4,8 @@ import { requireRole } from '@/server/request-context';
 import { getClient } from '@/server/services/clients';
 import { ClientForm } from '../../client-form';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('editClient');
 
@@ -16,9 +18,16 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   if (result.isErr()) notFound();
   const c = result.value.client;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
+      {v2 ? (
+        <PageHeader title={c.shortName ?? c.legalName} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
+        </>
+      )}
       <ClientForm
         client={{
           id: c.id,

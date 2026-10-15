@@ -4,6 +4,8 @@ import { requireRole } from '@/server/request-context';
 import { getPerson } from '@/server/services/people';
 import { PersonForm } from '../../person-form';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('edit');
 
@@ -14,9 +16,16 @@ export default async function EditPersonPage({ params }: { params: Promise<{ id:
   if (result.isErr()) notFound();
   const p = result.value;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{p.fullName}</h1>
+      {v2 ? (
+        <PageHeader title={p.fullName} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{p.fullName}</h1>
+        </>
+      )}
       <PersonForm
         person={{
           id: p.id,

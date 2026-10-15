@@ -7,6 +7,8 @@ import { getPerson } from '@/server/services/people';
 import { AssignmentForm } from '../../../assignments/assignment-form';
 import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('newAssignment');
 
@@ -19,9 +21,16 @@ export default async function NewAssignmentPage({ params }: { params: Promise<{ 
   const contracts = (await contractOptions.run(ctx, {})).unwrapOr([]);
   const annexes = (await annexOptions.run(ctx, {})).unwrapOr([]);
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
+      {v2 ? (
+        <PageHeader title={t('newTitle')} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
+        </>
+      )}
       <AssignmentForm
         personName={person.value.fullName}
         contracts={contracts}

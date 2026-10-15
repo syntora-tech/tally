@@ -9,6 +9,11 @@ import { searchPeople } from '@/server/services/people';
 import { PeopleTable, type PeopleRow } from './people-table';
 import { getTranslations } from 'next-intl/server';
 import { getLabels, localizeForUser, pageTitle } from '@/server/i18n';
+import { AutoFilters } from '@/components/v2/auto-filters';
+import { RowMenu } from '@/components/v2/form-dialog';
+import { PageHeader } from '@/components/v2/page-header';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PeopleTabs } from './people-tabs';
 
 export const generateMetadata = pageTitle('people');
 
@@ -50,6 +55,67 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
   const canWrite = FINANCE_ROLES.includes(ctx.actor.role);
   const t = await getTranslations('people');
   const { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS } = await getLabels();
+
+  if ((await getUiPrefs()).version === 'v2') {
+    const tc = await getTranslations('common');
+    const option = (labels: Record<string, string>) =>
+      Object.entries(labels).map(([value, label]) => ({ value, label }));
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader title={t('title')} help={t('subtitle')}>
+          <RowMenu
+            label={tc('actions')}
+            entries={[
+              {
+                label: t('exportCsv'),
+                href: `/api/people/export?${new URLSearchParams(filters).toString()}`,
+                download: true,
+              },
+            ]}
+          />
+          {canWrite && <Button render={<Link href="/people/new" />}>+ {t('add')}</Button>}
+        </PageHeader>
+        {canWrite && <PeopleTabs active="people" />}
+        <AutoFilters
+          label={t('filters')}
+          clearLabel={tc('clearFilters')}
+          fields={[
+            { kind: 'text', name: 'stack', label: t('stack'), placeholder: 'Solidity, React' },
+            { kind: 'text', name: 'seniority', label: t('seniority'), placeholder: 'Senior' },
+            { kind: 'text', name: 'maxRate', label: t('maxRate'), inputMode: 'decimal' },
+            { kind: 'text', name: 'location', label: t('location') },
+            {
+              kind: 'select',
+              name: 'bench',
+              label: t('bench'),
+              allLabel: t('anyFem'),
+              options: option(BENCH_LABELS),
+            },
+            {
+              kind: 'select',
+              name: 'allocation',
+              label: t('allocation'),
+              allLabel: t('anyMasc'),
+              options: option(ALLOCATION_LABELS),
+            },
+            {
+              kind: 'select',
+              name: 'status',
+              label: t('status'),
+              allLabel: t('anyMasc'),
+              options: option(PERSON_STATUS_LABELS),
+            },
+            { kind: 'date', name: 'availableOn', label: t('availableOn') },
+          ]}
+        />
+        {result.isErr() ? (
+          <p className="text-destructive">{(await localizeForUser(result.error)).message}</p>
+        ) : (
+          <PeopleTable rows={rows} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

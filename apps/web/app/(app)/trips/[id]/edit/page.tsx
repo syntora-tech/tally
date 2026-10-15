@@ -7,6 +7,8 @@ import { searchPeople } from '@/server/services/people';
 import { getTrip } from '@/server/services/trips';
 import { pageTitle } from '@/server/i18n';
 import { TripForm } from '../../trip-form';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('editTrip');
 
@@ -21,13 +23,20 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   if (card.isErr()) notFound();
   const { trip, participants } = card.value;
   const ids = participants.map((p) => p.personId);
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Link href={`/trips/${id}`} className="text-sm text-muted-foreground hover:underline">
           ← {trip.title}
         </Link>
-        <h1 className="text-2xl font-semibold">{t('edit')}</h1>
+        {v2 ? (
+          <PageHeader title={t('edit')} />
+        ) : (
+          <>
+            <h1 className="text-2xl font-semibold">{t('edit')}</h1>
+          </>
+        )}
       </div>
       <TripForm
         value={{ ...trip, participantIds: ids }}

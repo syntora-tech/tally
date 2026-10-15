@@ -5,6 +5,8 @@ import { linkTargets } from '@/server/services/documents/registry';
 import { DocumentForm } from '../document-form';
 import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('newDocument');
 
@@ -30,9 +32,16 @@ export default async function NewDocumentPage({
       ? { type: entityType as LinkEntityType, id: entityId }
       : null;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
+      {v2 ? (
+        <PageHeader title={t('newTitle')} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{t('newTitle')}</h1>
+        </>
+      )}
       <DocumentForm
         targets={targets}
         initialLinks={validEntity ? [`${validEntity.type}:${validEntity.id}`] : []}

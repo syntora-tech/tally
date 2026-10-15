@@ -1042,7 +1042,15 @@
     "location": "Location",
     "contactOwner": "Contact person",
     "payee": "Payout recipient",
-    "notes": "Notes"
+    "notes": "Notes",
+    "v2": {
+      "tabs": {
+        "overview": "Overview",
+        "money": "Wallets and taxes",
+        "documents": "Documents",
+        "history": "History"
+      }
+    }
   },
   "personAssignments": {
     "title": "Assignments",

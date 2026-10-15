@@ -5,6 +5,8 @@ import { getContract } from '@/server/services/clients';
 import { ContractForm, type ContractFormValues } from '../../contract-form';
 import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('editContract');
 
@@ -18,9 +20,16 @@ export default async function EditContractPage({ params }: { params: Promise<{ i
   if (result.isErr()) notFound();
   const { contract: c, clientName, payeeName } = result.value;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
+      {v2 ? (
+        <PageHeader title={<>{t('title', { number: c.number })}</>} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
+        </>
+      )}
       <ContractForm
         counterpartyName={clientName ?? payeeName ?? ''}
         contract={{

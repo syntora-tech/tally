@@ -1042,7 +1042,15 @@
     "location": "Локація",
     "contactOwner": "Контактна особа",
     "payee": "Одержувач виплат",
-    "notes": "Нотатки"
+    "notes": "Нотатки",
+    "v2": {
+      "tabs": {
+        "overview": "Огляд",
+        "money": "Гаманці й податки",
+        "documents": "Документи",
+        "history": "Історія"
+      }
+    }
   },
   "personAssignments": {
     "title": "Залучення",

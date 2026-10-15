@@ -1,4 +1,4 @@
-import { addMonths, toDecimal } from '@tally/domain';
+import { addMonths, isAssignmentActive, toDecimal, type LocalDate } from '@tally/domain';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -22,6 +22,10 @@ import { AddVersionForm } from '../add-version-form';
 import { AgencyVersionForm } from '../agency-version-form';
 import { EditVersionButton } from '../edit-version-button';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { HelpTip } from '@/components/v2/help-tip';
+import { PageHeader } from '@/components/v2/page-header';
+import { Status } from '@/components/v2/status';
+import { getUiPrefs } from '@/server/ui-prefs';
 
 export const generateMetadata = pageTitle('assignment');
 
@@ -66,78 +70,8 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   } = labels;
   const month = fmt.month;
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            <Link href={`/people/${a.personId}`} className="hover:underline">
-              {personName}
-            </Link>
-            {' · '}
-            {a.isInternal ? (
-              t('internal')
-            ) : (
-              <Link href={`/clients/${clientId ?? ''}`} className="hover:underline">
-                {clientName}
-              </Link>
-            )}
-          </h1>
-          <p className="text-muted-foreground">
-            {[a.roleTitle, annexLabel ?? a.sowRef, contractNumber].filter(Boolean).join(' · ')} ·
-            FTE {a.fte} · {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
-          </p>
-        </div>
-        <Button variant="outline" render={<Link href={`/people/assignments/${a.id}/edit`} />}>
-          {tc('edit')}
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t('marginTitle')}</CardTitle>
-          <CardDescription>
-            {t('marginDescription', {
-              basis: margin
-                ? t('marginBasis', { month: month(margin.month), hours: margin.workHours })
-                : t('currentMonth'),
-            })}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {margin ? (
-            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              <div>
-                <div className="text-muted-foreground">{t('toClient')}</div>
-                <div className="text-lg font-medium">
-                  {fmt.amount(margin.billing, margin.currency)}
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">{t('toPerson')}</div>
-                <div className="text-lg font-medium">{fmt.amount(margin.pay, margin.currency)}</div>
-              </div>
-              {margin.agency !== '0.00' && (
-                <div>
-                  <div className="text-muted-foreground">{t('agencyTitle')}</div>
-                  <div className="text-lg font-medium">
-                    {fmt.amount(margin.agency, margin.currency)}
-                  </div>
-                </div>
-              )}
-              <div>
-                <div className="text-muted-foreground">{t('margin')}</div>
-                <div className="text-lg font-semibold" data-testid="assignment-margin">
-                  {fmt.amount(margin.margin, margin.currency)}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('noMargin')}</p>
-          )}
-        </CardContent>
-      </Card>
-
+  const details = (
+    <>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader>
@@ -371,6 +305,158 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         <LinkedDocuments ctx={ctx} entityType="assignment" entityId={a.id} canAdd />
         <AuditHistory ctx={ctx} tableName="assignment" rowId={a.id} />
       </div>
+    </>
+  );
+
+  if ((await getUiPrefs()).version === 'v2') {
+    const active = isAssignmentActive(
+      { startsOn: a.startsOn as LocalDate, endsOn: a.endsOn as LocalDate | null },
+      ctx.today,
+    );
+    const tp = await getTranslations('personAssignments');
+    const kpi = (label: React.ReactNode, value: string, testId?: string) => (
+      <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">{label}</div>
+        <div className="font-heading text-xl font-bold tabular-nums" data-testid={testId}>
+          {value}
+        </div>
+      </div>
+    );
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title={
+            <>
+              <Link href={`/people/${a.personId}`} className="hover:underline">
+                {personName}
+              </Link>
+              {' → '}
+              {a.isInternal ? (
+                t('internal')
+              ) : (
+                <Link href={`/clients/${clientId ?? ''}`} className="hover:underline">
+                  {clientName}
+                </Link>
+              )}
+            </>
+          }
+          meta={
+            <span className="flex flex-wrap items-center gap-2">
+              <Status tone={active ? 'success' : 'neutral'}>
+                {active ? tp('active') : tp('inactive')}
+              </Status>
+              {[a.roleTitle, annexLabel ?? a.sowRef, contractNumber].filter(Boolean).join(' · ')} ·
+              FTE {a.fte} · {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
+            </span>
+          }
+        >
+          <Button variant="outline" render={<Link href={`/people/assignments/${a.id}/edit`} />}>
+            {tc('edit')}
+          </Button>
+        </PageHeader>
+        {margin ? (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {kpi(t('toClient'), fmt.amount(margin.billing, margin.currency))}
+            {kpi(t('toPerson'), fmt.amount(margin.pay, margin.currency))}
+            {margin.agency !== '0.00' &&
+              kpi(t('agencyTitle'), fmt.amount(margin.agency, margin.currency))}
+            {kpi(
+              <>
+                {t('margin')}
+                <HelpTip label={tc('help')}>
+                  {t('marginDescription', {
+                    basis: t('marginBasis', {
+                      month: month(margin.month),
+                      hours: margin.workHours,
+                    }),
+                  })}
+                </HelpTip>
+              </>,
+              fmt.amount(margin.margin, margin.currency),
+              'assignment-margin',
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('noMargin')}</p>
+        )}
+        {details}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            <Link href={`/people/${a.personId}`} className="hover:underline">
+              {personName}
+            </Link>
+            {' · '}
+            {a.isInternal ? (
+              t('internal')
+            ) : (
+              <Link href={`/clients/${clientId ?? ''}`} className="hover:underline">
+                {clientName}
+              </Link>
+            )}
+          </h1>
+          <p className="text-muted-foreground">
+            {[a.roleTitle, annexLabel ?? a.sowRef, contractNumber].filter(Boolean).join(' · ')} ·
+            FTE {a.fte} · {fmt.date(a.startsOn)} — {a.endsOn ? fmt.date(a.endsOn) : t('noEnd')}
+          </p>
+        </div>
+        <Button variant="outline" render={<Link href={`/people/assignments/${a.id}/edit`} />}>
+          {tc('edit')}
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('marginTitle')}</CardTitle>
+          <CardDescription>
+            {t('marginDescription', {
+              basis: margin
+                ? t('marginBasis', { month: month(margin.month), hours: margin.workHours })
+                : t('currentMonth'),
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {margin ? (
+            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+              <div>
+                <div className="text-muted-foreground">{t('toClient')}</div>
+                <div className="text-lg font-medium">
+                  {fmt.amount(margin.billing, margin.currency)}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">{t('toPerson')}</div>
+                <div className="text-lg font-medium">{fmt.amount(margin.pay, margin.currency)}</div>
+              </div>
+              {margin.agency !== '0.00' && (
+                <div>
+                  <div className="text-muted-foreground">{t('agencyTitle')}</div>
+                  <div className="text-lg font-medium">
+                    {fmt.amount(margin.agency, margin.currency)}
+                  </div>
+                </div>
+              )}
+              <div>
+                <div className="text-muted-foreground">{t('margin')}</div>
+                <div className="text-lg font-semibold" data-testid="assignment-margin">
+                  {fmt.amount(margin.margin, margin.currency)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('noMargin')}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {details}
     </div>
   );
 }

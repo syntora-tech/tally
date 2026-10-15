@@ -6,6 +6,8 @@ import { annexOptions } from '@/server/services/contracts/annexes';
 import { AssignmentForm } from '../../assignment-form';
 import { getTranslations } from 'next-intl/server';
 import { pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('editAssignment');
 
@@ -20,9 +22,16 @@ export default async function EditAssignmentPage({ params }: { params: Promise<{
     ? (await annexOptions.run(ctx, { contractId: a.contractId })).unwrapOr([])
     : [];
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('editTitle')}</h1>
+      {v2 ? (
+        <PageHeader title={t('editTitle')} />
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">{t('editTitle')}</h1>
+        </>
+      )}
       <AssignmentForm
         personName={personName}
         contracts={[]}

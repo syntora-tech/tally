@@ -16,6 +16,10 @@ import { CvUpload } from './cv-upload';
 import { DefaultPayeeForm } from './default-payee-form';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { PageHeader } from '@/components/v2/page-header';
+import { Status } from '@/components/v2/status';
+import { TabsNav } from '@/components/v2/tabs-nav';
+import { getUiPrefs } from '@/server/ui-prefs';
 
 export const generateMetadata = pageTitle('person');
 
@@ -28,7 +32,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PersonPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await requireRole(ALL_ROLES);
   const { id } = await params;
   const result = await getPerson.run(ctx, { id });
@@ -42,6 +52,135 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const [t, tc, fmt, { ALLOCATION_LABELS, BENCH_LABELS, PERSON_STATUS_LABELS }] = await Promise.all(
     [getTranslations('personCard'), getTranslations('common'), getFormat(), getLabels()],
   );
+
+  if ((await getUiPrefs()).version === 'v2') {
+    const tv = await getTranslations('personCard.v2');
+    const requested = (await searchParams).tab;
+    const tabs: ('overview' | 'money' | 'documents' | 'history')[] = [
+      'overview',
+      ...(isFinance ? (['money'] as const) : []),
+      'documents',
+      'history',
+    ];
+    const tab = (tabs as readonly string[]).includes(requested as string)
+      ? (requested as string)
+      : 'overview';
+    const initials = p.fullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('');
+    const fact = (label: string, value: React.ReactNode) => (
+      <div className="flex items-baseline justify-between gap-4 py-1.5">
+        <dt className="text-muted-foreground">{label}</dt>
+        <dd className="text-right">{value}</dd>
+      </div>
+    );
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-muted font-heading text-lg font-bold">
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <PageHeader
+              title={p.fullName}
+              meta={
+                <span className="flex flex-wrap items-center gap-2">
+                  {[p.position ?? t('noPosition'), p.seniority.join(', ')]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  <Status tone={p.status === 'active' ? 'success' : 'neutral'}>
+                    {PERSON_STATUS_LABELS[p.status]}
+                  </Status>
+                  <Status
+                    tone={p.bench === 'free' ? 'info' : p.bench === 'busy' ? 'neutral' : 'warning'}
+                  >
+                    {BENCH_LABELS[p.bench]} · FTE {p.load}
+                  </Status>
+                </span>
+              }
+            >
+              {isFinance && (
+                <Button variant="outline" render={<Link href={`/people/${p.id}/edit`} />}>
+                  {tc('edit')}
+                </Button>
+              )}
+            </PageHeader>
+          </div>
+        </div>
+        <TabsNav
+          label={p.fullName}
+          active={tab}
+          tabs={tabs.map((k) => ({
+            key: k,
+            label: tv(`tabs.${k}`),
+            href: `/people/${p.id}?tab=${k}`,
+          }))}
+        />
+        {tab === 'overview' && (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+            <section className="rounded-lg border bg-card" aria-label={t('profile')}>
+              <h2 className="border-b px-4 py-3 font-heading font-semibold">{t('profile')}</h2>
+              <dl className="px-4 py-3 text-sm">
+                {fact(
+                  t('stack'),
+                  <span className="flex flex-wrap justify-end gap-1">
+                    {p.stack.length ? p.stack.map((tag) => <Status key={tag}>{tag}</Status>) : '—'}
+                  </span>,
+                )}
+                {fact(t('domains'), p.domains.join(', ') || '—')}
+                {fact(
+                  t('marketRate'),
+                  p.marketRateUsd ? t('perHour', { amount: fmt.amount(p.marketRateUsd) }) : '—',
+                )}
+                {fact(t('allocation'), p.allocation ? ALLOCATION_LABELS[p.allocation] : '—')}
+                {fact(
+                  t('availableFrom'),
+                  p.availabilityFrom ? fmt.date(p.availabilityFrom) : t('now'),
+                )}
+                {fact(t('location'), [p.location, p.timezone].filter(Boolean).join(', ') || '—')}
+                {fact(t('contactOwner'), p.contactOwner ?? '—')}
+                {p.notes && fact(t('notes'), p.notes)}
+              </dl>
+            </section>
+            <div className="flex flex-col gap-5">
+              {isFinance && <AssignmentsCard ctx={ctx} personId={p.id} />}
+              {isFinance && (
+                <section className="rounded-lg border bg-card" aria-label={t('payee')}>
+                  <h2 className="border-b px-4 py-3 font-heading font-semibold">{t('payee')}</h2>
+                  <div className="px-4 py-3">
+                    <DefaultPayeeForm
+                      personId={p.id}
+                      currentPayeeId={p.defaultPayee?.id ?? null}
+                      options={payeeOptions}
+                    />
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+        )}
+        {tab === 'money' && isFinance && (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+            <WalletsCard ctx={ctx} owner={{ name: 'personId', value: p.id }} />
+            <PayoutChargesCard ctx={ctx} personId={p.id} />
+          </div>
+        )}
+        {tab === 'documents' && (
+          <LinkedDocuments
+            ctx={ctx}
+            entityType="person"
+            entityId={p.id}
+            canAdd={isFinance}
+            action={isFinance ? <CvUpload personId={p.id} /> : undefined}
+          />
+        )}
+        {tab === 'history' && <AuditHistory ctx={ctx} tableName="person" rowId={p.id} />}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
