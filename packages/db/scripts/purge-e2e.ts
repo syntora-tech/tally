@@ -4,7 +4,8 @@
  *   pnpm db:purge-e2e            # dry run: prints what would be deleted
  *   pnpm db:purge-e2e --apply    # deletes in one transaction, verifies FK integrity, else rolls back
  *
- * Seeds are rows named like test fixtures (`E2E …`, `unique()` suffixes) and far-future periods;
+ * Seeds are rows named like test fixtures (`E2E …`, `unique()` suffixes) and far-future periods,
+ * acts and invoices;
  * everything that references them through foreign keys follows. Protected tables are guarded by
  * triggers, so the delete runs with `session_replication_role = replica` — which also disables FK
  * checks, hence the explicit orphan check before commit.
@@ -14,7 +15,8 @@ import { join } from 'node:path';
 import postgres from 'postgres';
 
 const FIXTURE = String.raw`^E2E|\m(reg|trip|dos|ag|94) [0-9a-z]{7,9}$`;
-const FAR_FUTURE_MONTH = '2040-01-01';
+// Real books start in 2025; e2e and integration tests work in 2030 and later.
+const FAR_FUTURE = '2030-01-01';
 
 const SEED_COLUMNS: readonly (readonly [string, string])[] = [
   ['client', 'legal_name'],
@@ -90,12 +92,18 @@ try {
       rows.map((r) => r.id),
     );
   }
-  const farPeriods = await sql<{ id: string }[]>`
-    select id::text from period where month >= ${FAR_FUTURE_MONTH}`;
-  add(
-    'period',
-    farPeriods.map((r) => r.id),
-  );
+  for (const [table, column] of [
+    ['period', 'month'],
+    ['supplier_act', 'act_date'],
+    ['invoice', 'issue_date'],
+  ] as const) {
+    const rows = await sql<{ id: string }[]>`
+      select id::text from ${sql(table)} where ${sql(column)} >= ${FAR_FUTURE}`;
+    add(
+      table,
+      rows.map((r) => r.id),
+    );
+  }
 
   // Earlier replica-mode test cleanups could delete a parent without its children; such rows
   // point at nothing and are junk too.
