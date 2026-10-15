@@ -489,7 +489,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                 !a.rateLocked &&
                                 a.periodFrom &&
                                 a.periodTo &&
-                                a.periodFrom < a.periodTo &&
+                                (a.periodFrom < a.periodTo || !next) &&
                                 (activitiesIn(i, a).length > 1 || splitsByAmount(i, a)) && (
                                   <SplitActForm
                                     actId={a.id}
@@ -497,6 +497,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                     periodTo={a.periodTo}
                                     activities={activitiesIn(i, a)}
                                     byAmount={splitsByAmount(i, a)}
+                                    extendable={!next}
                                   />
                                 )}
                             </li>

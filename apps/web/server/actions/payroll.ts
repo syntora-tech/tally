@@ -111,10 +111,12 @@ export async function splitActAction(
   };
   const boundary = parseLocalDate(field('boundary'));
   const first = field('side') !== 'second';
+  // The last act may run on past the act's own end (A-098).
+  const end = field('actEnd') || field('actTo');
   const range = boundary.isOk()
     ? first
       ? { periodFrom: field('actFrom'), periodTo: boundary.value }
-      : { periodFrom: addDays(boundary.value, 1), periodTo: field('actTo') }
+      : { periodFrom: addDays(boundary.value, 1), periodTo: end }
     : { periodFrom: '', periodTo: '' };
   const result = await splitActByActivity.run(ctx, {
     actId: field('actId'),
@@ -123,6 +125,7 @@ export async function splitActAction(
     adjustmentIds: formData.getAll('adjustmentIds'),
     amountUsd: field('amountUsd'),
     ...range,
+    periodEnd: end === field('actTo') ? undefined : end,
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');

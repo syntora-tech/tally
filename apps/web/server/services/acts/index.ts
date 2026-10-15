@@ -394,28 +394,38 @@ export const splitActInput = z.object({
   /** The new act's period: at the start or the end of the act being split. */
   periodFrom: localDateString,
   periodTo: localDateString,
+  /** The last day of the later act, when it runs past the act being split (A-098). */
+  periodEnd: optionalLocalDate.describe(
+    'Last day of the later of the two acts, YYYY-MM-DD; default the last day of the act being split. Only the last act of a closed payout may run on into the next months — up to the day its last part is paid (A-098)',
+  ),
 });
 
 /**
  * Cuts the chosen days off a draft act into a new one (A-085): the days must start or end with
- * the act's period and leave it some; the old act keeps the other days.
+ * the act's period and leave it some; the old act keeps the other days. The last act of a closed
+ * payout may run on past its month, up to the day its last part is paid (A-098).
  */
 export async function carveAct(
   tx: DbTransaction,
   act: SupplierAct,
-  range: { periodFrom: string; periodTo: string },
+  range: { periodFrom: string; periodTo: string; periodEnd?: string | null | undefined },
   values: Partial<typeof supplierAct.$inferInsert>,
 ) {
   const from = (act.periodFrom ?? range.periodFrom) as LocalDate;
   const to = (act.periodTo ?? range.periodTo) as LocalDate;
-  const atStart = range.periodFrom === from && range.periodTo < to;
-  const atEnd = range.periodTo === to && range.periodFrom > from;
+  const end = (range.periodEnd ?? to) as LocalDate;
+  if (end !== to) {
+    const extended = await extendableTo(tx, act, to, end);
+    if (extended.isErr()) return err(extended.error);
+  }
+  const atStart = range.periodFrom === from && range.periodTo < end;
+  const atEnd = range.periodTo === end && range.periodFrom > from;
   if (range.periodFrom > range.periodTo || (!atStart && !atEnd)) {
     return err(serviceError('validation_error', 'acts.splitAtEdge'));
   }
   const cal = await loadCalendar(tx);
   const keep = atStart
-    ? { from: addDays(range.periodTo as LocalDate, 1), to }
+    ? { from: addDays(range.periodTo as LocalDate, 1), to: end }
     : { from, to: addDays(range.periodFrom as LocalDate, -1) };
   await tx
     .update(supplierAct)
@@ -444,6 +454,36 @@ export async function carveAct(
     .returning({ id: supplierAct.id });
   return created ? ok(created) : err(serviceError('internal_error', 'general.createFailed'));
 }
+
+/**
+ * A payout's last act may run on into the next months (A-098): a month paid in parts is acted up
+ * to the day its last part is paid, after the client pays. Acts before the close keep their month.
+ */
+async function extendableTo(tx: DbTransaction, act: SupplierAct, to: LocalDate, end: LocalDate) {
+  if (!act.payrollItemId) return err(serviceError('validation_error', 'acts.splitEndPayoutOnly'));
+  if (end < to) return err(serviceError('validation_error', 'acts.splitEndBeforeAct'));
+  const [item] = await tx
+    .select({ month: period.month })
+    .from(payrollItem)
+    .innerJoin(period, eq(period.id, payrollItem.periodId))
+    .where(eq(payrollItem.id, act.payrollItemId));
+  const limit = endOfMonth(addMonths((item?.month ?? to) as LocalDate, SPLIT_END_MONTHS));
+  if (end > limit) {
+    return err(
+      serviceError(
+        'validation_error',
+        msg('acts.splitEndTooLate', { limit: limit.split('-').reverse().join('.') }),
+      ),
+    );
+  }
+  const later = (await monthlyActsOf(tx, act.payrollItemId)).some(
+    (a) => a.id !== act.id && (a.periodFrom ?? '') > to,
+  );
+  return later ? err(serviceError('validation_error', 'acts.splitEndLastOnly')) : ok(end);
+}
+
+/** How many months past its own a payout's acts may run (A-098). */
+const SPLIT_END_MONTHS = 3;
 
 /**
  * Splits a draft act by activity (A-085) or by a USD share (A-086): the chosen lines and

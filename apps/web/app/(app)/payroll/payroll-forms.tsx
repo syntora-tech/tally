@@ -565,12 +565,15 @@ export function SplitActForm({
   periodTo,
   activities,
   byAmount,
+  extendable = false,
 }: {
   actId: string;
   periodFrom: string;
   periodTo: string;
   activities: { id: string; kind: 'line' | 'assignment' | 'adjustment'; label: string }[];
   byAmount: boolean;
+  /** The last act of a closed payout: the later act may run on into the next months (A-098). */
+  extendable?: boolean;
 }) {
   const [state, action, pending] = useActionState<PayrollFormState, FormData>(splitActAction, null);
   const t = useTranslations('payDialog');
@@ -580,7 +583,10 @@ export function SplitActForm({
   // Open since a given result; a later successful split closes the form.
   const [openedAt, setOpenedAt] = useState<{ state: PayrollFormState } | null>(null);
   const open = openedAt !== null && !(state !== openedAt.state && state?.ok);
-  const [boundary, setBoundary] = useState<string>(() => midDay(periodFrom, periodTo));
+  const [end, setEnd] = useState(periodTo);
+  const [boundary, setBoundary] = useState<string>(() =>
+    periodFrom < periodTo ? midDay(periodFrom, periodTo) : '',
+  );
   const byActivity = activities.length > 1;
   if (!open) {
     return (
@@ -601,7 +607,11 @@ export function SplitActForm({
       <input type="hidden" name="actId" value={actId} />
       <input type="hidden" name="actFrom" value={periodFrom} />
       <input type="hidden" name="actTo" value={periodTo} />
-      <p className="text-xs text-muted-foreground">{t('splitHint')}</p>
+      {!extendable && <input type="hidden" name="actEnd" value={periodTo} />}
+      <p className="text-xs text-muted-foreground">
+        {t('splitHint')}
+        {extendable && ` ${t('splitEndHint')}`}
+      </p>
       <div className="flex flex-wrap items-end gap-3">
         <FormField
           label={t('splitBoundary')}
@@ -614,13 +624,32 @@ export function SplitActForm({
             type="date"
             value={boundary}
             min={periodFrom}
-            max={prevDay(periodTo)}
+            max={end ? prevDay(end) : undefined}
             onChange={(e) => {
               setBoundary(e.target.value);
             }}
             className="w-40"
           />
         </FormField>
+        {extendable && (
+          <FormField
+            label={t('splitEnd')}
+            htmlFor={`split-end-${actId}`}
+            error={error?.fieldErrors?.periodEnd}
+          >
+            <Input
+              id={`split-end-${actId}`}
+              name="actEnd"
+              type="date"
+              value={end}
+              min={periodTo}
+              onChange={(e) => {
+                setEnd(e.target.value);
+              }}
+              className="w-40"
+            />
+          </FormField>
+        )}
         <fieldset className="flex flex-col gap-1 text-sm">
           <legend className="mb-1 text-xs text-muted-foreground">{t('splitSide')}</legend>
           <label className="flex items-center gap-2">
@@ -629,7 +658,7 @@ export function SplitActForm({
           </label>
           <label className="flex items-center gap-2">
             <input type="radio" name="side" value="second" />
-            {after ? `${fmt.date(after)}–${fmt.date(periodTo)}` : t('splitSecond')}
+            {after && end ? `${fmt.date(after)}–${fmt.date(end)}` : t('splitSecond')}
           </label>
         </fieldset>
       </div>

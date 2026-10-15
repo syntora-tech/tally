@@ -10,6 +10,7 @@ const act = (over: Partial<RegistryAct>): RegistryAct => ({
   type: 'monthly',
   periodFrom: null,
   periodTo: null,
+  payoutMonth: null,
   isLegacy: false,
   signed: false,
   contractId: 'c',
@@ -28,6 +29,14 @@ describe('supplier acts registry', () => {
       ]),
     ).toEqual(['2026-02', '2026-03']);
     expect(missingMonths([act({ actDate: '2026-05-29', periodFrom: '2026-05-01' })])).toEqual([]);
+    // The last act of the September payout runs into October (A-098): October is still missing.
+    expect(
+      missingMonths([
+        act({ actDate: '2026-08-31', periodFrom: '2026-08-01' }),
+        act({ actDate: '2026-10-09', periodFrom: '2026-10-01', payoutMonth: '2026-09-01' }),
+        act({ actDate: '2026-11-30', periodFrom: '2026-11-01' }),
+      ]),
+    ).toEqual(['2026-10']);
   });
 
   it('totals issued acts per counterparty and overall', () => {

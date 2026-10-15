@@ -131,6 +131,24 @@ test('a single-activity act is split by a USD share at a boundary day (A-086)', 
   await expect(acts.getByText('41,500.00')).toBeVisible();
 });
 
+test('the last act runs on into the next month, up to the last payment (A-098)', async ({
+  page,
+}) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  await page.goto(`/payroll?period=${ids.period}`);
+  const acts = page.getByTestId('payout-acts');
+  await acts.getByRole('button', { name: 'Split act' }).last().click();
+  await page.getByLabel('Last act until').fill('2052-10-09');
+  await page.getByLabel('First act up to').fill('2052-09-30');
+  await page.getByLabel(/01\.10\.2052–09\.10\.2052/).check();
+  await page.getByLabel('USD for the new act').fill('500');
+  await page.getByRole('button', { name: 'Split', exact: true }).click();
+  await expect(page.getByText('Act split')).toBeVisible();
+  await expect(acts.getByText('16.09.2052–30.09.2052')).toBeVisible();
+  await expect(acts.getByText('01.10.2052–09.10.2052')).toBeVisible();
+  await expect(acts.getByText('20,750.00')).toHaveCount(2);
+});
+
 test('an empty period opened by mistake is deleted', async ({ page }) => {
   await signIn(page, E2E_OWNER_EMAIL);
   await page.goto(`/periods/${emptyPeriod}`);

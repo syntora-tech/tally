@@ -1,4 +1,4 @@
-import { contract, payee, supplierAct } from '@tally/db/schema';
+import { contract, payee, payrollItem, period, supplierAct } from '@tally/db/schema';
 import { addMonths, startOfMonth, sum, type LocalDate } from '@tally/domain';
 import { and, asc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { ok } from 'neverthrow';
@@ -30,6 +30,8 @@ export type RegistryAct = {
   type: string;
   periodFrom: string | null;
   periodTo: string | null;
+  /** Month of the act's payout, if any: its last act may run on past it (A-098). */
+  payoutMonth: string | null;
   isLegacy: boolean;
   signed: boolean;
   contractId: string;
@@ -51,7 +53,9 @@ export function missingMonths(acts: readonly RegistryAct[]): string[] {
   const months = new Set(
     acts
       .filter((a) => a.type === 'monthly' && a.status !== 'void')
-      .map((a) => (a.periodFrom ?? startOfMonth(a.actDate as LocalDate)).slice(0, 7)),
+      .map((a) =>
+        (a.payoutMonth ?? a.periodFrom ?? startOfMonth(a.actDate as LocalDate)).slice(0, 7),
+      ),
   );
   const sorted = [...months].sort();
   const first = sorted[0];
@@ -111,6 +115,7 @@ export const actsRegistry = defineService({
             type: supplierAct.type,
             periodFrom: supplierAct.periodFrom,
             periodTo: supplierAct.periodTo,
+            payoutMonth: period.month,
             isLegacy: supplierAct.isLegacy,
             signed: sql<boolean>`${supplierAct.signedUrl} is not null`,
             contractId: supplierAct.contractId,
@@ -121,6 +126,8 @@ export const actsRegistry = defineService({
           .from(supplierAct)
           .innerJoin(payee, eq(payee.id, supplierAct.payeeId))
           .innerJoin(contract, eq(contract.id, supplierAct.contractId))
+          .leftJoin(payrollItem, eq(payrollItem.id, supplierAct.payrollItemId))
+          .leftJoin(period, eq(period.id, payrollItem.periodId))
           .where(
             and(
               payeeId ? eq(supplierAct.payeeId, payeeId) : undefined,

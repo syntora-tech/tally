@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(6);
+select plan(8);
 
 insert into public.company (id, name_en, name_ua) values ('10000000-0000-0000-0000-000000000022', 'S', 'С');
 insert into public.payee (id, kind, legal_name_ua) values ('30000000-0000-0000-0000-000000000022', 'fop', 'ФОП 22');
@@ -46,6 +46,23 @@ update public.supplier_act set status = 'issued', number = '9022 - А1', snapsho
   where id = '90000000-0000-0000-0000-000000000022';
 select throws_ok($$ update public.supplier_act set assignment_ids = null where id = '90000000-0000-0000-0000-000000000022' $$,
   'TL001', null, 'the work of an issued act is frozen');
+
+-- A-098: the last act of a payout runs on into the next month and still belongs to its payout's
+-- month, so the next month's act may take the same work.
+insert into public.period (id, month, work_hours) values ('61000000-0000-0000-0000-000000000022', '2039-10-01', 176);
+insert into public.payroll_item (id, period_id, person_id, payout_method, payee_id, total_usd) values
+  ('70000000-0000-0000-0000-000000000022', '60000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000022', 'fiat', '31000000-0000-0000-0000-000000000022', 1000),
+  ('71000000-0000-0000-0000-000000000022', '61000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000022', 'fiat', '31000000-0000-0000-0000-000000000022', 1000);
+insert into public.supplier_act (id, contract_id, payee_id, payroll_item_id, act_date, period_from, period_to, amount_uah, amount_usd, assignment_ids)
+  values ('93000000-0000-0000-0000-000000000022', '51000000-0000-0000-0000-000000000022', '31000000-0000-0000-0000-000000000022',
+          '70000000-0000-0000-0000-000000000022', '2039-10-10', '2039-10-01', '2039-10-10', 0, 1000,
+          array['80000000-0000-0000-0000-000000000022'::uuid]);
+select is(public.act_month(a), '2039-09-01'::date, 'an act of a payout belongs to the payout''s month')
+  from public.supplier_act a where a.id = '93000000-0000-0000-0000-000000000022';
+select lives_ok($$ insert into public.supplier_act (contract_id, payee_id, payroll_item_id, act_date, period_from, period_to, amount_uah, amount_usd, assignment_ids)
+  values ('51000000-0000-0000-0000-000000000022', '31000000-0000-0000-0000-000000000022', '71000000-0000-0000-0000-000000000022',
+          '2039-10-31', '2039-10-01', '2039-10-31', 0, 1000, array['80000000-0000-0000-0000-000000000022'::uuid]) $$,
+  'the next month''s act takes the same work');
 
 select * from finish();
 rollback;
