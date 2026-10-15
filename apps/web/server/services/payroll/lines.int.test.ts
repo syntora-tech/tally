@@ -19,6 +19,7 @@ import { adjustClosedPayout, removePayoutLine } from './lines';
 const h = intHarness('2045-11-10');
 let finance: Awaited<ReturnType<typeof h.user>>;
 let owner: Awaited<ReturnType<typeof h.user>>;
+let splitAct = '';
 const ids = {
   company: '',
   person: '',
@@ -190,6 +191,7 @@ describe('a line out of a closed payout (A-097)', () => {
       periodTo: '2045-10-15',
     });
     const newAct = split._unsafeUnwrap().id;
+    splitAct = newAct;
     const [moved] = await h.db
       .select()
       .from(adjustment)
@@ -201,6 +203,24 @@ describe('a line out of a closed payout (A-097)', () => {
         .set({ amount: '-1' })
         .where(eq(adjustment.id, correction.id ?? '')),
     ).rejects.toThrow();
+  });
+
+  it('an adjustment goes into the chosen draft act, e.g. a one-off rounding (A-100)', async () => {
+    const actAmount = async (id: string) =>
+      (await h.db.select().from(supplierAct).where(eq(supplierAct.id, id)))[0]?.amountUah;
+    const rest = await actAmount(ids.act);
+    const input = { itemId: ids.item, amount: '-0.14', currency: 'UAH', reason: 'Rounding' };
+    expect(
+      (
+        await adjustClosedPayout.run(h.ctxFor(owner), {
+          ...input,
+          actId: '00000000-0000-4000-8000-000000000000',
+        })
+      )._unsafeUnwrapErr().message,
+    ).toBe('payroll.adjustActDraft');
+    (await adjustClosedPayout.run(h.ctxFor(owner), { ...input, actId: splitAct }))._unsafeUnwrap();
+    expect(await actAmount(splitAct)).toBe('2643.86');
+    expect(await actAmount(ids.act)).toBe(rest);
   });
 
   it('refuses once the act is issued', async () => {

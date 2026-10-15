@@ -575,7 +575,17 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                       i.periodStatus === 'closed' &&
                       toDecimal(i.item.paidAmount).isZero() &&
                       i.acts.every((a) => a.status === 'draft') && (
-                        <AdjustClosedForm itemId={i.item.id} fiat={fiat} />
+                        <AdjustClosedForm
+                          itemId={i.item.id}
+                          fiat={fiat}
+                          acts={[...i.acts]
+                            .filter((a) => a.status === 'draft' && !a.rateLocked)
+                            .sort((a, b) => Number(b.isRest) - Number(a.isRest))
+                            .map((a) => ({
+                              id: a.id,
+                              label: `${a.periodFrom && a.periodTo ? `${fmt.date(a.periodFrom)}–${fmt.date(a.periodTo)}` : tp('draftAct')} · ${fmt.amount(a.amountUah, 'UAH')}`,
+                            }))}
+                        />
                       )}
                     {i.group !== 'paid' && (
                       <PayDialog

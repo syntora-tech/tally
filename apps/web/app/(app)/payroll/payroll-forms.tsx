@@ -453,7 +453,16 @@ export function RemoveLineForm({ lineId }: { lineId: string }) {
 }
 
 /** Owner only: an adjustment of an unpaid payout of a closed month (A-099). */
-export function AdjustClosedForm({ itemId, fiat }: { itemId: string; fiat: boolean }) {
+export function AdjustClosedForm({
+  itemId,
+  fiat,
+  acts,
+}: {
+  itemId: string;
+  fiat: boolean;
+  /** Draft acts of the payout, the act of the rest first: where the adjustment goes (A-100). */
+  acts: { id: string; label: string }[];
+}) {
   const [state, action, pending] = useActionState<PayrollFormState, FormData>(
     adjustClosedPayoutAction,
     null,
@@ -481,6 +490,14 @@ export function AdjustClosedForm({ itemId, fiat }: { itemId: string; fiat: boole
           className="h-8 w-24"
           options={currencies.map((c) => ({ value: c, label: c }))}
         />
+        {acts.length > 1 && (
+          <NativeSelect
+            name="actId"
+            aria-label={t('adjustAct')}
+            className="h-8 w-72"
+            options={acts.map((a) => ({ value: a.id, label: `${t('adjustAct')}: ${a.label}` }))}
+          />
+        )}
         <Input
           name="reason"
           placeholder={t('adjustReason')}

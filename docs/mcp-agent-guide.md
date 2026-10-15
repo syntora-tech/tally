@@ -421,7 +421,7 @@ Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-0
 
 A director's salary is a planned expense with parts (A-082, A-097), shown on Payroll without an act; it must not also be an assignment pay line in a FOP payout. When the owner asks, take such a line out of a closed month with `remove_payout_line` (`dryRun` first) and end the assignment with `upsert_assignments` (`endsOn`).
 
-A closed month's amounts are frozen. When the owner asks to correct an unpaid payout of a closed month (e.g. 804 USD should be 803.73), add `adjust_closed_payout` with the signed difference (`-0.27`, USD) and a reason — `dryRun` first; the accrued line stays, the difference shows as an adjustment (A-099). Fix the pay terms for later months with `upsert_assignments`.
+A closed month's amounts are frozen. When the owner asks to correct an unpaid payout of a closed month (e.g. 804 USD should be 803.73), add `adjust_closed_payout` with the signed difference (`-0.27`, USD) and a reason — `dryRun` first; the accrued line stays, the difference shows as an adjustment (A-099). With `actId` it goes into that draft act of the payout, e.g. a one-off rounding of one act to match its document (A-100). Fix the pay terms for later months with `upsert_assignments`.
 
 Payouts follow document → signature → payment (A-096): a FOP payout is paid only against an issued act with its Vchasno link (`signed` in `get_payroll_queue` acts), a contractor abroad only against an issued contractor invoice marked signed (`signedAt` in `list_contractor_invoices`). Issuing and signing stay in the UI; report what is missing rather than suggesting a payment.
 

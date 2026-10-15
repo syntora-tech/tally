@@ -869,7 +869,7 @@ export const TOOLS: readonly ToolDef[] = [
     title: 'Adjust an unpaid payout of a closed month',
     kind: 'write',
     description:
-      'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to an unpaid person payout of a closed month whose act is not issued — the month\'s adjustments are frozen otherwise. Recomputes the payout totals and its draft act at the payout rate. Refuses payouts with payments or an issued act; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
+      'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to an unpaid person payout of a closed month whose act is not issued — the month\'s adjustments are frozen otherwise. actId puts it into one draft act of the payout (acts[].id, e.g. a one-off rounding of -0.14 UAH so that act matches its document, A-100); by default it goes to the act of the rest. Recomputes the payout totals and its draft acts at the payout rate. Refuses payouts with payments or an issued act; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
     service: adjustClosedPayout,
   }),
 ];

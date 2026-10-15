@@ -465,7 +465,8 @@
       "lineItemPaid": "The payout has payments: it no longer changes",
       "lineActIssued": "The payout has an issued act: void it to change the payout",
       "adjustPersonOnly": "Only a person's payout takes adjustments",
-      "adjustOpenPeriod": "The month is open: add the adjustment in the period"
+      "adjustOpenPeriod": "The month is open: add the adjustment in the period",
+      "adjustActDraft": "Choose a draft act of this payout that is not paid"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1640,7 +1641,8 @@
     "adjustAmount": "Amount, e.g. -0.27",
     "adjustReason": "Reason",
     "adjustSubmit": "Add adjustment",
-    "adjusted": "Adjustment added"
+    "adjusted": "Adjustment added",
+    "adjustAct": "Into act"
   },
   "payDialog": {
     "paid": "Payout recorded",

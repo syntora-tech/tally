@@ -135,6 +135,11 @@ export const adjustClosedPayout = defineService({
       .refine((c) => ['USD', 'USDT', 'USDC', 'UAH'].includes(c), 'periods.adjustmentCurrency')
       .default('USD'),
     reason: requiredText('field.reason').describe('Why the payout changes after the close'),
+    actId: z
+      .preprocess((v) => (v === '' ? undefined : v), z.uuid().optional())
+      .describe(
+        'Draft act of the payout (acts[].id) the adjustment goes into; default the act of the rest (A-100)',
+      ),
     dryRun: z.boolean().default(false),
   }),
   handler: async (ctx, input) => {
@@ -150,6 +155,15 @@ export const adjustClosedPayout = defineService({
       if (month?.status !== 'closed') {
         return err(serviceError('conflict', 'payroll.adjustOpenPeriod'));
       }
+      const [act] = input.actId
+        ? await tx.select().from(supplierAct).where(eq(supplierAct.id, input.actId))
+        : [];
+      if (
+        input.actId &&
+        (act?.payrollItemId !== item.id || act.status !== 'draft' || act.rateLocked)
+      ) {
+        return err(serviceError('validation_error', 'payroll.adjustActDraft'));
+      }
       await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
       const amount =
         input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
@@ -163,6 +177,8 @@ export const adjustClosedPayout = defineService({
           amount,
           currency: input.currency,
           reason: input.reason,
+          // The act of the rest takes the adjustments given to no other act (A-085).
+          supplierActId: act && act.amountUsd !== null ? act.id : null,
         })
         .returning({ id: adjustment.id });
       const totals = await recomputePayout(tx, item);
