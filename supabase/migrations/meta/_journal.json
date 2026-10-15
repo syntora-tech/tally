@@ -561,6 +561,13 @@
       "when": 1792051633629,
       "tag": "20261015080713_closed_payout_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792052966181,
+      "tag": "20261015082926_adjustment_act_closed_period",
+      "breakpoints": true
     }
   ]
 }

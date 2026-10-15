@@ -13,6 +13,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { splitActByActivity } from '../acts';
 import { adjustClosedPayout, removePayoutLine } from './lines';
 
 const h = intHarness('2045-11-10');
@@ -171,6 +172,35 @@ describe('a line out of a closed payout (A-097)', () => {
     expect(act?.amountUah).toBe('39989.20');
     const added = await h.db.select().from(adjustment).where(eq(adjustment.periodId, ids.period));
     expect(added).toMatchObject([{ kind: 'correction', amount: '-0.27000000', currency: 'USD' }]);
+  });
+
+  it('an adjustment of the closed month moves into a split act; its amount stays frozen', async () => {
+    const added = await adjustClosedPayout.run(h.ctxFor(owner), {
+      itemId: ids.item,
+      kind: 'other',
+      amount: '2644',
+      currency: 'UAH',
+      reason: 'AWS',
+    });
+    const correction = { id: added._unsafeUnwrap().adjustmentId };
+    const split = await splitActByActivity.run(h.ctxFor(finance), {
+      actId: ids.act,
+      adjustmentIds: [correction.id ?? ''],
+      periodFrom: '2045-10-01',
+      periodTo: '2045-10-15',
+    });
+    const newAct = split._unsafeUnwrap().id;
+    const [moved] = await h.db
+      .select()
+      .from(adjustment)
+      .where(eq(adjustment.id, correction.id ?? ''));
+    expect(moved?.supplierActId).toBe(newAct);
+    await expect(
+      h.db
+        .update(adjustment)
+        .set({ amount: '-1' })
+        .where(eq(adjustment.id, correction.id ?? '')),
+    ).rejects.toThrow();
   });
 
   it('refuses once the act is issued', async () => {

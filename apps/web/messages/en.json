@@ -488,7 +488,7 @@
       "sequenceDown": "The number counter cannot go down",
       "noSequence": "The contract has no number sequence",
       "sequenceYear": "The document date is before the year of the number sequence",
-      "periodClosed": "The period is closed — hours cannot change",
+      "periodClosed": "The period is closed — its hours and amounts cannot change",
       "reopenReason": "Enter the reason for reopening the period",
       "versionExists": "A terms version from this date already exists",
       "duplicate": "Such a record already exists",
