@@ -475,6 +475,9 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                   {a.signed ? t('signed') : t('unsigned')}
                                 </Badge>
                               )}
+                              {(i.group === 'paid' || (a.rateLocked && !a.isRest)) && (
+                                <Badge>{t('actPaid')}</Badge>
+                              )}
                               {(a.status === 'draft' || (a.status === 'issued' && !a.signed)) && (
                                 <Button
                                   size="sm"

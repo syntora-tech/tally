@@ -1620,6 +1620,7 @@
     "methodChanged": "Payout method changed",
     "signed": "signed",
     "unsigned": "not signed",
+    "actPaid": "paid",
     "step": {
       "issue": "Next: issue the document",
       "sign": "Next: sign the document",

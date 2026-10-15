@@ -47,10 +47,11 @@ import { bookTransaction, type TransactionInput } from '../ledger';
 import { loadCalendar } from '../periods';
 import { chargePayout } from '../planned/payout-charges';
 import { refreshPayability } from './payability';
+import { heldValue, payrollGroup } from './held';
 
 const USD_LIKE = ['USD', 'USDT', 'USDC'];
 
-export type PayrollGroup = 'ready' | 'waiting' | 'paid';
+export type { PayrollGroup } from './held';
 
 /** Payroll queue (6.6): statuses are refreshed for today first, so deadlines show up at once. */
 export const listPayroll = defineService({
@@ -172,8 +173,7 @@ export const listPayroll = defineService({
       const currency = item.payoutMethod === 'fiat' ? 'UAH' : 'USD';
       const total = item.payoutMethod === 'fiat' ? item.totalUah : item.totalUsd;
       const remaining = total === null ? null : toDecimal(total).minus(item.paidAmount).toFixed(2);
-      const group: PayrollGroup =
-        item.status === 'paid' ? 'paid' : item.status === 'draft' ? 'waiting' : 'ready';
+      const group = payrollGroup(item, total, lines);
       return {
         item,
         ...rest,
@@ -441,15 +441,9 @@ export const payItem = defineService({
       const allReady = lines.every((l) => l.status === 'payable' || l.status === 'paid');
       const total = fiat ? item.item.totalUah : item.item.totalUsd;
       if (total === null) return err(serviceError('validation_error', 'payroll.rateFirst'));
-      // The lines still held back come off the total, so adjustments count as payable.
-      const held = lines.filter((l) => l.status !== 'payable' && l.status !== 'paid');
-      const heldUsd = sum(held.filter((l) => l.currency !== 'UAH').map((l) => l.amount));
-      const heldUah = sum(held.filter((l) => l.currency === 'UAH').map((l) => l.amount));
       const payable = allReady
         ? toDecimal(total)
-        : toDecimal(total).minus(
-            fiat ? heldUsd.times(toDecimal(item.item.payoutFxRate ?? '0')).plus(heldUah) : heldUsd,
-          );
+        : toDecimal(total).minus(heldValue(lines, item.item));
       const after = toDecimal(item.item.paidAmount).plus(input.amount);
       if (after.gt(payable.toDecimalPlaces(2)) && !input.overrideReason) {
         return err(
