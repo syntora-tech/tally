@@ -6,7 +6,14 @@ import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -29,6 +36,10 @@ import {
   PayReimbursementForm,
   ReimbursementForm,
 } from './trip-forms';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
+import { Status } from '@/components/v2/status';
+import { DialogButton } from '@/components/v2/form-dialog';
 
 export const generateMetadata = pageTitle('trip');
 
@@ -65,29 +76,99 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       fmt.amount(amount, c.currency),
     ].join(' · ');
 
+  const expenseForm = (
+    <ExpenseForm
+      tripId={trip.id}
+      people={participants.map((p) => ({ value: p.personId, label: p.name }))}
+      defaultDate={trip.startsOn ?? ctx.today}
+      accounts={accountOptions}
+      candidates={candidateRows
+        .filter((c) => !c.linked)
+        .map((c) => ({ value: c.id, label: candidateLabel(c, c.amount) }))}
+    />
+  );
+  const reimbursementForm = (
+    <ReimbursementForm
+      tripId={trip.id}
+      today={ctx.today}
+      people={participants.map((p) => {
+        const owed = toDecimal(
+          summary.find((s) => s.personId === p.personId)?.remainingUah ?? '0',
+        ).minus(
+          reimbursements
+            .filter((r) => r.personId === p.personId && !r.paid)
+            .reduce((s, r) => s.plus(toDecimal(r.amount).minus(r.paidUah)), toDecimal('0')),
+        );
+        return {
+          value: p.personId,
+          label: p.name,
+          remaining: owed.gt(0) ? owed.toFixed(2) : '',
+          payeeId: people?.unwrapOr([]).find((x) => x.id === p.personId)?.defaultPayeeId ?? null,
+        };
+      })}
+      periods={(periods?.unwrapOr([]) ?? [])
+        .filter(({ period: x }) => x.status === 'open')
+        .map(({ period: x }) => ({ value: x.id, label: fmt.month(x.month) }))}
+      payees={(payees?.unwrapOr([]) ?? [])
+        .filter((x) => x.kind !== 'crypto')
+        .map((x) => ({ value: x.id, label: x.name }))}
+    />
+  );
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link href="/trips" className="text-sm text-muted-foreground hover:underline">
-            ← {t('title')}
-          </Link>
-          <h1 className="text-2xl font-semibold">{trip.title}</h1>
-          <p className="text-muted-foreground">
-            {[
-              trip.location,
-              trip.startsOn && trip.endsOn
-                ? `${fmt.date(trip.startsOn)} — ${fmt.date(trip.endsOn)}`
-                : t('noDates'),
-              participants.map((p) => p.name).join(', '),
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-          <Badge variant="outline" className="mt-1" data-testid="trip-status">
-            {t(`status.${status}`)}
-          </Badge>
-        </div>
+        {v2 ? (
+          <PageHeader
+            title={trip.title}
+            meta={
+              <span className="flex flex-wrap items-center gap-2">
+                <Status
+                  tone={
+                    status === 'settled'
+                      ? 'success'
+                      : status === 'awaiting_reimbursement'
+                        ? 'warning'
+                        : 'info'
+                  }
+                  testId="trip-status"
+                >
+                  {t(`status.${status}`)}
+                </Status>
+                {[
+                  trip.location,
+                  trip.startsOn && trip.endsOn
+                    ? `${fmt.date(trip.startsOn)} — ${fmt.date(trip.endsOn)}`
+                    : t('noDates'),
+                  participants.map((p) => p.name).join(', '),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            }
+          />
+        ) : (
+          <div>
+            <Link href="/trips" className="text-sm text-muted-foreground hover:underline">
+              ← {t('title')}
+            </Link>
+            <h1 className="text-2xl font-semibold">{trip.title}</h1>
+            <p className="text-muted-foreground">
+              {[
+                trip.location,
+                trip.startsOn && trip.endsOn
+                  ? `${fmt.date(trip.startsOn)} — ${fmt.date(trip.endsOn)}`
+                  : t('noDates'),
+                participants.map((p) => p.name).join(', '),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            <Badge variant="outline" className="mt-1" data-testid="trip-status">
+              {t(`status.${status}`)}
+            </Badge>
+          </div>
+        )}
         {finance && (
           <Button variant="outline" render={<Link href={`/trips/${trip.id}/edit`} />}>
             {t('edit')}
@@ -148,6 +229,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('expenses')}</CardTitle>
+              {v2 && (
+                <CardAction>
+                  <DialogButton variant="outline" title={t('expenses')} wide content={expenseForm}>
+                    + {t('v2.add')}
+                  </DialogButton>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {expenses.length > 0 && (
@@ -223,21 +311,25 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   </Table>
                 </div>
               )}
-              <ExpenseForm
-                tripId={trip.id}
-                people={participants.map((p) => ({ value: p.personId, label: p.name }))}
-                defaultDate={trip.startsOn ?? ctx.today}
-                accounts={accountOptions}
-                candidates={candidateRows
-                  .filter((c) => !c.linked)
-                  .map((c) => ({ value: c.id, label: candidateLabel(c, c.amount) }))}
-              />
+              {!v2 && expenseForm}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('reimbursements')}</CardTitle>
+              {v2 && participants.length > 0 && (
+                <CardAction>
+                  <DialogButton
+                    variant="outline"
+                    title={t('reimbursements')}
+                    wide
+                    content={reimbursementForm}
+                  >
+                    + {t('v2.add')}
+                  </DialogButton>
+                </CardAction>
+              )}
               <CardDescription>{t('reimbursementsDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -282,38 +374,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
                   </div>
                 );
               })}
-              {participants.length > 0 && (
-                <ReimbursementForm
-                  tripId={trip.id}
-                  today={ctx.today}
-                  people={participants.map((p) => {
-                    const owed = toDecimal(
-                      summary.find((s) => s.personId === p.personId)?.remainingUah ?? '0',
-                    ).minus(
-                      reimbursements
-                        .filter((r) => r.personId === p.personId && !r.paid)
-                        .reduce(
-                          (s, r) => s.plus(toDecimal(r.amount).minus(r.paidUah)),
-                          toDecimal('0'),
-                        ),
-                    );
-                    return {
-                      value: p.personId,
-                      label: p.name,
-                      remaining: owed.gt(0) ? owed.toFixed(2) : '',
-                      payeeId:
-                        people?.unwrapOr([]).find((x) => x.id === p.personId)?.defaultPayeeId ??
-                        null,
-                    };
-                  })}
-                  periods={(periods?.unwrapOr([]) ?? [])
-                    .filter(({ period: x }) => x.status === 'open')
-                    .map(({ period: x }) => ({ value: x.id, label: fmt.month(x.month) }))}
-                  payees={(payees?.unwrapOr([]) ?? [])
-                    .filter((x) => x.kind !== 'crypto')
-                    .map((x) => ({ value: x.id, label: x.name }))}
-                />
-              )}
+              {participants.length > 0 && !v2 && reimbursementForm}
             </CardContent>
           </Card>
         </>

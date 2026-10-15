@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@/components/ui/button';
+import { TabsNav } from '@/components/v2/tabs-nav';
+import { getUiPrefs } from '@/server/ui-prefs';
 
 const TABS = [
   { key: 'structure', href: '/documents', finance: false },
@@ -21,9 +23,24 @@ export async function DocumentsNav({
   finance?: boolean;
 }) {
   const t = await getTranslations('documentsNav');
+  const tabs = TABS.filter((tab) => finance || !tab.finance);
+  if ((await getUiPrefs()).version === 'v2') {
+    return (
+      <TabsNav
+        label={t('label')}
+        active={current}
+        tabs={tabs.map((tab) => ({
+          key: tab.key,
+          label: t(tab.key),
+          href: tab.href,
+          count: tab.key === 'inbox' && inboxCount ? inboxCount : undefined,
+        }))}
+      />
+    );
+  }
   return (
     <nav className="flex flex-wrap gap-2" aria-label={t('label')}>
-      {TABS.filter((tab) => finance || !tab.finance).map((tab) => (
+      {tabs.map((tab) => (
         <Button
           key={tab.key}
           size="sm"

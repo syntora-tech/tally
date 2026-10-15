@@ -6,7 +6,14 @@ import { AuditHistory } from '@/components/audit-history';
 import { LinkedDocuments } from '@/components/linked-documents';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -26,6 +33,7 @@ import { HelpTip } from '@/components/v2/help-tip';
 import { PageHeader } from '@/components/v2/page-header';
 import { Status } from '@/components/v2/status';
 import { getUiPrefs } from '@/server/ui-prefs';
+import { DialogButton } from '@/components/v2/form-dialog';
 
 export const generateMetadata = pageTitle('assignment');
 
@@ -70,12 +78,66 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
   } = labels;
   const month = fmt.month;
 
-  const details = (
+  const billingForm = (
+    <AddVersionForm
+      side="billing"
+      assignmentId={a.id}
+      suggestedMonth={nextMonth}
+      defaults={{
+        type: lastBilling?.type ?? 'hourly',
+        rate: lastBilling?.rate ?? '',
+        currency: contractCurrency ?? 'USD',
+        prorationPolicy: lastBilling?.prorationPolicy ?? 'full_month',
+        invoiceChannel: lastBilling?.invoiceChannel ?? 'fiat',
+      }}
+    />
+  );
+  const payForm = (
+    <AddVersionForm
+      side="pay"
+      assignmentId={a.id}
+      suggestedMonth={nextMonth}
+      defaults={{
+        type: lastPay?.type ?? 'fixed',
+        amount: lastPay?.amount ?? '',
+        currency: lastPay?.currency ?? 'USD',
+        payoutMethod: lastPay?.payoutMethod ?? 'fiat',
+        releasePolicy: lastPay?.releasePolicy ?? 'on_payment_or_due',
+        graceDays: lastPay?.graceDays ?? 0,
+      }}
+    />
+  );
+  const agencyForm = (
+    <AgencyVersionForm
+      assignmentId={a.id}
+      suggestedMonth={nextMonth}
+      payees={payees}
+      defaults={
+        lastAgency
+          ? {
+              payeeId: lastAgency.payeeId,
+              ratePerHour: toDecimal(lastAgency.ratePerHour).toString(),
+              payoutMethod: lastAgency.payoutMethod,
+              releasePolicy: lastAgency.releasePolicy,
+              graceDays: lastAgency.graceDays,
+            }
+          : null
+      }
+    />
+  );
+  const details = (inline: boolean) => (
     <>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('billingVersions')}</CardTitle>
+            {!inline && (
+              <CardAction>
+                <DialogButton variant="outline" title={t('billingVersions')} content={billingForm}>
+                  {t('v2.addVersion')}
+                </DialogButton>
+              </CardAction>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Table>
@@ -124,24 +186,20 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 ))}
               </TableBody>
             </Table>
-            <AddVersionForm
-              side="billing"
-              assignmentId={a.id}
-              suggestedMonth={nextMonth}
-              defaults={{
-                type: lastBilling?.type ?? 'hourly',
-                rate: lastBilling?.rate ?? '',
-                currency: contractCurrency ?? 'USD',
-                prorationPolicy: lastBilling?.prorationPolicy ?? 'full_month',
-                invoiceChannel: lastBilling?.invoiceChannel ?? 'fiat',
-              }}
-            />
+            {inline && billingForm}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('payVersions')}</CardTitle>
+            {!inline && (
+              <CardAction>
+                <DialogButton variant="outline" title={t('payVersions')} content={payForm}>
+                  {t('v2.addVersion')}
+                </DialogButton>
+              </CardAction>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Table>
@@ -192,19 +250,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 ))}
               </TableBody>
             </Table>
-            <AddVersionForm
-              side="pay"
-              assignmentId={a.id}
-              suggestedMonth={nextMonth}
-              defaults={{
-                type: lastPay?.type ?? 'fixed',
-                amount: lastPay?.amount ?? '',
-                currency: lastPay?.currency ?? 'USD',
-                payoutMethod: lastPay?.payoutMethod ?? 'fiat',
-                releasePolicy: lastPay?.releasePolicy ?? 'on_payment_or_due',
-                graceDays: lastPay?.graceDays ?? 0,
-              }}
-            />
+            {inline && payForm}
           </CardContent>
         </Card>
       </div>
@@ -212,6 +258,13 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t('agencyTitle')}</CardTitle>
+          {!inline && (
+            <CardAction>
+              <DialogButton variant="outline" title={t('agencyTitle')} wide content={agencyForm}>
+                {t('v2.addVersion')}
+              </DialogButton>
+            </CardAction>
+          )}
           <CardDescription>{t('agencyDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -245,22 +298,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
               </TableBody>
             </Table>
           )}
-          <AgencyVersionForm
-            assignmentId={a.id}
-            suggestedMonth={nextMonth}
-            payees={payees}
-            defaults={
-              lastAgency
-                ? {
-                    payeeId: lastAgency.payeeId,
-                    ratePerHour: toDecimal(lastAgency.ratePerHour).toString(),
-                    payoutMethod: lastAgency.payoutMethod,
-                    releasePolicy: lastAgency.releasePolicy,
-                    graceDays: lastAgency.graceDays,
-                  }
-                : null
-            }
-          />
+          {inline && agencyForm}
         </CardContent>
       </Card>
 
@@ -379,7 +417,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         ) : (
           <p className="text-sm text-muted-foreground">{t('noMargin')}</p>
         )}
-        {details}
+        {details(false)}
       </div>
     );
   }
@@ -456,7 +494,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
         </CardContent>
       </Card>
 
-      {details}
+      {details(true)}
     </div>
   );
 }

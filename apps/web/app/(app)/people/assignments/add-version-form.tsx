@@ -13,6 +13,7 @@ import {
   type AssignmentFormState,
 } from '@/server/actions/assignments';
 import { BillingFields, PayFields, type BillingDefaults, type PayDefaults } from './terms-fields';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 type Common = {
   assignmentId: string;
@@ -36,6 +37,7 @@ export function AddVersionForm(props: Props) {
     editing ? updateTermsVersion : addTermsVersion,
     null,
   );
+  useCloseOnSuccess(state);
   const { onSaved } = props;
   const formRef = useRef<HTMLFormElement>(null);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;

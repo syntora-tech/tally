@@ -13,6 +13,8 @@ import { getDocument, linkTargets } from '@/server/services/documents/registry';
 import { EditDocumentForm, LinkForm } from './document-actions';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, getLocalizeText, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('document');
 
@@ -32,21 +34,40 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
     getLocalizeText(),
   ]);
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{d.title}</h1>
-        <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
-          <Badge variant="outline">{DOCUMENT_TYPE_LABELS[d.type as DocumentType]}</Badge>
-          {d.number && <span>{tc('number', { number: d.number })}</span>}
-          {d.docDate && <span>{t('of', { date: fmt.date(d.docDate) })}</span>}
-          <span>· {DOC_STATUS_LABELS[d.status]}</span>
-          {d.historical && <Badge variant="secondary">{t('historical')}</Badge>}
-          {d.version > 1 && (
-            <Badge variant="secondary">{t('version', { version: d.version })}</Badge>
-          )}
-        </p>
-      </div>
+      {v2 ? (
+        <PageHeader
+          title={d.title}
+          meta={
+            <>
+              <Badge variant="outline">{DOCUMENT_TYPE_LABELS[d.type as DocumentType]}</Badge>
+              {d.number && <span>{tc('number', { number: d.number })}</span>}
+              {d.docDate && <span>{t('of', { date: fmt.date(d.docDate) })}</span>}
+              <span>· {DOC_STATUS_LABELS[d.status]}</span>
+              {d.historical && <Badge variant="secondary">{t('historical')}</Badge>}
+              {d.version > 1 && (
+                <Badge variant="secondary">{t('version', { version: d.version })}</Badge>
+              )}
+            </>
+          }
+        />
+      ) : (
+        <div>
+          <h1 className="text-2xl font-semibold">{d.title}</h1>
+          <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
+            <Badge variant="outline">{DOCUMENT_TYPE_LABELS[d.type as DocumentType]}</Badge>
+            {d.number && <span>{tc('number', { number: d.number })}</span>}
+            {d.docDate && <span>{t('of', { date: fmt.date(d.docDate) })}</span>}
+            <span>· {DOC_STATUS_LABELS[d.status]}</span>
+            {d.historical && <Badge variant="secondary">{t('historical')}</Badge>}
+            {d.version > 1 && (
+              <Badge variant="secondary">{t('version', { version: d.version })}</Badge>
+            )}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">

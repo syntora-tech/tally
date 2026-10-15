@@ -828,7 +828,10 @@
       "planned": "paid {amount}"
     },
     "act": "act {number}",
-    "actDraft": "draft act"
+    "actDraft": "draft act",
+    "v2": {
+      "add": "Add"
+    }
   },
   "fields": {
     "legal_name": "Legal name",
@@ -1107,7 +1110,10 @@
     "agency": "Agency",
     "ratePerHour": "Per hour",
     "agencyEnded": "ended",
-    "versionClosed": "Closed"
+    "versionClosed": "Closed",
+    "v2": {
+      "addVersion": "+ New version from a month…"
+    }
   },
   "assignmentForm": {
     "person": "Person",

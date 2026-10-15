@@ -118,3 +118,27 @@ test('A-102: the v2 overview shows the same totals as v1', async ({ page }) => {
     await expect(page.getByTestId(id)).toHaveText(v1[i] ?? '');
   }
 });
+
+test('A-102: v2 settings and documents are split into tabs with instant filters', async ({
+  page,
+}) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  await page
+    .context()
+    .addCookies([{ name: 'tally_ui', value: 'v2', url: 'http://localhost:3000' }]);
+  await page.goto('/settings');
+  const tabs = page.getByRole('navigation', { name: 'Settings' });
+  await expect(tabs.getByRole('link', { name: 'Company details' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await tabs.getByRole('link', { name: 'Connected agents' }).click();
+  await expect(page).toHaveURL(/tab=agents/);
+  await expect(page.getByLabel('Name (EN)')).toHaveCount(0);
+
+  await page.goto('/documents?view=list');
+  await page.getByRole('combobox', { name: 'Status' }).selectOption('issued');
+  await expect(page).toHaveURL(/status=issued/);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page).not.toHaveURL(/status=/);
+});

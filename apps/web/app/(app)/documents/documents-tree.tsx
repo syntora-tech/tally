@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import type { ServiceContext } from '@/server/services/context';
 import { documentTree } from '@/server/services/documents/structure';
 import { DocumentsNav } from './documents-nav';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 /**
  * The registry as a tree (A-081): each client and payee opens into its contracts, SOWs and
@@ -23,13 +25,18 @@ export async function DocumentsTreeView({
   const href = (kind: 'client' | 'payee', id: string) =>
     kind === 'client' ? `/clients/${id}` : `/people/payees/${id}`;
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('title')}</h1>
-          <p className="text-muted-foreground">{td('subtitle')}</p>
-        </div>
+        {v2 ? (
+          <PageHeader title={t('title')} help={td('subtitle')} />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">{t('title')}</h1>
+            <p className="text-muted-foreground">{td('subtitle')}</p>
+          </div>
+        )}
         {canWrite && <Button render={<Link href="/documents/new" />}>{t('add')}</Button>}
       </div>
       <DocumentsNav current="structure" finance={canWrite} />

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toOptions, useLabels } from '@/lib/labels';
 import { addAgencyVersionAction, type AssignmentFormState } from '@/server/actions/assignments';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 
 export type AgencyDefaults = {
   payeeId: string;
@@ -34,6 +35,7 @@ export function AgencyVersionForm({
     addAgencyVersionAction,
     null,
   );
+  useCloseOnSuccess(state);
   const errors = state && !state.ok ? state.error.fieldErrors : undefined;
   const t = useTranslations('terms');
   const tc = useTranslations('common');

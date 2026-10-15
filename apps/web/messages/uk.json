@@ -828,7 +828,10 @@
       "planned": "виплачено {amount}"
     },
     "act": "акт {number}",
-    "actDraft": "чернетка акту"
+    "actDraft": "чернетка акту",
+    "v2": {
+      "add": "Додати"
+    }
   },
   "fields": {
     "legal_name": "Юридична назва",
@@ -1107,7 +1110,10 @@
     "agency": "Агенція",
     "ratePerHour": "За годину",
     "agencyEnded": "припинено",
-    "versionClosed": "Закрито"
+    "versionClosed": "Закрито",
+    "v2": {
+      "addVersion": "+ Нова версія з місяця…"
+    }
   },
   "assignmentForm": {
     "person": "Людина",

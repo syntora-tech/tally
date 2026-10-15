@@ -11,6 +11,8 @@ import { requireRole } from '@/server/request-context';
 import { getClient } from '@/server/services/clients';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('client');
 
@@ -31,16 +33,29 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     getLabels(),
   ]);
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
-          <p className="text-muted-foreground">
-            {c.legalName}
-            {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
-          </p>
-        </div>
+        {v2 ? (
+          <PageHeader
+            title={c.shortName ?? c.legalName}
+            meta={
+              <>
+                {c.legalName}
+                {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
+              </>
+            }
+          />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
+            <p className="text-muted-foreground">
+              {c.legalName}
+              {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
+            </p>
+          </div>
+        )}
         {isFinance && (
           <div className="flex gap-2">
             <Button variant="outline" render={<Link href={`/clients/${c.id}/edit`} />}>

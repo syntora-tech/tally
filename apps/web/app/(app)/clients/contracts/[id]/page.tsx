@@ -10,6 +10,8 @@ import { getContract } from '@/server/services/clients';
 import { listContractAnnexes } from '@/server/services/contracts/annexes';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('contract');
 
@@ -39,24 +41,45 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
     ],
   );
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
-          <p className="text-muted-foreground">
-            {CONTRACT_KIND_LABELS[c.kind]} ·{' '}
-            {isClient ? (
-              <Link className="hover:underline" href={`/clients/${c.clientId ?? ''}`}>
-                {clientName}
-              </Link>
-            ) : (
-              <Link className="hover:underline" href={`/people/payees/${c.payeeId ?? ''}`}>
-                {payeeName}
-              </Link>
-            )}
-          </p>
-        </div>
+        {v2 ? (
+          <PageHeader
+            title={<>{t('title', { number: c.number })}</>}
+            meta={
+              <>
+                {CONTRACT_KIND_LABELS[c.kind]} ·{' '}
+                {isClient ? (
+                  <Link className="hover:underline" href={`/clients/${c.clientId ?? ''}`}>
+                    {clientName}
+                  </Link>
+                ) : (
+                  <Link className="hover:underline" href={`/people/payees/${c.payeeId ?? ''}`}>
+                    {payeeName}
+                  </Link>
+                )}
+              </>
+            }
+          />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">{t('title', { number: c.number })}</h1>
+            <p className="text-muted-foreground">
+              {CONTRACT_KIND_LABELS[c.kind]} ·{' '}
+              {isClient ? (
+                <Link className="hover:underline" href={`/clients/${c.clientId ?? ''}`}>
+                  {clientName}
+                </Link>
+              ) : (
+                <Link className="hover:underline" href={`/people/payees/${c.payeeId ?? ''}`}>
+                  {payeeName}
+                </Link>
+              )}
+            </p>
+          </div>
+        )}
         <Button variant="outline" render={<Link href={`/clients/contracts/${c.id}/edit`} />}>
           {tc('edit')}
         </Button>

@@ -11,6 +11,8 @@ import { listPayeeContracts } from '@/server/services/clients';
 import { getPayee } from '@/server/services/payees';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('payee');
 
@@ -37,13 +39,18 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
     getLabels(),
   ]);
 
+  const v2 = (await getUiPrefs()).version === 'v2';
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{p.legalNameUa ?? p.legalNameEn}</h1>
-          <p className="text-muted-foreground">{PAYEE_KIND_LABELS[p.kind]}</p>
-        </div>
+        {v2 ? (
+          <PageHeader title={p.legalNameUa ?? p.legalNameEn} meta={PAYEE_KIND_LABELS[p.kind]} />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold">{p.legalNameUa ?? p.legalNameEn}</h1>
+            <p className="text-muted-foreground">{PAYEE_KIND_LABELS[p.kind]}</p>
+          </div>
+        )}
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href={`/people/payees/${p.id}/edit`} />}>
             {tc('edit')}
