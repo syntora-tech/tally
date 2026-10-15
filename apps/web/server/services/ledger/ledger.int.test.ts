@@ -144,6 +144,24 @@ describe('ledger services (6.7)', () => {
     expect(res._unsafeUnwrapErr().fieldErrors?.currency).toBeDefined();
   });
 
+  it('finds transactions by words of their description or category', async () => {
+    const tagged = await createTransaction.run(h.ctxFor(finance), {
+      type: 'expense',
+      occurredOn: '2034-01-12',
+      categoryId: cats.expense,
+      description: 'Server 100%_rent',
+      from: { accountId: accounts.usd, amount: '10' },
+    });
+    const id = tagged._unsafeUnwrap().id;
+    const search = async (q: string) =>
+      (await listTransactions.run(h.ctxFor(finance), { q, from: '2034-01-01' }))
+        ._unsafeUnwrap()
+        .map((r) => r.transaction.id);
+    expect(await search('server 100%_')).toContain(id);
+    expect(await search('100%x')).not.toContain(id);
+    expect((await deleteTransaction.run(h.ctxFor(finance), { id })).isOk()).toBe(true);
+  });
+
   it('filters unallocated money and deletes a free transaction', async () => {
     const rows = (
       await listTransactions.run(h.ctxFor(finance), { unallocated: 'on', from: '2034-01-01' })

@@ -1362,7 +1362,15 @@
       "inactive": "inactive",
       "noAccounts": "No accounts yet",
       "newCategory": "New category",
-      "categoriesHelp": "Each category belongs to one transaction type; a transaction picks a category of its own type."
+      "categoriesHelp": "Each category belongs to one transaction type; a transaction picks a category of its own type.",
+      "search": "Search transactions",
+      "searchPlaceholder": "Description, counterparty, category…",
+      "period": "Period",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "deleteAction": "Delete…",
+      "deleteTitle": "Delete the transaction?"
     }
   },
   "ledgerForms": {
@@ -1428,7 +1436,12 @@
     "counterpartyAddress": "Counterparty wallet",
     "counterpartyAddressHint": "A known wallet links its owner automatically",
     "reason": "Reason for the change",
-    "reasonHint": "Required when money of an allocated transaction changes; kept in the history"
+    "reasonHint": "Required when money of an allocated transaction changes; kept in the history",
+    "moreTypes": "More types",
+    "v2": {
+      "addFee": "Bank fee",
+      "addRef": "Bank reference or hash"
+    }
   },
   "periods": {
     "title": "Periods",
@@ -1504,7 +1517,19 @@
       "steps": "Month close steps",
       "next": "Next: {step}",
       "delete": "Delete the period…",
-      "emptyHours": "An empty cell counts as 0 hours; empty person hours equal the client hours."
+      "emptyHours": "An empty cell counts as 0 hours; empty person hours equal the client hours.",
+      "import": "Import CSV",
+      "importTitle": "Hours from a CSV file",
+      "importHint": "Columns as in the “Hours template (CSV)” file from the ⋯ menu.",
+      "summary": {
+        "params": "{norm} h · rate {fx}",
+        "hours": "{filled} of {total} filled in",
+        "rows": "{count, plural, one {# line} other {# lines}}",
+        "adjustments": "{count, plural, =0 {none} one {# adjustment} other {# adjustments}}",
+        "invoices": "{count, plural, =0 {not closed} one {# invoice} other {# invoices}}"
+      },
+      "adjustment": "Adjustment",
+      "adjustmentTitle": "New adjustment"
     }
   },
   "periodForms": {
@@ -1550,7 +1575,11 @@
     "reason": "Reason",
     "adjustmentRemoved": "Adjustment removed",
     "delete": "Delete period",
-    "deleteConfirm": "Delete this empty period?"
+    "deleteConfirm": "Delete this empty period?",
+    "v2": {
+      "personRole": "Person · role",
+      "emptyIsZero": "An empty cell is 0 hours"
+    }
   },
   "invoices": {
     "title": "Invoices",
@@ -2038,7 +2067,15 @@
     "revoked": "revoked",
     "recentCalls": "Recent calls",
     "callOk": "success",
-    "footer": "Google Docs template IDs are set in environment variables or on the contract; users come in later stages."
+    "footer": "Google Docs template IDs are set in environment variables or on the contract; users come in later stages.",
+    "v2": {
+      "newException": "Exception",
+      "sequence": "Numbering",
+      "template": "Template",
+      "nextNumber": "Next number",
+      "usedBy": "Used by",
+      "defaultInvoices": "invoices by default"
+    }
   },
   "settingsForms": {
     "companySaved": "Details saved",
@@ -2149,7 +2186,15 @@
     "nextMonth": "the next month",
     "partSaved": "Part saved",
     "partDeleted": "Part deleted",
-    "confirmDeletePart": "Delete this part? Unpaid payments of it are removed."
+    "confirmDeletePart": "Delete this part? Unpaid payments of it are removed.",
+    "v2": {
+      "newPlan": "Planned expense",
+      "noPlans": "No plans yet",
+      "noPlansHint": "Add a recurring expense: every month it becomes a payment on the Payments tab.",
+      "details": "Parts, taxes and charges of {name}",
+      "partsCount": "{count, plural, one {# part} other {# parts}}",
+      "chargesCount": "{count, plural, one {# tax or charge} other {# taxes or charges}}"
+    }
   },
   "dossier": {
     "title": "Case file",

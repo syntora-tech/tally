@@ -31,9 +31,8 @@ import {
   UnlinkButton,
   UnskipButton,
 } from './planned-forms';
-import { TabsNav } from '@/components/v2/tabs-nav';
 import { getUiPrefs } from '@/server/ui-prefs';
-import { LedgerHeader } from '../ledger-v2';
+import { PlannedV2 } from './planned-v2';
 
 export const generateMetadata = pageTitle('planned');
 
@@ -55,20 +54,8 @@ export default async function PlannedExpensesPage({
   ]);
   const thisMonth = ctx.today.slice(0, 7);
 
-  const v2 = (await getUiPrefs()).version === 'v2';
-  const header = v2 ? (
-    <div className="flex flex-col gap-4">
-      <LedgerHeader section="planned" title={t('title')} help={t('subtitle')} />
-      <TabsNav
-        label={t('title')}
-        active={tab}
-        tabs={[
-          { key: 'payments', label: tp('tab'), href: '/ledger/planned' },
-          { key: 'plans', label: t('tab'), href: '/ledger/planned?tab=plans' },
-        ]}
-      />
-    </div>
-  ) : (
+  if ((await getUiPrefs()).version === 'v2') return <PlannedV2 ctx={ctx} tab={tab} />;
+  const header = (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <Link href="/ledger" className="text-sm text-muted-foreground hover:underline">

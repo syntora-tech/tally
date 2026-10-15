@@ -2,7 +2,10 @@
 
 import { derivedRate, parseDecimal, toDecimal } from '@tally/domain';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
+import { cn } from 'cn';
+import { useIsV2 } from '@/components/v2/ui-version';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -51,6 +54,8 @@ function legsOf(value?: TransactionValues) {
 }
 
 const TWO_LEG = ['transfer', 'fx_exchange', 'crypto_buy', 'crypto_sell', 'crypto_swap'];
+/** v2: the everyday types as a switch, the rest under "More". */
+const MAIN_TYPES = ['expense', 'revenue', 'transfer', 'fx_exchange'];
 
 export function TransactionForm(props: {
   accounts: AccountOption[];
@@ -69,6 +74,7 @@ export function TransactionForm(props: {
   const t = useTranslations('txForm');
   const tc = useTranslations('common');
   const { TX_TYPE_LABELS } = useLabels();
+  const v2 = useIsV2();
   const [type, setType] = useState(value?.type ?? 'expense');
   const [legs, setLegs] = useState(() => legsOf(value));
   const [adjustSign, setAdjustSign] = useState<'to' | 'from'>(
@@ -82,6 +88,8 @@ export function TransactionForm(props: {
         : '',
   );
   const fee = value?.postings.find((p) => p.isFee);
+  const [feeOpen, setFeeOpen] = useState(Boolean(fee));
+  const [refOpen, setRefOpen] = useState(Boolean(value?.externalRef));
   const isCrypto = [legs.from, legs.to].some(
     (id) => props.accounts.find((a) => a.id === id)?.kind === 'crypto',
   );
@@ -106,7 +114,12 @@ export function TransactionForm(props: {
       : null;
 
   const leg = (key: 'from' | 'to', label: string) => (
-    <div className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-2">
+    <div
+      className={cn(
+        'grid grid-cols-1 gap-3 md:grid-cols-2',
+        v2 ? 'items-end' : 'rounded-md border p-3',
+      )}
+    >
       <FormField label={label} htmlFor={`${key}-account`} error={errors?.[key]}>
         <NativeSelect
           id={`${key}-account`}
@@ -129,6 +142,8 @@ export function TransactionForm(props: {
           id={`${key}-amount`}
           name={`${key}.amount`}
           inputMode="decimal"
+          placeholder={v2 ? '0.00' : undefined}
+          className={v2 ? 'font-heading text-lg font-bold tabular-nums' : undefined}
           value={key === 'from' ? legs.fromAmount : legs.toAmount}
           onChange={(e) => {
             const value = e.target.value.replace(',', '.');
@@ -147,18 +162,70 @@ export function TransactionForm(props: {
         </Alert>
       )}
       {value && <input type="hidden" name="id" value={value.id} />}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <FormField label={t('type')} htmlFor="type">
-          <NativeSelect
-            id="type"
-            name="type"
-            value={type}
-            options={toOptions(TX_TYPE_LABELS)}
+      {v2 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="type" value={type} />
+          <div
+            role="radiogroup"
+            aria-label={t('type')}
+            className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1"
+          >
+            {MAIN_TYPES.map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={type === k}
+                onClick={() => {
+                  setType(k);
+                }}
+                className={cn(
+                  'h-8 rounded-md px-3 text-[13px] font-medium',
+                  type === k
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {TX_TYPE_LABELS[k]}
+              </button>
+            ))}
+          </div>
+          <select
+            aria-label={t('moreTypes')}
+            value={MAIN_TYPES.includes(type) ? '' : type}
             onChange={(e) => {
-              setType(e.target.value);
+              if (e.target.value) setType(e.target.value);
             }}
-          />
-        </FormField>
+            className={cn(
+              'h-10 rounded-lg border bg-card px-3 text-[13px] font-medium',
+              !MAIN_TYPES.includes(type) && 'border-foreground',
+            )}
+          >
+            <option value="">{t('moreTypes')}</option>
+            {Object.entries(TX_TYPE_LABELS)
+              .filter(([k]) => !MAIN_TYPES.includes(k))
+              .map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+      <div className={cn('grid grid-cols-1 gap-3', v2 ? 'md:grid-cols-2' : 'md:grid-cols-3')}>
+        {!v2 && (
+          <FormField label={t('type')} htmlFor="type">
+            <NativeSelect
+              id="type"
+              name="type"
+              value={type}
+              options={toOptions(TX_TYPE_LABELS)}
+              onChange={(e) => {
+                setType(e.target.value);
+              }}
+            />
+          </FormField>
+        )}
         <FormField label={t('date')} htmlFor="occurredOn" error={errors?.occurredOn}>
           <Input
             id="occurredOn"
@@ -211,28 +278,62 @@ export function TransactionForm(props: {
         </p>
       )}
 
-      <details className="rounded-md border p-3" open={Boolean(fee)}>
-        <summary className="cursor-pointer text-sm">{t('fee')}</summary>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <FormField label={t('feeAccount')} htmlFor="fee-account" error={errors?.fee}>
-            <NativeSelect
-              id="fee-account"
-              name="fee.accountId"
-              placeholder={t('noFee')}
-              options={accountOptions}
-              defaultValue={fee?.accountId ?? ''}
-            />
-          </FormField>
-          <FormField label={t('feeAmount')} htmlFor="fee-amount">
-            <Input
-              id="fee-amount"
-              name="fee.amount"
-              inputMode="decimal"
-              defaultValue={fee ? editableDecimal(toDecimal(fee.amount).abs().toFixed(8)) : ''}
-            />
-          </FormField>
-        </div>
-      </details>
+      {v2 ? (
+        feeOpen ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <FormField label={t('feeAccount')} htmlFor="fee-account" error={errors?.fee}>
+              <NativeSelect
+                id="fee-account"
+                name="fee.accountId"
+                placeholder={t('noFee')}
+                options={accountOptions}
+                defaultValue={fee?.accountId ?? (legs.from || legs.to)}
+              />
+            </FormField>
+            <FormField label={t('feeAmount')} htmlFor="fee-amount">
+              <Input
+                id="fee-amount"
+                name="fee.amount"
+                inputMode="decimal"
+                defaultValue={fee ? editableDecimal(toDecimal(fee.amount).abs().toFixed(8)) : ''}
+              />
+            </FormField>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="self-start text-sm font-medium text-link hover:underline"
+            onClick={() => {
+              setFeeOpen(true);
+            }}
+          >
+            + {t('v2.addFee')}
+          </button>
+        )
+      ) : (
+        <details className="rounded-md border p-3" open={Boolean(fee)}>
+          <summary className="cursor-pointer text-sm">{t('fee')}</summary>
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <FormField label={t('feeAccount')} htmlFor="fee-account" error={errors?.fee}>
+              <NativeSelect
+                id="fee-account"
+                name="fee.accountId"
+                placeholder={t('noFee')}
+                options={accountOptions}
+                defaultValue={fee?.accountId ?? ''}
+              />
+            </FormField>
+            <FormField label={t('feeAmount')} htmlFor="fee-amount">
+              <Input
+                id="fee-amount"
+                name="fee.amount"
+                inputMode="decimal"
+                defaultValue={fee ? editableDecimal(toDecimal(fee.amount).abs().toFixed(8)) : ''}
+              />
+            </FormField>
+          </div>
+        </details>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <FormField label={t('party')} htmlFor="party" error={errors?.personId ?? errors?.clientId}>
@@ -281,12 +382,24 @@ export function TransactionForm(props: {
             />
           </FormField>
         )}
-        <FormField
-          label={isCrypto || type.startsWith('crypto') ? t('txHash') : t('bankRef')}
-          htmlFor="externalRef"
-        >
-          <Input id="externalRef" name="externalRef" defaultValue={value?.externalRef ?? ''} />
-        </FormField>
+        {v2 && !refOpen ? (
+          <button
+            type="button"
+            className="self-end justify-self-start pb-2.5 text-sm font-medium text-link hover:underline"
+            onClick={() => {
+              setRefOpen(true);
+            }}
+          >
+            + {t('v2.addRef')}
+          </button>
+        ) : (
+          <FormField
+            label={isCrypto || type.startsWith('crypto') ? t('txHash') : t('bankRef')}
+            htmlFor="externalRef"
+          >
+            <Input id="externalRef" name="externalRef" defaultValue={value?.externalRef ?? ''} />
+          </FormField>
+        )}
       </div>
       <FormField label={t('description')} htmlFor="description">
         <Textarea
@@ -306,10 +419,15 @@ export function TransactionForm(props: {
           <Input id="reason" name="reason" />
         </FormField>
       )}
-      <div>
+      <div className={v2 ? 'flex gap-2' : undefined}>
         <Button type="submit" disabled={pending}>
           {pending ? tc('saving') : value ? tc('save') : t('submit')}
         </Button>
+        {v2 && (
+          <Button variant="outline" render={<Link href="/ledger" />}>
+            {tc('cancel')}
+          </Button>
+        )}
       </div>
     </form>
   );

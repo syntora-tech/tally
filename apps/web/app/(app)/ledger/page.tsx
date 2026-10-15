@@ -49,6 +49,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     unallocated: first(params.unallocated),
   };
   const v2 = (await getUiPrefs()).version === 'v2';
+  // Text search exists only in v2; v1 keeps its filters as they were.
+  const search: { q?: string } = v2 ? { q: first(params.q) } : {};
   // v2 pages the journal: the newest LEDGER_PAGE rows, "Show more" grows the limit.
   const limit = v2
     ? Math.min(JOURNAL_LIMIT, Math.max(LEDGER_PAGE, Number(first(params.limit)) || LEDGER_PAGE))
@@ -56,7 +58,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
   const [accounts, categories, journal] = await Promise.all([
     listAccounts.run(ctx, {}),
     listCategories.run(ctx, {}),
-    listTransactions.run(ctx, { ...filters, limit }),
+    listTransactions.run(ctx, { ...filters, ...search, limit }),
   ]);
   const accountRows = accounts.unwrapOr([]);
   const [t, fmt, { TX_TYPE_LABELS }] = await Promise.all([
@@ -67,7 +69,8 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
 
   if (v2 && journal.isOk()) {
     const more = new URLSearchParams();
-    for (const [k, v] of Object.entries(filters)) if (v) more.set(k, v);
+    const query: Record<string, string> = { ...filters, ...search };
+    for (const [k, v] of Object.entries(query)) if (v) more.set(k, v);
     more.set('limit', String(Math.min(JOURNAL_LIMIT, limit + LEDGER_PAGE)));
     return (
       <LedgerV2
@@ -77,6 +80,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
         filters={filters}
         limit={limit}
         moreHref={`/ledger?${more.toString()}`}
+        today={ctx.today}
       />
     );
   }

@@ -259,6 +259,9 @@
   .v2 [data-slot='native-select'] {
     padding-inline-end: 2rem;
   }
+  .v2 table [data-slot='input'] {
+    height: 2.25rem;
+  }
   .v2 [data-slot='input'][type='file'] {
     height: auto;
     padding: 0.5rem 0.625rem;

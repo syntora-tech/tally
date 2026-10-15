@@ -59,6 +59,29 @@ export function DeleteTransactionButton({ id }: { id: string }) {
   );
 }
 
+/** v2: the confirmation of a delete, in the row's ⋯ dialog. */
+export function DeleteTransactionForm({ id }: { id: string }) {
+  const t = useTranslations('ledgerForms');
+  const tc = useTranslations('common');
+  const [, action, pending] = useActionState<LedgerFormState, FormData>(async (prev, formData) => {
+    const result = await deleteTransactionAction(prev, formData);
+    if (result?.ok) toast.success(t('txDeleted'));
+    else if (result) toast.error(result.error.message);
+    return result;
+  }, null);
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-sm text-muted-foreground">{t('confirmDelete')}</p>
+      <div className="flex justify-end">
+        <Button type="submit" variant="destructive" disabled={pending}>
+          {tc('delete')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export type AccountValues = {
   id: string;
   name: string;

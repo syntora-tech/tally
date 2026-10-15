@@ -189,6 +189,8 @@ export const journalFilters = z.object({
   accountId: optionalUuid,
   /** Revenue/expense whose main posting is not fully allocated yet. */
   unallocated: checkbox,
+  /** Words in the description, counterparty, reference, category or party name. */
+  q: z.preprocess(emptyToUndefined, z.string().trim().max(200).optional()),
   limit: z.number().int().min(1).max(1000).default(300),
 });
 
@@ -196,6 +198,15 @@ const mainAmount = sql<
   string | null
 >`(select abs(p.amount) from ${posting} p where p.transaction_id = "transaction"."id" and not p.is_fee order by abs(p.amount) desc limit 1)`;
 const allocated = sql<string>`coalesce((select sum(a.amount * coalesce(a.fx_rate, 1)) from ${allocation} a where a.transaction_id = "transaction"."id"), 0)`;
+
+/** Case-insensitive substring match; % and _ typed by the user are literal. */
+function matches(q: string) {
+  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return sql`(${transaction.description} ilike ${pattern} or ${transaction.counterparty} ilike ${pattern}
+    or ${transaction.externalRef} ilike ${pattern} or ${category.name} ilike ${pattern}
+    or ${person.fullName} ilike ${pattern} or ${client.legalName} ilike ${pattern}
+    or ${client.shortName} ilike ${pattern})`;
+}
 
 export const listTransactions = defineService({
   name: 'ledger.transactions.list',
@@ -216,6 +227,7 @@ export const listTransactions = defineService({
               sql`${allocated} < ${mainAmount}`,
             )
           : undefined,
+        f.q ? matches(f.q) : undefined,
       ];
       const txs = await tx
         .select({

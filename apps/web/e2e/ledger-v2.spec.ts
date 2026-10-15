@@ -40,7 +40,7 @@ async function newTx(
   await page.goto('/ledger');
   await page.getByRole('link', { name: '+ Transaction' }).click();
   await expect(page).toHaveURL(/\/ledger\/new$/);
-  await page.getByLabel('Type').selectOption(tx.type);
+  await page.getByRole('radio', { name: tx.type === 'revenue' ? 'Revenue' : 'Expense' }).click();
   await page.getByLabel('Category').selectOption({ label: tx.category });
   const side = tx.type === 'revenue' ? '#to' : '#from';
   await page.locator(`${side}-account`).selectOption({ label: `${tx.account} (USD)` });
@@ -116,6 +116,12 @@ test('v2 ledger: accounts in dialogs, chips and instant filters over the journal
 
   await chips.getByRole('link', { name: /All accounts/ }).click();
   await expect(rows.filter({ hasText: income })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search transactions' }).fill(spend);
+  await page.getByRole('searchbox', { name: 'Search transactions' }).press('Enter');
+  await expect(page).toHaveURL(/q=/);
+  await expect(rows.filter({ hasText: income })).toHaveCount(0);
+  await expect(rows.filter({ hasText: spend })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filters' }).click();
   // Filters apply on change, no "Show" button.
   await page.getByRole('combobox', { name: 'Type' }).selectOption('expense');
   await expect(page).toHaveURL(/type=expense/);
@@ -125,8 +131,9 @@ test('v2 ledger: accounts in dialogs, chips and instant filters over the journal
   await expect(page).not.toHaveURL(/type=/);
   await expect(rows.filter({ hasText: income })).toBeVisible();
 
-  page.once('dialog', (d) => void d.accept());
-  await rows.filter({ hasText: spend }).getByRole('button', { name: 'Delete' }).click();
+  await rows.filter({ hasText: spend }).getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText('Transaction deleted')).toBeVisible();
   await expect(rows.filter({ hasText: spend })).toHaveCount(0);
 });

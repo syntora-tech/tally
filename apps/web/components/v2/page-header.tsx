@@ -10,6 +10,7 @@ import { HelpTip } from './help-tip';
 export async function PageHeader({
   title,
   help,
+  leading,
   badges,
   meta,
   crumb,
@@ -18,6 +19,8 @@ export async function PageHeader({
 }: {
   title: ReactNode;
   help?: ReactNode;
+  /** Before the title on its line, e.g. the ‹ of a month switcher. */
+  leading?: ReactNode;
   badges?: ReactNode;
   meta?: ReactNode;
   crumb?: string;
@@ -31,6 +34,7 @@ export async function PageHeader({
       {crumbLabel && <Crumb label={crumbLabel} parents={crumbParents} />}
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {leading}
           <h1 className="font-heading text-[28px] leading-tight font-bold tracking-[-0.02em] [overflow-wrap:anywhere]">
             {title}
           </h1>

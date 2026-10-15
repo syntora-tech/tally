@@ -2,6 +2,7 @@
 
 import { FileInput } from '@/components/file-input';
 import { useIsV2 } from '@/components/v2/ui-version';
+import { cn } from 'cn';
 import { useTranslations } from 'next-intl';
 import { parseDecimal, payrollTotalUah } from '@tally/domain';
 import { useActionState, useEffect, useState } from 'react';
@@ -65,6 +66,40 @@ export function ParamsForm(props: {
   const t = useTranslations('periodForms');
   const tc = useTranslations('common');
   const error = useResult(state, t('paramsSaved'));
+  const v2 = useIsV2();
+  if (v2) {
+    return (
+      <form action={action} className="flex flex-col gap-3">
+        <input type="hidden" name="periodId" value={props.periodId} />
+        <div className="grid max-w-xl grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <FormField label={t('norm')} htmlFor="workHours" error={error?.fieldErrors?.workHours}>
+            <Input
+              id="workHours"
+              name="workHours"
+              inputMode="decimal"
+              defaultValue={props.workHours}
+              disabled={props.disabled}
+            />
+          </FormField>
+          <FormField label={t('fx')} htmlFor="referenceFxUsdUah">
+            <Input
+              id="referenceFxUsdUah"
+              name="referenceFxUsdUah"
+              inputMode="decimal"
+              defaultValue={props.referenceFx ?? ''}
+              disabled={props.disabled}
+            />
+          </FormField>
+          {!props.disabled && (
+            <Button type="submit" disabled={pending}>
+              {tc('save')}
+            </Button>
+          )}
+        </div>
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="periodId" value={props.periodId} />
@@ -123,6 +158,95 @@ export function HoursForm({
   const t = useTranslations('periodForms');
   const tc = useTranslations('common');
   const error = useResult(state, t('hoursSaved'));
+  const v2 = useIsV2();
+  if (v2) {
+    const cell = 'px-3 py-2';
+    return (
+      <form action={action} className="flex flex-col">
+        <input type="hidden" name="periodId" value={periodId} />
+        {error?.message && (
+          <div className="px-5 pt-4">
+            <ErrorAlert message={error.message} />
+          </div>
+        )}
+        <table className="w-full min-w-[52rem] text-sm">
+          <thead className="text-xs text-muted-foreground">
+            <tr>
+              <th className="px-5 py-2.5 text-left font-normal">{t('v2.personRole')}</th>
+              <th className={cn(cell, 'text-left font-normal')}>{t('col.client')}</th>
+              <th className={cn(cell, 'text-left font-normal')}>{t('col.terms')}</th>
+              <th className={cn(cell, 'w-28 text-left font-normal')}>{t('col.hours')}</th>
+              <th className={cn(cell, 'w-28 text-left font-normal')}>{t('col.payHours')}</th>
+              <th className="px-5 py-2.5 text-left font-normal">{t('col.note')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.assignmentId} className="border-t">
+                <td className="px-5 py-2">
+                  <span className="font-medium">{r.personName}</span>
+                  {r.roleTitle && (
+                    <span className="block text-xs text-muted-foreground">{r.roleTitle}</span>
+                  )}
+                </td>
+                <td className={cell}>{r.clientName ?? tc('internal')}</td>
+                <td className={cn(cell, 'text-xs text-muted-foreground')}>{r.billing}</td>
+                <td className={cell}>
+                  <Input
+                    name={`hours.${r.assignmentId}`}
+                    aria-label={t('hoursAria', {
+                      person: r.personName,
+                      client: r.clientName ?? tc('internal'),
+                    })}
+                    inputMode="decimal"
+                    defaultValue={r.hours ?? ''}
+                    disabled={disabled}
+                    className="w-24 text-right tabular-nums"
+                  />
+                </td>
+                <td className={cell}>
+                  <Input
+                    name={`payHours.${r.assignmentId}`}
+                    aria-label={t('payHoursAria', {
+                      person: r.personName,
+                      client: r.clientName ?? tc('internal'),
+                    })}
+                    inputMode="decimal"
+                    placeholder={t('payHoursPlaceholder')}
+                    defaultValue={r.payHours ?? ''}
+                    disabled={disabled}
+                    className="w-24 text-right tabular-nums"
+                  />
+                </td>
+                <td className="px-5 py-2">
+                  <Input
+                    name={`note.${r.assignmentId}`}
+                    aria-label={t('noteAria', {
+                      person: r.personName,
+                      client: r.clientName ?? tc('internal'),
+                    })}
+                    placeholder={t('notePlaceholder')}
+                    maxLength={200}
+                    defaultValue={r.note ?? ''}
+                    disabled={disabled}
+                    className="min-w-40"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!disabled && (
+          <div className="flex flex-wrap items-center gap-3 border-t px-5 py-3">
+            <span className="text-xs text-muted-foreground">{t('v2.emptyIsZero')}</span>
+            <Button type="submit" disabled={pending} className="ml-auto">
+              {pending ? tc('saving') : t('saveHours')}
+            </Button>
+          </div>
+        )}
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="periodId" value={periodId} />
@@ -322,8 +446,73 @@ export function AdjustmentForm(props: {
   );
   const t = useTranslations('periodForms');
   const tc = useTranslations('common');
-  const { ADJUSTMENT_KIND_LABELS } = useLabels();
+  const { ADJUSTMENT_KIND_LABELS, PAYOUT_METHOD_LABELS } = useLabels();
   const error = useResult(state, t('adjustmentAdded'));
+  if (useIsV2()) {
+    return (
+      <form action={action} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <input type="hidden" name="periodId" value={props.periodId} />
+        <FormField label={t('person')} htmlFor="adj-person" error={error?.fieldErrors?.personId}>
+          <NativeSelect
+            id="adj-person"
+            name="personId"
+            placeholder={t('choose')}
+            options={props.people.map((p) => ({ value: p.id, label: p.name }))}
+          />
+        </FormField>
+        <FormField label={t('kind')} htmlFor="adj-kind">
+          <NativeSelect
+            id="adj-kind"
+            name="kind"
+            defaultValue="bonus"
+            options={toOptions(ADJUSTMENT_KIND_LABELS)}
+          />
+        </FormField>
+        <FormField label={t('amount')} htmlFor="adj-amount" error={error?.fieldErrors?.amount}>
+          <div className="flex gap-2">
+            <Input id="adj-amount" name="amount" inputMode="decimal" />
+            <NativeSelect
+              aria-label={t('currency')}
+              name="currency"
+              defaultValue="UAH"
+              className="w-24"
+              options={[
+                { value: 'UAH', label: 'UAH' },
+                { value: 'USD', label: 'USD' },
+              ]}
+            />
+          </div>
+        </FormField>
+        <FormField label={t('payout')} htmlFor="adj-method">
+          <NativeSelect
+            id="adj-method"
+            name="payoutMethod"
+            defaultValue="fiat"
+            options={[
+              { value: 'fiat', label: PAYOUT_METHOD_LABELS.fiat ?? 'fiat' },
+              { value: 'crypto', label: PAYOUT_METHOD_LABELS.crypto ?? 'crypto' },
+            ]}
+          />
+        </FormField>
+        <FormField
+          label={t('reason')}
+          htmlFor="adj-reason"
+          error={error?.fieldErrors?.reason}
+          className="sm:col-span-2"
+        >
+          <Input id="adj-reason" name="reason" required />
+        </FormField>
+        <div className="sm:col-span-2">
+          <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+        </div>
+        <div className="flex gap-2 sm:col-span-2">
+          <Button type="submit" disabled={pending}>
+            {tc('add')}
+          </Button>
+        </div>
+      </form>
+    );
+  }
   return (
     <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-7">
       <input type="hidden" name="periodId" value={props.periodId} />

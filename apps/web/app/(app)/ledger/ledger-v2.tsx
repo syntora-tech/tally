@@ -1,19 +1,30 @@
-import { isCryptoNetwork, shortAddress, toDecimal, transactionExplorerUrl } from '@tally/domain';
+import {
+  addMonths,
+  endOfMonth,
+  isCryptoNetwork,
+  shortAddress,
+  startOfMonth,
+  toDecimal,
+  transactionExplorerUrl,
+  type LocalDate,
+} from '@tally/domain';
 import { cn } from 'cn';
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ExternalLink, Pencil } from 'lucide-react';
 import type { Result } from 'neverthrow';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AutoFilters } from '@/components/v2/auto-filters';
 import { HelpTip } from '@/components/v2/help-tip';
 import { PageHeader } from '@/components/v2/page-header';
+import { EmptyState } from '@/components/v2/panel';
 import { Status } from '@/components/v2/status';
 import { TabsNav } from '@/components/v2/tabs-nav';
 import { getFormat, getLabels } from '@/server/i18n';
 import { impliedRate, type listAccounts, type listTransactions } from '@/server/services/ledger';
-import { DeleteTransactionButton } from './ledger-forms';
+import { RowMenu } from '@/components/v2/form-dialog';
+import { DeleteTransactionForm } from './ledger-forms';
 
 type OkOf<T> = T extends Result<infer V, unknown> ? V : never;
 type AccountRow = OkOf<Awaited<ReturnType<typeof listAccounts.run>>>[number];
@@ -70,6 +81,7 @@ export async function LedgerV2({
   filters,
   limit,
   moreHref,
+  today,
 }: {
   accounts: AccountRow[];
   categories: { id: string; name: string; txType: string }[];
@@ -77,13 +89,24 @@ export async function LedgerV2({
   filters: { accountId: string; unallocated: string };
   limit: number;
   moreHref: string;
+  today: LocalDate;
 }) {
-  const [t, tc, fmt, { TX_TYPE_LABELS }] = await Promise.all([
+  const [t, tc, fmt, { TX_TYPE_LABELS }, locale] = await Promise.all([
     getTranslations('ledger'),
     getTranslations('common'),
     getFormat(),
     getLabels(),
+    getLocale(),
   ]);
+  // Only the day groups are spelled out; every other date stays DD.MM.YYYY.
+  const dayLabel = new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const monthStart = startOfMonth(today);
+  const lastMonth = addMonths(monthStart, -1);
   const accountHref = (id: string) => {
     const q = new URLSearchParams();
     if (id) q.set('accountId', id);
@@ -145,8 +168,30 @@ export async function LedgerV2({
         clearLabel={t('v2.clear')}
         resets={['limit']}
         fields={[
-          { kind: 'date', name: 'from', label: t('from') },
-          { kind: 'date', name: 'to', label: t('to') },
+          {
+            kind: 'text',
+            name: 'q',
+            label: t('v2.search'),
+            placeholder: t('v2.searchPlaceholder'),
+            search: true,
+          },
+          {
+            kind: 'range',
+            from: 'from',
+            to: 'to',
+            label: t('v2.period'),
+            fromLabel: t('from'),
+            toLabel: t('to'),
+            presets: [
+              { label: t('v2.thisMonth'), from: monthStart, to: endOfMonth(monthStart) },
+              { label: t('v2.lastMonth'), from: lastMonth, to: endOfMonth(lastMonth) },
+              {
+                label: t('v2.thisYear'),
+                from: `${today.slice(0, 4)}-01-01`,
+                to: `${today.slice(0, 4)}-12-31`,
+              },
+            ],
+          },
           {
             kind: 'select',
             name: 'type',
@@ -169,9 +214,7 @@ export async function LedgerV2({
       />
 
       {journal.length === 0 ? (
-        <div className="rounded-lg border border-dashed px-6 py-12 text-center text-muted-foreground">
-          {t('noTransactions')}
-        </div>
+        <EmptyState title={t('noTransactions')} />
       ) : (
         <div className="rounded-lg border bg-card">
           <div className="hidden grid-cols-[2rem_minmax(0,1fr)_11rem_9rem_9rem_4.5rem] gap-3 border-b px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
@@ -188,7 +231,11 @@ export async function LedgerV2({
           {[...byDate.entries()].map(([date, rows]) => (
             <section key={date} aria-label={fmt.date(date)}>
               <h3 className="border-b bg-muted/50 px-4 py-1.5 text-xs font-semibold text-muted-foreground">
-                {fmt.date(date)}
+                {dayLabel
+                  .formatToParts(new Date(`${date}T00:00:00Z`))
+                  .filter((part) => part.type !== 'literal')
+                  .map((part) => part.value)
+                  .join(' ')}
               </h3>
               <ul className="divide-y">
                 {rows.map((tx) => {
@@ -226,7 +273,7 @@ export async function LedgerV2({
                     <li
                       key={tx.transaction.id}
                       data-testid="ledger-row"
-                      className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm md:grid-cols-[2rem_minmax(0,1fr)_11rem_9rem_9rem_4.5rem]"
+                      className="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm hover:bg-muted/40 md:grid-cols-[2rem_minmax(0,1fr)_11rem_9rem_9rem_4.5rem]"
                     >
                       <span
                         aria-label={TX_TYPE_LABELS[type]}
@@ -291,9 +338,12 @@ export async function LedgerV2({
                                   })}
                             </Status>
                           ) : (
-                            <Status tone="success" testId="allocation">
-                              {t('v2.allocated')}
-                            </Status>
+                            <span
+                              className="text-xs text-muted-foreground"
+                              data-testid="allocation"
+                            >
+                              ✓ {t('v2.allocated')}
+                            </span>
                           )
                         ) : null}
                       </div>
@@ -316,17 +366,31 @@ export async function LedgerV2({
                           </div>
                         ))}
                       </div>
-                      <div className="col-start-3 flex justify-end md:col-start-auto">
+                      <div className="col-start-3 flex justify-end gap-1 md:col-start-auto md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
                         <Button
                           size="icon-sm"
-                          variant="ghost"
+                          variant="outline"
                           aria-label={t('edit')}
                           title={t('edit')}
                           render={<Link href={`/ledger/${tx.transaction.id}/edit`} />}
                         >
                           <Pencil className="size-4" />
                         </Button>
-                        {allocated.isZero() && <DeleteTransactionButton id={tx.transaction.id} />}
+                        {allocated.isZero() && (
+                          <RowMenu
+                            label={tc('actions')}
+                            entries={[
+                              {
+                                label: t('v2.deleteAction'),
+                                destructive: true,
+                                dialog: {
+                                  title: t('v2.deleteTitle'),
+                                  content: <DeleteTransactionForm id={tx.transaction.id} />,
+                                },
+                              },
+                            ]}
+                          />
+                        )}
                       </div>
                     </li>
                   );

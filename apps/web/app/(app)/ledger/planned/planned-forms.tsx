@@ -10,6 +10,7 @@ import { TransferFeeFields, type TransferFeeValues } from '@/components/transfer
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { editableDecimal } from '@/lib/format';
+import { useCloseOnSuccess } from '@/components/v2/form-dialog';
 import {
   deletePlannedExpenseAction,
   deletePlannedPartAction,
@@ -583,6 +584,193 @@ export function PaymentActions({
       </Button>
       {payError && <p className="w-full text-sm text-destructive">{payError}</p>}
       {cancel}
+    </form>
+  );
+}
+
+/** v2: "Paid" in a dialog — a new expense with its fee, or one already in the statement. */
+export function PayPlannedForm({
+  id,
+  amount,
+  currency,
+  fee,
+  today,
+  accounts,
+  candidates,
+}: {
+  id: string;
+  amount: string;
+  currency: string;
+  fee: { amount: string; currency: string } | null;
+  today: string;
+  accounts: { id: string; label: string; currency: string }[];
+  candidates: { id: string; label: string }[];
+}) {
+  const t = useTranslations('plannedPayments');
+  const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>(
+    candidates.length ? 'existing' : 'new',
+  );
+  // The row changes status under the dialog, so the toast fires from the action itself.
+  const [state, pay, paying] = useActionState<PlannedFormState, FormData>(
+    async (prev, formData) => {
+      const result = await payPlannedAction(prev, formData);
+      if (result?.ok) toast.success(t('paid'));
+      return result;
+    },
+    null,
+  );
+  useCloseOnSuccess(state);
+  const errors = state && !state.ok ? state.error.fieldErrors : undefined;
+  const error = state && !state.ok && !state.error.fieldErrors ? state.error.message : null;
+  const p = `ppd-${id}`;
+  const own = accounts.filter((a) => a.currency === currency);
+  return (
+    <form action={pay} className="flex flex-col gap-3">
+      <input type="hidden" name="id" value={id} />
+      <FormField label={t('source')} htmlFor={`${p}-source`}>
+        <NativeSelect
+          id={`${p}-source`}
+          value={paidFrom}
+          onChange={(e) => {
+            setPaidFrom(e.target.value === 'existing' ? 'existing' : 'new');
+          }}
+          options={[
+            { value: 'existing', label: t('sourceExisting') },
+            { value: 'new', label: t('sourceNew') },
+          ]}
+        />
+      </FormField>
+      {paidFrom === 'existing' ? (
+        <FormField label={t('transaction')} htmlFor={`${p}-tx`} error={errors?.transactionIds}>
+          {candidates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('noCandidates')}</p>
+          ) : (
+            <NativeSelect
+              id={`${p}-tx`}
+              name="transactionId"
+              placeholder={t('chooseTransaction')}
+              options={candidates.map((c) => ({ value: c.id, label: c.label }))}
+            />
+          )}
+        </FormField>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField label={t('account')} htmlFor={`${p}-acc`} error={errors?.accountId}>
+            <NativeSelect
+              id={`${p}-acc`}
+              name="accountId"
+              defaultValue={own[0]?.id ?? ''}
+              placeholder={t('chooseAccount')}
+              options={own.map((a) => ({ value: a.id, label: a.label }))}
+            />
+          </FormField>
+          <FormField label={t('date')} htmlFor={`${p}-date`}>
+            <Input id={`${p}-date`} name="occurredOn" type="date" defaultValue={today} />
+          </FormField>
+          <FormField
+            label={t('amount', { currency })}
+            htmlFor={`${p}-amount`}
+            error={errors?.amount}
+          >
+            <Input
+              id={`${p}-amount`}
+              name="amount"
+              inputMode="decimal"
+              defaultValue={editableDecimal(amount)}
+            />
+          </FormField>
+          <FormField
+            label={t('fee', { currency: fee?.currency ?? currency })}
+            htmlFor={`${p}-fee`}
+            error={errors?.feeAmount}
+          >
+            <Input
+              id={`${p}-fee`}
+              name="feeAmount"
+              inputMode="decimal"
+              defaultValue={editableDecimal(fee?.amount)}
+            />
+          </FormField>
+          {fee && fee.currency !== currency && (
+            <FormField label={t('feeAccount')} htmlFor={`${p}-fee-acc`}>
+              <NativeSelect
+                id={`${p}-fee-acc`}
+                name="feeAccountId"
+                defaultValue={accounts.find((a) => a.currency === fee.currency)?.id ?? ''}
+                options={accounts.map((a) => ({ value: a.id, label: a.label }))}
+              />
+            </FormField>
+          )}
+        </div>
+      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={paying}>
+          {t('record')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** v2: this month's amount of a payment (the gross of a salary instalment), in a dialog. */
+export function PlannedAmountForm({
+  id,
+  isInstalment,
+  amount,
+  gross,
+  currency,
+}: {
+  id: string;
+  isInstalment: boolean;
+  amount: string;
+  gross: string | null;
+  currency: string;
+}) {
+  const t = useTranslations('plannedPayments');
+  const tc = useTranslations('common');
+  const [state, action, saving] = useActionState(setPlannedAmountAction, null);
+  const errors = usePlannedFeedback(state, t('amountSaved'));
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <input type="hidden" name="id" value={id} />
+      <FormField
+        label={isInstalment ? t('gross', { currency }) : t('amount', { currency })}
+        htmlFor={`ppa-${id}`}
+        error={errors?.amount}
+      >
+        <Input
+          id={`ppa-${id}`}
+          name="amount"
+          inputMode="decimal"
+          defaultValue={editableDecimal(isInstalment ? (gross ?? amount) : amount)}
+        />
+      </FormField>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={saving}>
+          {tc('save')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** v2: skipping this month's payment with a reason, in a dialog. */
+export function SkipPlannedForm({ id }: { id: string }) {
+  const t = useTranslations('plannedPayments');
+  const [state, action, skipping] = useActionState(skipPlannedAction, null);
+  const errors = usePlannedFeedback(state, t('skipped'));
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <input type="hidden" name="id" value={id} />
+      <FormField label={t('skipReason')} htmlFor={`pps-${id}`} error={errors?.reason}>
+        <Input id={`pps-${id}`} name="reason" />
+      </FormField>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={skipping}>
+          {t('skip')}
+        </Button>
+      </div>
     </form>
   );
 }
