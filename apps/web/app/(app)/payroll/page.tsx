@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { addMonths, endOfMonth, startOfMonth, sum, toDecimal, type LocalDate } from '@tally/domain';
 import Link from 'next/link';
@@ -38,13 +39,15 @@ export const generateMetadata = pageTitle('payroll');
 
 const GROUPS: PayrollGroup[] = ['ready', 'waiting', 'paid'];
 const LINE_STATUSES = ['accrued', 'awaiting_client', 'payable', 'paid'] as const;
+const ALL = 'all';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function PayrollPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireRole(FINANCE_ROLES);
   const params = await searchParams;
-  const periodId = typeof params.period === 'string' ? params.period : '';
+  const requested = typeof params.period === 'string' ? params.period : undefined;
+  const periodId = requested && requested !== ALL ? requested : '';
   const [rows, periods, accounts, suggestion] = await Promise.all([
     listPayroll.run(ctx, { periodId }),
     listPeriods.run(ctx, {}),
@@ -52,6 +55,16 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     suggestRate.run(ctx, { onDate: ctx.today }),
   ]);
   const items = rows.unwrapOr([]);
+  if (requested === undefined) {
+    // Opens on the latest month that still has something unpaid; "All" is ?period=all.
+    const latest = items
+      .filter((i) => i.item.status !== 'paid')
+      .reduce<(typeof items)[number] | undefined>(
+        (a, b) => (a && a.month >= b.month ? a : b),
+        undefined,
+      );
+    if (latest) redirect(`/payroll?period=${latest.item.periodId}`);
+  }
   const unpaidMonths = items.filter((i) => i.group !== 'paid').map((i) => i.month);
   const candidates = unpaidMonths.length
     ? (
@@ -230,7 +243,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           <Button
             size="sm"
             variant={periodId ? 'outline' : 'default'}
-            render={<Link href="/payroll" />}
+            render={<Link href={`/payroll?period=${ALL}`} />}
           >
             {t('all')}
           </Button>
@@ -349,13 +362,46 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
 
       {GROUPS.map((g) => {
         const group = items.filter((i) => i.group === g);
-        if (group.length === 0) return null;
+        // Acts paid on their own while the rest of their payout is still open (A-085).
+        const paidParts =
+          g === 'paid'
+            ? items
+                .filter((i) => i.group !== 'paid')
+                .flatMap((i) =>
+                  i.acts.filter((a) => a.rateLocked && !a.isRest).map((a) => ({ i, a })),
+                )
+            : [];
+        if (group.length === 0 && paidParts.length === 0) return null;
         const title = t(`groups.${g}`);
         return (
           <section key={g} className="flex flex-col gap-3" aria-label={title}>
             <h2 className="text-lg font-semibold">
-              {title} ({group.length})
+              {title} ({group.length + paidParts.length})
             </h2>
+            {paidParts.map(({ i, a }) => (
+              <Card key={a.id} data-testid="paid-part">
+                <CardContent className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium">
+                    {i.personName} · {fmt.month(i.month)}
+                  </span>
+                  <Link className="hover:underline" href={`/acts/${a.id}`}>
+                    {a.number ?? tp('draftAct')}
+                  </Link>
+                  {a.periodFrom && a.periodTo && (
+                    <span className="text-muted-foreground">
+                      {fmt.date(a.periodFrom)}–{fmt.date(a.periodTo)}
+                    </span>
+                  )}
+                  <span>{fmt.amount(a.amountUah, 'UAH')}</span>
+                  <Badge>{t('actPaid')}</Badge>
+                  {i.remaining !== null && (
+                    <span className="text-muted-foreground">
+                      {t('paidPartRest', { amount: fmt.amount(i.remaining, i.currency) })}
+                    </span>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
             {group.map((i) => {
               const fiat = i.item.payoutMethod === 'fiat';
               return (

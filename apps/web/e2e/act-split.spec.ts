@@ -187,6 +187,28 @@ test('a draft act is issued with my own PDF, then marked signed by its copy (A-1
   await expect(page.getByTestId('payout-acts').getByText('signed', { exact: true })).toBeVisible();
 });
 
+test('an act paid on its own shows under Paid while its payout stays open', async ({ page }) => {
+  const { db: d, sql: client } = db();
+  try {
+    await d.transaction(async (tx) => {
+      await tx.execute(sql`set local session_replication_role = replica`);
+      await tx.execute(
+        sql`update public.supplier_act set rate_locked = true where payroll_item_id = ${ids.item} and number like '% - А1'`,
+      );
+    });
+  } finally {
+    await client.end();
+  }
+  await signIn(page, E2E_OWNER_EMAIL);
+  // Payroll opens on the latest month with something unpaid, not on all months.
+  await page.goto('/payroll');
+  await expect(page).toHaveURL(/\/payroll\?period=[0-9a-f-]{36}$/);
+  await page.goto(`/payroll?period=${ids.period}`);
+  const part = page.getByRole('region', { name: 'Paid' }).getByTestId('paid-part');
+  await expect(part.getByRole('link', { name: /- А1$/ })).toBeVisible();
+  await expect(part.getByText('paid', { exact: true })).toBeVisible();
+});
+
 test('an empty period opened by mistake is deleted', async ({ page }) => {
   await signIn(page, E2E_OWNER_EMAIL);
   await page.goto(`/periods/${emptyPeriod}`);

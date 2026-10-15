@@ -67,8 +67,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       href: '/invoices?status=issued',
       testId: 'receivables-total',
     },
-    { key: 'awaiting', value: o.awaitingUsd, href: '/payroll', testId: 'awaiting-total' },
-    { key: 'payable', value: o.payableUsd, href: '/payroll', testId: 'payable-total' },
+    {
+      key: 'awaiting',
+      value: o.awaitingUsd,
+      href: '/payroll?period=all',
+      testId: 'awaiting-total',
+    },
+    { key: 'payable', value: o.payableUsd, href: '/payroll?period=all', testId: 'payable-total' },
     {
       key: 'badDebt',
       value: o.badDebtUsd,

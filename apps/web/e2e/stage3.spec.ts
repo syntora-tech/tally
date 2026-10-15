@@ -219,7 +219,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL(/\/ledger$/);
 
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   const p1 = itemCard(page, people.p1);
   await expect(p1).toContainText('client');
   await expect(p1.getByTestId('next-step')).toHaveText('Next: issue the document');
@@ -242,7 +242,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Link saved')).toBeVisible();
 
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   const signed = itemCard(page, people.p1);
   await expect(signed.getByTestId('next-step')).toHaveText('Next: pay');
   await signed.getByRole('button', { name: 'Pay' }).click();
@@ -260,12 +260,12 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await setToday(page, '2043-09-18');
   await revenue(page, '235');
   await allocate(page, clients.k3, '235');
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   await expect(itemCard(page, people.p3)).toContainText('waiting for client until 21.09.2043');
 
   // 2. Client is late: on 21.09 the line becomes payable at the company's expense.
   await setToday(page, '2043-09-21');
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   await expect(itemCard(page, people.p2)).toContainText('payable');
   await expect(itemCard(page, people.p2)).toContainText('company');
   await page.goto('/dashboard');
@@ -281,7 +281,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await expect(page.getByText('Paid').first()).toBeVisible();
   await page.goto('/dashboard');
   await expect(page.getByTestId('credit-to-clients')).not.toHaveText(creditBefore);
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   await expect(itemCard(page, people.p2)).toContainText('company');
 
   // A payout already in the Ledger (a statement row) is linked to the item, not booked twice.
@@ -292,7 +292,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   await page.locator('#from-amount').fill('10000');
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page).toHaveURL(/\/ledger$/);
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   const p2 = itemCard(page, people.p2);
   await p2.getByRole('button', { name: 'Pay' }).click();
   await p2.getByLabel('Payment', { exact: true }).selectOption('existing');
@@ -327,7 +327,7 @@ test('spec 9.4: pay-when-paid scenarios 1–5', async ({ page }) => {
   const newNumber = (await heading.innerText()).match(/S\d+\/43/)?.[0];
   const reissuedUrl = page.url();
   expect(newNumber).not.toBe(oldNumber);
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   await expect(itemCard(page, people.p3)).toContainText(`invoice ${newNumber ?? ''}`);
 
   // 7. The client never pays: the owner writes the debt off without touching the Ledger (A-065).

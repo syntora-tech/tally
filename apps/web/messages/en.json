@@ -1621,6 +1621,7 @@
     "signed": "signed",
     "unsigned": "not signed",
     "actPaid": "paid",
+    "paidPartRest": "part of the payout; the rest, {amount}, is on its card above",
     "step": {
       "issue": "Next: issue the document",
       "sign": "Next: sign the document",
