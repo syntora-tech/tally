@@ -13,6 +13,9 @@ import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { CardLayout, KeyValue, KeyValues, Panel } from '@/components/v2/panel';
+import { INVOICE_TONES, Status } from '@/components/v2/status';
+import { listInvoices } from '@/server/services/invoices';
 
 export const generateMetadata = pageTitle('client');
 
@@ -34,28 +37,187 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   ]);
 
   const v2 = (await getUiPrefs()).version === 'v2';
+  if (v2) {
+    const [invoices, { INVOICE_STATUS_LABELS }] = await Promise.all([
+      isFinance ? listInvoices.run(ctx, { clientId: c.id }) : null,
+      getLabels(),
+    ]);
+    const invoiceRows = invoices?.unwrapOr([]) ?? [];
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title={c.shortName ?? c.legalName}
+          meta={
+            <>
+              {c.legalName}
+              {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
+            </>
+          }
+        >
+          {isFinance && (
+            <>
+              <Button variant="outline" render={<Link href={`/clients/${c.id}/edit`} />}>
+                {tc('edit')}
+              </Button>
+              <Button render={<Link href={`/clients/contracts/new?clientId=${c.id}`} />}>
+                + {t('newContract')}
+              </Button>
+            </>
+          )}
+        </PageHeader>
+        <CardLayout
+          main={
+            <>
+              {isFinance && (
+                <Panel title={t('contracts')}>
+                  {contracts.length === 0 ? (
+                    <p className="text-muted-foreground">{t('noContracts')}</p>
+                  ) : (
+                    <ul className="-mx-5 -mb-4 flex flex-col divide-y border-t">
+                      {contracts.map((ct) => (
+                        <li key={ct.id}>
+                          <Link
+                            href={`/clients/contracts/${ct.id}`}
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 hover:bg-muted/40"
+                          >
+                            <span className="font-medium">{ct.number}</span>
+                            <Status tone={ct.status === 'active' ? 'success' : 'neutral'}>
+                              {CONTRACT_STATUS_LABELS[ct.status]}
+                            </Status>
+                            <span className="text-muted-foreground">
+                              {[
+                                ct.signedOn ? t('signedOn', { date: fmt.date(ct.signedOn) }) : null,
+                                ct.currency,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              )}
+              {isFinance && (
+                <Panel title={t('activePeople')}>
+                  {activePeople.length === 0 ? (
+                    <p className="text-muted-foreground">{t('noActivePeople')}</p>
+                  ) : (
+                    <ul className="-mx-5 -mb-4 flex flex-col divide-y border-t">
+                      {activePeople.map((a) => (
+                        <li key={a.assignmentId}>
+                          <Link
+                            href={`/people/assignments/${a.assignmentId}`}
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 hover:bg-muted/40"
+                          >
+                            <span className="font-medium">{a.personName}</span>
+                            <span className="text-muted-foreground">
+                              {[
+                                a.roleTitle,
+                                a.annexLabel ?? a.sowRef,
+                                a.contractNumber,
+                                `FTE ${a.fte}`,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              )}
+              {isFinance && (
+                <Panel title={t('invoicesTitle')} flush>
+                  {invoiceRows.length === 0 ? (
+                    <p className="px-5 py-4 text-muted-foreground">{t('v2.noInvoices')}</p>
+                  ) : (
+                    <table className="w-full min-w-[34rem] text-sm tabular-nums">
+                      <tbody>
+                        {invoiceRows.map((i) => (
+                          <tr key={i.id} className="border-t first:border-t-0 hover:bg-muted/40">
+                            <td className="px-5 py-2.5">
+                              <Link
+                                href={`/invoices/${i.id}`}
+                                className="font-medium hover:underline"
+                              >
+                                {i.number ?? t('v2.draft')}
+                              </Link>
+                            </td>
+                            <td className="px-3 py-2.5 text-muted-foreground">
+                              {fmt.date(i.issueDate)}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              {fmt.amount(i.total, i.currency)}
+                            </td>
+                            <td className="px-5 py-2.5 text-right">
+                              <span className="inline-flex flex-wrap justify-end gap-1">
+                                <Status tone={INVOICE_TONES[i.status] ?? 'neutral'}>
+                                  {INVOICE_STATUS_LABELS[i.status] ?? i.status}
+                                </Status>
+                                {i.overdueDays > 0 && (
+                                  <Status tone="danger">
+                                    {t('v2.overdue', { days: i.overdueDays })}
+                                  </Status>
+                                )}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </Panel>
+              )}
+              <AuditHistory ctx={ctx} tableName="client" rowId={c.id} />
+            </>
+          }
+          aside={
+            <>
+              <Panel title={t('details')}>
+                <KeyValues>
+                  <KeyValue label={t('address')}>
+                    {c.address && <span className="whitespace-pre-line">{c.address}</span>}
+                  </KeyValue>
+                  <KeyValue label={t('bankDetails')}>
+                    {c.bankDetails && <span className="whitespace-pre-line">{c.bankDetails}</span>}
+                  </KeyValue>
+                  <KeyValue label={t('contacts')}>
+                    {contacts.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {contacts.map((ct, i) => (
+                          <li key={i}>
+                            {ct.name}
+                            {ct.role ? ` (${ct.role})` : ''}
+                            {ct.email ? ` · ${ct.email}` : ''}
+                            {ct.phone ? ` · ${ct.phone}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </KeyValue>
+                </KeyValues>
+              </Panel>
+              {isFinance && <WalletsCard ctx={ctx} owner={{ name: 'clientId', value: c.id }} />}
+              <CounterpartyDossier ctx={ctx} party="client" id={c.id} canAdd={isFinance} />
+            </>
+          }
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
-        {v2 ? (
-          <PageHeader
-            title={c.shortName ?? c.legalName}
-            meta={
-              <>
-                {c.legalName}
-                {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
-              </>
-            }
-          />
-        ) : (
-          <div>
-            <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
-            <p className="text-muted-foreground">
-              {c.legalName}
-              {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
-            </p>
-          </div>
-        )}
+        <div>
+          <h1 className="text-2xl font-semibold">{c.shortName ?? c.legalName}</h1>
+          <p className="text-muted-foreground">
+            {c.legalName}
+            {c.country ? ` · ${c.country}` : ''} · {c.defaultCurrency}
+          </p>
+        </div>
         {isFinance && (
           <div className="flex gap-2">
             <Button variant="outline" render={<Link href={`/clients/${c.id}/edit`} />}>

@@ -20,7 +20,7 @@ export default async function PayeesPage() {
     const tp = await getTranslations('people');
     return (
       <div className="flex flex-col gap-5">
-        <PageHeader title={tp('title')} help={t('subtitle')}>
+        <PageHeader title={tp('title')} crumb={t('title')} help={t('subtitle')}>
           <Button render={<Link href="/people/payees/new" />}>+ {t('add')}</Button>
         </PageHeader>
         <PeopleTabs active="payees" />

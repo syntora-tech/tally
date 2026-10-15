@@ -737,7 +737,10 @@
       "recordPayment": "Record payment",
       "calendarHelp": "Payouts, client due dates, planned expenses and document dates. “If nobody pays” is the treasury minus every outflow.",
       "ifNobodyPays": "If nobody pays:",
-      "zeroColumns": "Columns where every value is 0 are hidden."
+      "zeroColumns": "Columns where every value is 0 are hidden.",
+      "cashShort": "cash {amount}",
+      "showTable": "Show the table",
+      "hideTable": "Hide the table"
     }
   },
   "trips": {
@@ -937,7 +940,12 @@
     "activePeople": "Active people",
     "noActivePeople": "Nobody is assigned right now",
     "invoicesTitle": "Invoices and receivables",
-    "invoicesSoon": "Invoices, receivables and the average payment delay arrive at stage 2."
+    "invoicesSoon": "Invoices, receivables and the average payment delay arrive at stage 2.",
+    "v2": {
+      "noInvoices": "No invoices yet",
+      "draft": "Draft",
+      "overdue": "{days, plural, one {# day overdue} other {# days overdue}}"
+    }
   },
   "contracts": {
     "title": "Contract {number}",
@@ -2386,6 +2394,14 @@
     "signHint": "Once both sides have signed, add the link or the signed PDF: the payout can then be paid.",
     "signedOn": "Signed {date}",
     "signedLink": "signed link",
-    "signedCopy": "signed copy"
+    "signedCopy": "signed copy",
+    "v2": {
+      "flowLabel": "Invoice state",
+      "steps": {
+        "document": "Document",
+        "signature": "Signature",
+        "payment": "Payment"
+      }
+    }
   }
 }

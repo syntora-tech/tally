@@ -52,8 +52,9 @@ export const listInvoices = defineService({
   name: 'invoices.list',
   input: z.object({
     status: z.preprocess((v) => (v === '' ? undefined : v), z.enum(INVOICE_STATUSES).optional()),
+    clientId: z.uuid().optional(),
   }),
-  handler: async (ctx, { status }) => {
+  handler: async (ctx, { status, clientId }) => {
     const rows = await inActorScope(ctx, (tx) =>
       tx
         .select({
@@ -73,7 +74,12 @@ export const listInvoices = defineService({
         .from(invoice)
         .innerJoin(client, eq(client.id, invoice.clientId))
         .leftJoin(period, eq(period.id, invoice.periodId))
-        .where(status ? eq(invoice.status, status) : undefined)
+        .where(
+          and(
+            status ? eq(invoice.status, status) : undefined,
+            clientId ? eq(invoice.clientId, clientId) : undefined,
+          ),
+        )
         .orderBy(desc(invoice.issueDate), desc(invoice.createdAt)),
     );
     return ok(

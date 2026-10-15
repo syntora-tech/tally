@@ -62,10 +62,16 @@ export async function DashboardV2({
     (k) =>
       m !== null && [...m.byClient, ...m.byPerson, m.total].some((r) => !toDecimal(r[k]).isZero()),
   );
-  const maxNet = forecast.reduce(
-    (max, r) => (toDecimal(r.netUsd).abs().gt(max) ? toDecimal(r.netUsd).abs() : max),
+  const maxBar = forecast.reduce(
+    (max, r) =>
+      [toDecimal(r.netUsd).abs(), toDecimal(r.revenueUsd).abs()].reduce(
+        (acc, v) => (v.gt(acc) ? v : acc),
+        max,
+      ),
     toDecimal('0'),
   );
+  const barHeight = (v: string) =>
+    maxBar.isZero() ? '0' : toDecimal(v).abs().div(maxBar).times(100).toFixed(0);
 
   const kpi = (
     label: ReactNode,
@@ -109,11 +115,13 @@ export async function DashboardV2({
 
   const panel = (title: ReactNode, body: ReactNode, aside?: ReactNode, className?: string) => (
     <section className={cn('flex min-w-0 flex-col rounded-lg border bg-card', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 not-last:border-b">
-        <h2 className="flex items-center gap-2 font-heading font-semibold">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 not-last:border-b">
+        <h2 className="flex items-center gap-2 font-heading text-[17px] font-bold tracking-tight">
+          {title}
+        </h2>
         {aside}
       </div>
-      {body && <div className="min-w-0 px-4 py-3">{body}</div>}
+      {body && <div className="min-w-0 px-5 py-3">{body}</div>}
     </section>
   );
 
@@ -186,49 +194,50 @@ export async function DashboardV2({
         </Alert>
       )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        {panel(
-          <>
-            {tv('attention')}
-            <Status tone={overdue.length > 0 ? 'danger' : 'neutral'}>{overdue.length}</Status>
-          </>,
-          overdue.length === 0 && (!c || c.rows.length === 0) ? (
-            <p className="py-2 text-sm text-muted-foreground">{tv('allClear')}</p>
-          ) : (
-            <ul className="flex flex-col divide-y text-sm">
-              {overdue.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                  <Status tone="danger">{t('overdue', { days: r.daysPastDue })}</Status>
-                  <span className="min-w-0 flex-1 truncate">
-                    {r.clientName} · {r.number}
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {fmt.amount(r.remaining, r.currency)}
-                  </span>
-                  <Button size="sm" variant="outline" render={<Link href={`/invoices/${r.id}`} />}>
-                    {tv('recordPayment')}
-                  </Button>
-                </li>
-              ))}
-              {c?.rows.map((r) => (
-                <li key={r.lineId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                  <Status tone="warning">{t('creditTitle')}</Status>
-                  <span className="min-w-0 flex-1 truncate">{r.personName}</span>
-                  <span className="font-semibold tabular-nums">
-                    {r.amountUsd ? usd(r.amountUsd) : fmt.amount(r.amount, r.currency)}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    render={<Link href={`/invoices/${r.invoiceId}`} />}
-                  >
-                    {t('invoice', { number: r.invoiceNumber ?? '' })}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ),
-        )}
+      {panel(
+        <>
+          {tv('attention')}
+          <Status tone={overdue.length > 0 ? 'danger' : 'neutral'}>{overdue.length}</Status>
+        </>,
+        overdue.length === 0 && (!c || c.rows.length === 0) ? (
+          <p className="py-2 text-sm text-muted-foreground">{tv('allClear')}</p>
+        ) : (
+          <ul className="flex flex-col divide-y text-sm">
+            {overdue.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+                <Status tone="danger">{t('overdue', { days: r.daysPastDue })}</Status>
+                <span className="min-w-0 flex-1 truncate">
+                  {r.clientName} · {r.number}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {fmt.amount(r.remaining, r.currency)}
+                </span>
+                <Button size="sm" variant="outline" render={<Link href={`/invoices/${r.id}`} />}>
+                  {tv('recordPayment')}
+                </Button>
+              </li>
+            ))}
+            {c?.rows.map((r) => (
+              <li key={r.lineId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+                <Status tone="warning">{t('creditTitle')}</Status>
+                <span className="min-w-0 flex-1 truncate">{r.personName}</span>
+                <span className="font-semibold tabular-nums">
+                  {r.amountUsd ? usd(r.amountUsd) : fmt.amount(r.amount, r.currency)}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={`/invoices/${r.invoiceId}`} />}
+                >
+                  {t('invoice', { number: r.invoiceNumber ?? '' })}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ),
+      )}
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
         {panel(
           t('balances'),
           <ul className="flex flex-col divide-y text-sm">
@@ -253,44 +262,45 @@ export async function DashboardV2({
             {tl('reconcile')}
           </Link>,
         )}
+        {panel(
+          <>
+            {t('calendar')}
+            <HelpTip label={tc('help')}>{tv('calendarHelp')}</HelpTip>
+          </>,
+          o.events.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">{t('noEvents')}</p>
+          ) : (
+            <ul className="flex flex-col divide-y text-sm">
+              {o.events.map((e, i) => (
+                <li
+                  key={`${e.on}-${e.kind}-${String(i)}`}
+                  data-testid="calendar-event"
+                  className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2 sm:grid-cols-[5.5rem_10rem_minmax(0,1fr)_auto]"
+                >
+                  <span className="tabular-nums text-muted-foreground">{fmt.date(e.on)}</span>
+                  <span className="hidden sm:block">
+                    <Status>{t(`event.${e.kind}`)}</Status>
+                  </span>
+                  <Link href={e.href} className="min-w-0 truncate hover:underline">
+                    {e.kind === 'invoice_date' || e.kind === 'act_date'
+                      ? fmt.month(e.label)
+                      : e.label}
+                  </Link>
+                  <span className="text-right tabular-nums">
+                    {e.usd === null ? '' : usd(e.usd)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ),
+          <span className="text-sm text-muted-foreground">
+            {tv('ifNobodyPays')}{' '}
+            <span className="font-semibold text-foreground tabular-nums">
+              {usd(o.cashAfterOutflowsUsd)}
+            </span>
+          </span>,
+        )}
       </div>
-
-      {panel(
-        <>
-          {t('calendar')}
-          <HelpTip label={tc('help')}>{tv('calendarHelp')}</HelpTip>
-        </>,
-        o.events.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">{t('noEvents')}</p>
-        ) : (
-          <ul className="flex flex-col divide-y text-sm">
-            {o.events.map((e, i) => (
-              <li
-                key={`${e.on}-${e.kind}-${String(i)}`}
-                data-testid="calendar-event"
-                className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2 sm:grid-cols-[5.5rem_10rem_minmax(0,1fr)_auto]"
-              >
-                <span className="tabular-nums text-muted-foreground">{fmt.date(e.on)}</span>
-                <span className="hidden sm:block">
-                  <Status>{t(`event.${e.kind}`)}</Status>
-                </span>
-                <Link href={e.href} className="min-w-0 truncate hover:underline">
-                  {e.kind === 'invoice_date' || e.kind === 'act_date'
-                    ? fmt.month(e.label)
-                    : e.label}
-                </Link>
-                <span className="text-right tabular-nums">{e.usd === null ? '' : usd(e.usd)}</span>
-              </li>
-            ))}
-          </ul>
-        ),
-        <span className="text-sm text-muted-foreground">
-          {tv('ifNobodyPays')}{' '}
-          <span className="font-semibold text-foreground tabular-nums">
-            {usd(o.cashAfterOutflowsUsd)}
-          </span>
-        </span>,
-      )}
 
       {panel(
         m ? t('marginTitle', { month: fmt.month(m.period.month) }) : t('marginEmpty'),
@@ -383,70 +393,95 @@ export async function DashboardV2({
           <HelpTip label={tc('help')}>{t('forecastDescription')}</HelpTip>
         </>,
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-6 items-end gap-2" aria-hidden>
+          <div className="grid grid-cols-6 items-end gap-2">
             {forecast.map((r) => {
               const net = toDecimal(r.netUsd);
-              const height = maxNet.isZero() ? '0' : net.abs().div(maxNet).times(100).toFixed(0);
               return (
-                <div key={r.month} className="flex flex-col items-center gap-1">
-                  <div className="flex h-24 w-full items-end justify-center">
+                <div key={r.month} className="flex min-w-0 flex-col items-center gap-1">
+                  <div className="flex h-28 w-full items-end justify-center gap-1">
                     <div
+                      title={`${t('forecastCol.revenue')} ${fmt.amount(r.revenueUsd)}`}
+                      className="w-full max-w-6 rounded-t bg-foreground/15 dark:bg-foreground/25"
+                      style={{ height: `${barHeight(r.revenueUsd)}%` }}
+                    />
+                    <div
+                      title={`${t('forecastCol.net')} ${fmt.amount(r.netUsd)}`}
                       className={cn(
-                        'w-full max-w-12 rounded-t',
+                        'w-full max-w-6 rounded-t',
                         net.isNegative() ? 'bg-danger-foreground/70' : 'bg-foreground dark:bg-neon',
                       )}
-                      style={{ height: `${height}%` }}
+                      style={{ height: `${barHeight(r.netUsd)}%` }}
                     />
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {fmt.month(r.month).split(' ')[0]}
+                  <span className="text-xs font-medium">{fmt.month(r.month).split(' ')[0]}</span>
+                  <span className="hidden text-[11px] text-muted-foreground tabular-nums sm:block">
+                    {tv('cashShort', { amount: fmt.amount(r.cashUsd) })}
                   </span>
                 </div>
               );
             })}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground">
-                <tr className="border-b">
-                  <th className="py-2 pr-2 text-left font-medium">{t('forecastCol.month')}</th>
-                  {columns.map((k) => (
-                    <th key={k} className="px-2 py-2 text-right font-medium">
-                      {t(`forecastCol.${FORECAST_LABELS[k]}`)}
-                    </th>
-                  ))}
-                  <th className="px-2 py-2 text-right font-medium">{t('forecastCol.net')}</th>
-                  <th className="py-2 pl-2 text-right font-medium">{t('forecastCol.cash')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {forecast.map((r) => (
-                  <tr key={r.month} data-testid="forecast-month">
-                    <td className="py-2 pr-2">{fmt.month(r.month)}</td>
+          <details className="group">
+            <summary className="w-fit cursor-pointer list-none text-sm font-medium text-link hover:underline [&::-webkit-details-marker]:hidden">
+              <span className="group-open:hidden">{tv('showTable')}</span>
+              <span className="hidden group-open:inline">{tv('hideTable')}</span>
+            </summary>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="py-2 pr-2 text-left font-medium">{t('forecastCol.month')}</th>
                     {columns.map((k) => (
-                      <td key={k} className="px-2 py-2 text-right tabular-nums">
-                        {fmt.amount(r[k])}
-                      </td>
+                      <th key={k} className="px-2 py-2 text-right font-medium">
+                        {t(`forecastCol.${FORECAST_LABELS[k]}`)}
+                      </th>
                     ))}
-                    <td
-                      className={cn(
-                        'px-2 py-2 text-right font-medium tabular-nums',
-                        toDecimal(r.netUsd).isNegative() && 'text-danger-foreground',
-                      )}
-                    >
-                      {fmt.amount(r.netUsd)}
-                    </td>
-                    <td className="py-2 pl-2 text-right tabular-nums">{fmt.amount(r.cashUsd)}</td>
+                    <th className="px-2 py-2 text-right font-medium">{t('forecastCol.net')}</th>
+                    <th className="py-2 pl-2 text-right font-medium">{t('forecastCol.cash')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {hidden > 0 && <p className="text-xs text-muted-foreground">{tv('zeroColumns')}</p>}
+                </thead>
+                <tbody className="divide-y">
+                  {forecast.map((r) => (
+                    <tr key={r.month} data-testid="forecast-month">
+                      <td className="py-2 pr-2">{fmt.month(r.month)}</td>
+                      {columns.map((k) => (
+                        <td key={k} className="px-2 py-2 text-right tabular-nums">
+                          {fmt.amount(r[k])}
+                        </td>
+                      ))}
+                      <td
+                        className={cn(
+                          'px-2 py-2 text-right font-medium tabular-nums',
+                          toDecimal(r.netUsd).isNegative() && 'text-danger-foreground',
+                        )}
+                      >
+                        {fmt.amount(r.netUsd)}
+                      </td>
+                      <td className="py-2 pl-2 text-right tabular-nums">{fmt.amount(r.cashUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {hidden > 0 && <p className="text-xs text-muted-foreground">{tv('zeroColumns')}</p>}
+          </details>
         </div>,
-        <Link href="/ledger/planned" className="text-sm text-link hover:underline">
-          {t('plannedLink')}
-        </Link>,
+        <span className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="size-2.5 rounded-sm bg-foreground/15 dark:bg-foreground/25"
+            />
+            {t('forecastCol.revenue')}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span aria-hidden className="size-2.5 rounded-sm bg-foreground dark:bg-neon" />
+            {t('forecastCol.net')}
+          </span>
+          <Link href="/ledger/planned" className="text-sm text-link hover:underline">
+            {t('plannedLink')}
+          </Link>
+        </span>,
       )}
     </div>
   );

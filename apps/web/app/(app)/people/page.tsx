@@ -83,6 +83,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Searc
             rows={rows}
             toolbar={
               <AutoFilters
+                key="filters"
                 label={t('filters')}
                 clearLabel={tc('clearFilters')}
                 moreLabel={tc('moreFilters')}

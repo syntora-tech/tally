@@ -13,6 +13,8 @@ import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { CardLayout, KeyValue, KeyValues, Panel } from '@/components/v2/panel';
+import { Status } from '@/components/v2/status';
 
 export const generateMetadata = pageTitle('payee');
 
@@ -40,17 +42,99 @@ export default async function PayeePage({ params }: { params: Promise<{ id: stri
   ]);
 
   const v2 = (await getUiPrefs()).version === 'v2';
+  if (v2) {
+    const tp = await getTranslations('payees');
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title={p.legalNameUa ?? p.legalNameEn}
+          crumbParents={[{ label: tp('title'), href: '/people/payees' }]}
+          meta={PAYEE_KIND_LABELS[p.kind]}
+        >
+          <Button variant="outline" render={<Link href={`/people/payees/${p.id}/edit`} />}>
+            {tc('edit')}
+          </Button>
+          <Button render={<Link href={`/clients/contracts/new?payeeId=${p.id}`} />}>
+            + {t('newContract')}
+          </Button>
+        </PageHeader>
+        <CardLayout
+          main={
+            <>
+              <Panel title={t('details')}>
+                <KeyValues>
+                  <KeyValue label={t('nameEn')}>{p.legalNameEn}</KeyValue>
+                  <KeyValue label={t('person')}>
+                    {personName && p.personId ? (
+                      <Link className="text-link hover:underline" href={`/people/${p.personId}`}>
+                        {personName}
+                      </Link>
+                    ) : null}
+                  </KeyValue>
+                  <KeyValue label={t('taxId')}>{p.taxId}</KeyValue>
+                  <KeyValue label={t('edr')}>
+                    {p.edrRecord && p.edrDate
+                      ? t('edrOf', { record: p.edrRecord, date: fmt.date(p.edrDate) })
+                      : (p.edrRecord ?? (p.edrDate ? fmt.date(p.edrDate) : null))}
+                  </KeyValue>
+                  <KeyValue label={t('address')}>{p.addressUa}</KeyValue>
+                  {p.addressEn && <KeyValue label={t('addressEn')}>{p.addressEn}</KeyValue>}
+                  {p.bankDetailsEn && (
+                    <KeyValue label={t('bankDetailsEn')}>
+                      <span className="whitespace-pre-line">{p.bankDetailsEn}</span>
+                    </KeyValue>
+                  )}
+                  <KeyValue label="IBAN">{p.iban}</KeyValue>
+                  <KeyValue label={t('bank')}>{p.bankName}</KeyValue>
+                  <KeyValue label={t('fee')}>{feeLabel(p, fmt, p.feeCurrency ?? 'UAH')}</KeyValue>
+                  <KeyValue label={t('wallet')}>
+                    {[p.walletAddress, p.walletNetwork].filter(Boolean).join(' · ') || null}
+                  </KeyValue>
+                </KeyValues>
+              </Panel>
+              <CounterpartyDossier ctx={ctx} party="payee" id={p.id} canAdd />
+              <AuditHistory ctx={ctx} tableName="payee" rowId={p.id} />
+            </>
+          }
+          aside={
+            <Panel title={t('contracts')}>
+              {contracts.length === 0 ? (
+                <p className="text-muted-foreground">{t('noContracts')}</p>
+              ) : (
+                <ul className="-mx-5 -mb-4 flex flex-col divide-y border-t">
+                  {contracts.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/clients/contracts/${c.id}`}
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 px-5 py-3 hover:bg-muted/40"
+                      >
+                        <span className="font-medium">{c.number}</span>
+                        <Status tone={c.status === 'active' ? 'success' : 'neutral'}>
+                          {CONTRACT_STATUS_LABELS[c.status]}
+                        </Status>
+                        {c.signedOn && (
+                          <span className="text-xs text-muted-foreground">
+                            {fmt.date(c.signedOn)}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          }
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
-        {v2 ? (
-          <PageHeader title={p.legalNameUa ?? p.legalNameEn} meta={PAYEE_KIND_LABELS[p.kind]} />
-        ) : (
-          <div>
-            <h1 className="text-2xl font-semibold">{p.legalNameUa ?? p.legalNameEn}</h1>
-            <p className="text-muted-foreground">{PAYEE_KIND_LABELS[p.kind]}</p>
-          </div>
-        )}
+        <div>
+          <h1 className="text-2xl font-semibold">{p.legalNameUa ?? p.legalNameEn}</h1>
+          <p className="text-muted-foreground">{PAYEE_KIND_LABELS[p.kind]}</p>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href={`/people/payees/${p.id}/edit`} />}>
             {tc('edit')}

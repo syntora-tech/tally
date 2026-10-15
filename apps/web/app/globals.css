@@ -328,6 +328,11 @@
   .v2 [data-slot='table-row']:hover {
     background: color-mix(in srgb, var(--muted) 50%, transparent);
   }
+  .v2 span[class~='group/badge'][class~='border-border'] {
+    border-color: transparent;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
   .v2 [data-slot='badge'],
   .v2 span[class~='group/badge'] {
     height: auto;
@@ -378,5 +383,30 @@
   .v2 [data-slot='dialog-content'] form > div:has(> [type='submit']):last-child {
     flex-direction: row-reverse;
     justify-content: flex-start;
+  }
+  /* Native disclosures get the v2 chevron instead of the browser triangle. */
+  .v2 summary {
+    list-style: none;
+  }
+  .v2 summary::-webkit-details-marker {
+    display: none;
+  }
+  .v2 summary:not([class~='list-none'])::before {
+    content: '';
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    margin: 0 0.6rem 0.15rem 0.1rem;
+    border-right: 1.5px solid var(--muted-foreground);
+    border-bottom: 1.5px solid var(--muted-foreground);
+    transform: rotate(-45deg);
+    transition: transform 150ms;
+  }
+  .v2 details[open] > summary:not([class~='list-none'])::before {
+    transform: rotate(45deg);
+  }
+  .v2 [data-slot='card'] summary .font-heading {
+    font-size: 1.0625rem;
+    font-weight: 700;
   }
 }

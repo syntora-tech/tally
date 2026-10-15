@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/v2/page-header';
 import { TabsNav } from '@/components/v2/tabs-nav';
 import { getUiPrefs } from '@/server/ui-prefs';
 
@@ -10,6 +11,39 @@ const TABS = [
   { key: 'inbox', href: '/documents/inbox', finance: true },
   { key: 'checks', href: '/documents/checks', finance: true },
 ] as const;
+
+/**
+ * v2: one header for every documents tab — the section title, the tab's explanation under (?),
+ * "+ Add document" and the tabs.
+ */
+export async function DocumentsHeaderV2({
+  current,
+  help,
+  inboxCount,
+  finance = true,
+}: {
+  current: (typeof TABS)[number]['key'];
+  help: string;
+  inboxCount?: number;
+  finance?: boolean;
+}) {
+  const [t, td] = await Promise.all([
+    getTranslations('documentsNav'),
+    getTranslations('documents'),
+  ]);
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={td('title')}
+        help={help}
+        crumb={current === 'structure' ? undefined : t(current)}
+      >
+        {finance && <Button render={<Link href="/documents/new" />}>+ {td('add')}</Button>}
+      </PageHeader>
+      <DocumentsNav current={current} inboxCount={inboxCount} finance={finance} />
+    </div>
+  );
+}
 
 /** Tree, list, inbox and checks of the documents section (A-079, A-081). */
 export async function DocumentsNav({

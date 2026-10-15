@@ -124,14 +124,17 @@ export function CardLayout({ main, aside }: { main: ReactNode; aside: ReactNode 
   );
 }
 
-/** Ruled label/value rows of a profile or terms card (label column on the left). */
+/**
+ * Ruled label/value rows of a profile or terms card: the label column on the left, or above the
+ * value when the card is narrow (a container query, so the aside stacks them).
+ */
 export function KeyValues({ children }: { children: ReactNode }) {
-  return <dl className="-mb-1 flex flex-col text-sm">{children}</dl>;
+  return <dl className="@container -mb-1 flex flex-col text-sm">{children}</dl>;
 }
 
 export function KeyValue({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 border-t py-2 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 border-t py-2 @sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] @lg:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">{children ?? '—'}</dd>
     </div>

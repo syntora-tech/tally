@@ -26,6 +26,9 @@ import {
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
 import { Status } from '@/components/v2/status';
+import { RowMenu } from '@/components/v2/form-dialog';
+import { CardLayout, Fact, Facts, FactsRule, Panel } from '@/components/v2/panel';
+import { Steps } from '@/components/v2/steps';
 
 export const generateMetadata = pageTitle('contractorInvoice');
 
@@ -55,38 +58,189 @@ export default async function ContractorInvoicePage({
   ]);
 
   const v2 = (await getUiPrefs()).version === 'v2';
-  return (
-    <div className="flex flex-col gap-6">
-      {v2 ? (
+  if (v2) {
+    const tc = await getTranslations('common');
+    const signed = Boolean(inv.signedAt);
+    return (
+      <div className="flex flex-col gap-5">
         <PageHeader
           title={inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
-          meta={
-            <span className="flex flex-wrap items-center gap-2">
-              <Status tone={draft ? 'neutral' : inv.status === 'void' ? 'danger' : 'info'}>
-                {DOC_STATUS_LABELS[inv.status] ?? inv.status}
-              </Status>
-              {t('subtitle', { payee: payeeName, contract: contractNumber })}
-              {personName && month && ` · ${personName} · ${fmt.month(month)}`}
-            </span>
+          crumb={inv.number ?? t('titleDraft')}
+          badges={
+            <Status
+              tone={
+                draft
+                  ? 'neutral'
+                  : inv.status === 'void'
+                    ? 'danger'
+                    : signed
+                      ? 'success'
+                      : 'warning'
+              }
+            >
+              {DOC_STATUS_LABELS[inv.status] ?? inv.status}
+            </Status>
+          }
+          meta={`${t('subtitle', { payee: payeeName, contract: contractNumber })}${
+            personName && month ? ` · ${personName} · ${fmt.month(month)}` : ''
+          }`}
+        >
+          <RowMenu
+            label={tc('actions')}
+            entries={[
+              draft && {
+                label: `${tc('delete')}…`,
+                destructive: true,
+                dialog: {
+                  title: t('titleDraft'),
+                  content: <DeleteContractorInvoiceForm id={inv.id} />,
+                },
+              },
+              inv.status === 'issued' && {
+                label: `${t('rerender')}…`,
+                dialog: {
+                  title: t('rerender'),
+                  description: t('rerenderHint'),
+                  content: <RerenderContractorInvoiceForm id={inv.id} />,
+                },
+              },
+              'separator',
+              inv.status === 'issued' && {
+                label: `${t('void')}…`,
+                destructive: true,
+                dialog: { title: t('void'), content: <VoidContractorInvoiceForm id={inv.id} /> },
+              },
+            ]}
+          />
+        </PageHeader>
+        {inv.status !== 'void' && (
+          <Steps
+            label={t('v2.flowLabel')}
+            current={draft ? 0 : signed ? 2 : 1}
+            steps={[t('v2.steps.document'), t('v2.steps.signature'), t('v2.steps.payment')]}
+          />
+        )}
+        <CardLayout
+          main={
+            <>
+              {draft && (
+                <Panel
+                  title={t('issueTitle')}
+                  help={t('draftHint')}
+                  helpLabel={tc('help')}
+                  emphasis
+                >
+                  <ContractorInvoiceDraftForm
+                    id={inv.id}
+                    invoiceDate={inv.invoiceDate}
+                    descriptionEn={inv.descriptionEn}
+                    descriptionUa={inv.descriptionUa}
+                  />
+                  <IssueContractorInvoiceForm
+                    id={inv.id}
+                    number={contractorInvoiceNumber(inv.invoiceDate as LocalDate, [])}
+                  />
+                </Panel>
+              )}
+              {inv.status === 'issued' && (
+                <Panel title={t('fileTitle')} emphasis={!signed}>
+                  {inv.documentId && inv.pdfFileId ? (
+                    <Link
+                      className="text-link hover:underline"
+                      href={`/documents/${inv.documentId}`}
+                    >
+                      {t('openDocument')}
+                    </Link>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      {rendering && <AutoRefresh />}
+                      {t('fileRendering')}
+                    </p>
+                  )}
+                  {signed && inv.signedAt ? (
+                    <p data-testid="contractor-invoice-signed">
+                      {t('signedOn', { date: fmt.date(inv.signedAt.toISOString().slice(0, 10)) })}
+                      {inv.signedUrl && (
+                        <>
+                          {' · '}
+                          <a
+                            className="text-link hover:underline"
+                            href={inv.signedUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {t('signedLink')}
+                          </a>
+                        </>
+                      )}
+                      {inv.signedDocumentId && (
+                        <>
+                          {' · '}
+                          <Link
+                            className="text-link hover:underline"
+                            href={`/documents/${inv.signedDocumentId}`}
+                          >
+                            {t('signedCopy')}
+                          </Link>
+                        </>
+                      )}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground">{t('signHint')}</p>
+                      <SignContractorInvoiceForm id={inv.id} />
+                    </>
+                  )}
+                </Panel>
+              )}
+              <AuditHistory ctx={ctx} tableName="contractor_invoice" rowId={inv.id} />
+            </>
+          }
+          aside={
+            <Panel>
+              <Facts>
+                <Fact label={t('date')}>{fmt.date(inv.invoiceDate)}</Fact>
+                <Fact label={t('period')}>
+                  {inv.periodFrom && inv.periodTo
+                    ? `${fmt.date(inv.periodFrom)} – ${fmt.date(inv.periodTo)}`
+                    : '—'}
+                </Fact>
+                <Fact label={t('hours')}>{inv.hours ?? '—'}</Fact>
+                <FactsRule />
+                <Fact label={t('amount')} strong>
+                  <span data-testid="contractor-invoice-amount">
+                    {fmt.amount(inv.amount, inv.currency)}
+                  </span>
+                </Fact>
+              </Facts>
+              <p className="text-muted-foreground">
+                {inv.descriptionEn}
+                {inv.descriptionUa !== inv.descriptionEn && ` / ${inv.descriptionUa}`}
+              </p>
+              {inv.voidReason && <p>{t('voidReasonShown', { reason: inv.voidReason })}</p>}
+            </Panel>
           }
         />
-      ) : (
-        <div>
-          <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
-            {t('back')}
-          </Link>
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
-            {inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
-            <Badge variant={draft ? 'outline' : 'secondary'}>
-              {DOC_STATUS_LABELS[inv.status] ?? inv.status}
-            </Badge>
-          </h1>
-          <p className="text-muted-foreground">
-            {t('subtitle', { payee: payeeName, contract: contractNumber })}
-            {personName && month && ` · ${personName} · ${fmt.month(month)}`}
-          </p>
-        </div>
-      )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link href="/payroll" className="text-sm text-muted-foreground hover:underline">
+          {t('back')}
+        </Link>
+        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          {inv.number ? t('titleNumber', { number: inv.number }) : t('titleDraft')}
+          <Badge variant={draft ? 'outline' : 'secondary'}>
+            {DOC_STATUS_LABELS[inv.status] ?? inv.status}
+          </Badge>
+        </h1>
+        <p className="text-muted-foreground">
+          {t('subtitle', { payee: payeeName, contract: contractNumber })}
+          {personName && month && ` · ${personName} · ${fmt.month(month)}`}
+        </p>
+      </div>
 
       <Card>
         <CardContent className="grid gap-3 pt-6 text-sm sm:grid-cols-4">

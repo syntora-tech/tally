@@ -6,9 +6,10 @@ import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { documentChecks } from '@/server/services/documents/structure';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
-import { DocumentsNav } from '../documents-nav';
+import { DocumentsHeaderV2, DocumentsNav } from '../documents-nav';
+import { Panel } from '@/components/v2/panel';
+import { Status } from '@/components/v2/status';
 import { getUiPrefs } from '@/server/ui-prefs';
-import { PageHeader } from '@/components/v2/page-header';
 
 export const generateMetadata = pageTitle('documentChecks');
 
@@ -49,17 +50,117 @@ export default async function DocumentChecksPage() {
   );
 
   const v2 = (await getUiPrefs()).version === 'v2';
+  if (v2) {
+    const tc = await getTranslations('common');
+    const panel = (
+      id: 'payees' | 'contracts' | 'annexes' | 'duplicates',
+      count: number,
+      children: React.ReactNode,
+    ) => (
+      <Panel
+        testId={`check-${id}`}
+        title={
+          <>
+            {t(`${id}.title`)} <Status tone={count > 0 ? 'warning' : 'success'}>{count}</Status>
+          </>
+        }
+        help={t(`${id}.description`)}
+        helpLabel={tc('help')}
+      >
+        {count === 0 ? <p className="text-muted-foreground">✓ {t('allGood')}</p> : children}
+      </Panel>
+    );
+    return (
+      <div className="flex flex-col gap-5">
+        <DocumentsHeaderV2 current="checks" help={t('subtitle')} />
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+          {panel(
+            'payees',
+            checks.payeesWithoutContract.length,
+            <ul className="flex flex-col gap-1.5">
+              {checks.payeesWithoutContract.map((p) => (
+                <li key={p.id}>
+                  <Link className="text-link hover:underline" href={`/people/payees/${p.id}`}>
+                    {p.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>,
+          )}
+          {panel(
+            'contracts',
+            checks.contractsWithoutFile.length,
+            <ul className="flex flex-col gap-1.5">
+              {checks.contractsWithoutFile.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    className="font-medium text-link hover:underline"
+                    href={`/clients/contracts/${c.id}`}
+                  >
+                    {c.number}
+                  </Link>{' '}
+                  <span className="text-muted-foreground">
+                    · {CONTRACT_KIND_LABELS[c.kind]} · {c.party ?? '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>,
+          )}
+          {panel(
+            'annexes',
+            checks.annexesWithoutFile.length,
+            <ul className="flex flex-col gap-1.5">
+              {checks.annexesWithoutFile.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    className="text-link hover:underline"
+                    href={`/clients/contracts/${a.contractId}`}
+                  >
+                    {t(a.kind === 'sow' ? 'sow' : 'annex', { number: a.number })}
+                  </Link>{' '}
+                  <span className="text-muted-foreground">
+                    · {a.title ?? ''} · {a.contractNumber}
+                  </span>
+                </li>
+              ))}
+            </ul>,
+          )}
+          {panel(
+            'duplicates',
+            checks.duplicateNumbers.length,
+            <ul className="flex flex-col gap-3">
+              {checks.duplicateNumbers.map((g) => (
+                <li key={`${g.type}:${g.number}`}>
+                  <div className="font-medium">
+                    {DOCUMENT_TYPE_LABELS[g.type as DocumentType]} №{g.number}
+                  </div>
+                  <ul className="flex flex-col gap-1 pl-3">
+                    {g.docs.map((d) => (
+                      <li key={d.id}>
+                        <Link className="text-link hover:underline" href={`/documents/${d.id}`}>
+                          {d.title}
+                        </Link>
+                        {d.docDate && (
+                          <span className="text-muted-foreground"> · {fmt.date(d.docDate)}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>,
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        {v2 ? (
-          <PageHeader title={t('title')} help={t('subtitle')} />
-        ) : (
-          <div>
-            <h1 className="text-2xl font-semibold">{t('title')}</h1>
-            <p className="text-muted-foreground">{t('subtitle')}</p>
-          </div>
-        )}
+        <div>
+          <h1 className="text-2xl font-semibold">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('subtitle')}</p>
+        </div>
         <DocumentsNav current="checks" />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">

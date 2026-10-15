@@ -78,6 +78,8 @@ type Props<T extends RowData> = {
   rowHref?: (row: T) => string;
   /** v2: filters shown on the search row. */
   toolbar?: React.ReactNode;
+  /** False when the toolbar brings its own search. */
+  searchable?: boolean;
 };
 
 export function DataTable<T extends RowData>({
@@ -87,6 +89,7 @@ export function DataTable<T extends RowData>({
   emptyText,
   rowHref,
   toolbar,
+  searchable = true,
 }: Props<T>) {
   const t = useTranslations('common');
   const router = useRouter();
@@ -103,19 +106,21 @@ export function DataTable<T extends RowData>({
     <div className="flex flex-col gap-3">
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                table.setGlobalFilter(e.target.value);
-              }}
-              placeholder={searchPlaceholder ?? t('search')}
-              aria-label={searchPlaceholder ?? t('search')}
-              className="pl-8"
-            />
-          </div>
+          {searchable && (
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  table.setGlobalFilter(e.target.value);
+                }}
+                placeholder={searchPlaceholder ?? t('search')}
+                aria-label={searchPlaceholder ?? t('search')}
+                className="pl-8"
+              />
+            </div>
+          )}
           {toolbar}
         </div>
       ) : (

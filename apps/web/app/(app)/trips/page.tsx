@@ -17,6 +17,8 @@ import { listTrips } from '@/server/services/trips';
 import { getFormat, pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PageHeader } from '@/components/v2/page-header';
+import { EmptyState } from '@/components/v2/panel';
+import { Status } from '@/components/v2/status';
 
 export const generateMetadata = pageTitle('trips');
 
@@ -34,19 +36,29 @@ export default async function TripsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         {v2 ? (
-          <PageHeader title={t('title')} help={t('description')} />
+          <PageHeader title={t('title')} help={t('description')}>
+            {finance && <Button render={<Link href="/trips/new" />}>+ {t('new')}</Button>}
+          </PageHeader>
         ) : (
           <div>
             <h1 className="text-2xl font-semibold">{t('title')}</h1>
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
         )}
-        {finance && <Button render={<Link href="/trips/new" />}>{t('new')}</Button>}
+        {!v2 && finance && <Button render={<Link href="/trips/new" />}>{t('new')}</Button>}
       </div>
       {rows.length === 0 ? (
-        <p className="text-muted-foreground">{t('empty')}</p>
+        v2 ? (
+          <EmptyState title={t('empty')} />
+        ) : (
+          <p className="text-muted-foreground">{t('empty')}</p>
+        )
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div
+          className={
+            v2 ? 'overflow-x-auto rounded-lg border bg-card' : 'overflow-x-auto rounded-md border'
+          }
+        >
           <Table>
             <TableHeader>
               <TableRow>
@@ -76,11 +88,17 @@ export default async function TripsPage() {
                   </TableCell>
                   <TableCell>{r.participants.map((p) => p.name).join(', ')}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant={r.status === 'awaiting_reimbursement' ? 'destructive' : 'outline'}
-                    >
-                      {t(`status.${r.status}`)}
-                    </Badge>
+                    {v2 ? (
+                      <Status tone={r.status === 'awaiting_reimbursement' ? 'warning' : 'neutral'}>
+                        {t(`status.${r.status}`)}
+                      </Status>
+                    ) : (
+                      <Badge
+                        variant={r.status === 'awaiting_reimbursement' ? 'destructive' : 'outline'}
+                      >
+                        {t(`status.${r.status}`)}
+                      </Badge>
+                    )}
                   </TableCell>
                   {finance && (
                     <TableCell className="text-right tabular-nums">

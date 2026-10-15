@@ -20,6 +20,7 @@ import { documentServices } from '../documents';
 import {
   getInvoice,
   issueInvoice,
+  listInvoices,
   issuePreview,
   reissueInvoice,
   saveInvoice,
@@ -118,6 +119,15 @@ describe('invoices (spec 6.5, A-044)', () => {
     expect(card.invoice.total).toBe('8648.50000000');
     expect(card.invoice.dueDate).toBe('2037-08-20');
     expect(card.lines.map((l) => l.amount)).toEqual(['8648.00000000', '0.50000000']);
+  });
+
+  it("lists one client's invoices", async () => {
+    const own = (
+      await listInvoices.run(h.ctxFor(finance), { clientId: ids.client })
+    )._unsafeUnwrap();
+    expect(own.map((r) => r.id)).toEqual([id()]);
+    const all = (await listInvoices.run(h.ctxFor(finance), {}))._unsafeUnwrap();
+    expect(all.length).toBeGreaterThanOrEqual(own.length);
   });
 
   it('previews the issue date and due date', async () => {
