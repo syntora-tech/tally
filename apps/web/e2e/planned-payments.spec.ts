@@ -6,12 +6,24 @@ import { localEnv, signIn, unique } from './helpers';
 
 const plan = unique('E2E director salary');
 const uah = unique('E2E salary UAH');
+// A clean database (CI) has no people to pick from.
+const director = unique('E2E Director');
+const connect = () =>
+  createDb(localEnv().DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres', {
+    max: 1,
+  });
+
+test.beforeAll(async () => {
+  const { db, sql: client } = connect();
+  try {
+    await db.execute(sql`insert into public.person (full_name) values (${director})`);
+  } finally {
+    await client.end();
+  }
+});
 
 test.afterAll(async () => {
-  const { db, sql: client } = createDb(
-    localEnv().DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
-    { max: 1 },
-  );
+  const { db, sql: client } = connect();
   try {
     await db.execute(sql`
       delete from public.transaction t using public.posting p, public.account a
@@ -27,6 +39,7 @@ test.afterAll(async () => {
         (select id from public.planned_expense where name = ${plan})
     `);
     await db.execute(sql`delete from public.planned_expense where name = ${plan}`);
+    await db.execute(sql`delete from public.person where full_name = ${director}`);
   } finally {
     await client.end();
   }
@@ -47,8 +60,8 @@ test('planned payments: salary in two parts with taxes, marked paid (A-082)', as
   await page.locator('#pe-new-amount').fill('11401.68');
   await page.locator('#pe-new-day').fill('22');
   // A person's salary also shows on Payroll as a payout without an act (A-097).
-  await page.locator('#pe-new-person').selectOption({ index: 1 });
-  const personName = (await page.locator('#pe-new-person option:checked').innerText()).trim();
+  await page.locator('#pe-new-person').selectOption({ label: director });
+  const personName = director;
   await page.getByRole('button', { name: 'Add' }).first().click();
   await expect(page.getByText('Planned expense added')).toBeVisible();
 
@@ -94,7 +107,7 @@ test('planned payments: salary in two parts with taxes, marked paid (A-082)', as
   // The new expense pays the net amount, not the gross.
   await expect(advance.getByRole('link')).toContainText('4,510.00');
 
-  await page.goto('/payroll');
+  await page.goto('/payroll?period=all');
   const salary = page
     .getByTestId('salary-payout')
     .filter({ hasText: personName })
