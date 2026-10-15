@@ -103,3 +103,18 @@ test('A-102: the v2 sidebar keeps the role matrix', async ({ page }) => {
   await expect(nav.getByRole('link', { name: 'Settings' })).toHaveCount(0);
   await expect(nav.getByText('Month', { exact: true })).toHaveCount(0);
 });
+
+test('A-102: the v2 overview shows the same totals as v1', async ({ page }) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  const ids = ['treasury-total', 'receivables-total', 'payable-total', 'awaiting-total'];
+  await page.goto('/dashboard');
+  const v1 = await Promise.all(ids.map((id) => page.getByTestId(id).innerText()));
+  await page
+    .context()
+    .addCookies([{ name: 'tally_ui', value: 'v2', url: 'http://localhost:3000' }]);
+  await page.goto('/dashboard');
+  await expect(page.locator('html')).toHaveClass(/\bv2\b/);
+  for (const [i, id] of ids.entries()) {
+    await expect(page.getByTestId(id)).toHaveText(v1[i] ?? '');
+  }
+});

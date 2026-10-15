@@ -719,6 +719,19 @@
       "net": "Net",
       "cash": "Cash at month end",
       "charges": "Payout taxes & fees"
+    },
+    "v2": {
+      "accounts": "{count, plural, one {# account} other {# accounts}}",
+      "overdueCount": "{count, plural, one {# overdue} other {# overdue}}",
+      "invoices": "{count, plural, one {# unpaid invoice} other {# unpaid invoices}}",
+      "toPayroll": "Open payroll",
+      "awaitingHelp": "Earned by people in closed months; it becomes payable when the client pays the invoice (or at the payout deadline).",
+      "attention": "Needs attention",
+      "allClear": "Nothing overdue.",
+      "recordPayment": "Record payment",
+      "calendarHelp": "Payouts, client due dates, planned expenses and document dates. “If nobody pays” is the treasury minus every outflow.",
+      "ifNobodyPays": "If nobody pays:",
+      "zeroColumns": "Columns where every value is 0 are hidden."
     }
   },
   "trips": {

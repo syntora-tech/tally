@@ -18,6 +18,9 @@ import { creditToClients } from '@/server/services/dashboard';
 import { monthMargin, sixMonthForecast } from '@/server/services/dashboard/margin';
 import { dashboardOverview } from '@/server/services/dashboard/overview';
 import { getFormat, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PageHeader } from '@/components/v2/page-header';
+import { DashboardV2 } from './dashboard-v2';
 
 export const generateMetadata = pageTitle('dashboard');
 
@@ -28,6 +31,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const finance = FINANCE_ROLES.includes(ctx.actor.role);
   const t = await getTranslations('dashboard');
   if (!finance) {
+    if ((await getUiPrefs()).version === 'v2') {
+      return <PageHeader title={t('title')} meta={t('financeOnly')} />;
+    }
     return (
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">{t('title')}</h1>
@@ -58,6 +64,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       .toFixed(2),
   }));
   const unconverted = [...new Set([...o.unconverted, ...(m?.unconverted ?? [])])];
+  if ((await getUiPrefs()).version === 'v2') {
+    return <DashboardV2 o={o} c={c} m={m} forecast={forecastRows} />;
+  }
 
   const kpis = [
     { key: 'treasury', value: o.treasuryUsd, href: '/ledger', testId: 'treasury-total' },
