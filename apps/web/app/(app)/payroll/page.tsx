@@ -34,6 +34,8 @@ import {
   SplitActForm,
 } from './payroll-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
+import { getUiPrefs } from '@/server/ui-prefs';
+import { PayrollV2 } from './payroll-v2';
 
 export const generateMetadata = pageTitle('payroll');
 
@@ -228,6 +230,48 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
   // A USD share can go into a new act from the rest or from an act split off by amount (A-086).
   const splitsByAmount = (i: (typeof items)[number], a: (typeof items)[number]['acts'][number]) =>
     !toDecimal(i.item.totalUsd).isZero() && (a.isRest || activitiesIn(i, a).length === 0);
+
+  if ((await getUiPrefs()).version === 'v2') {
+    return (
+      <PayrollV2
+        items={items}
+        months={periods
+          .unwrapOr([])
+          .filter((p) => p.period.status === 'closed')
+          .map(({ period: p }) => ({ id: p.id, month: p.month }))}
+        periodId={periodId}
+        tab={typeof params.tab === 'string' ? params.tab : undefined}
+        isOwner={isOwner}
+        today={ctx.today}
+        contractorInvoices={contractorInvoices}
+        accountRows={accountRows}
+        suggestion={suggestion.unwrapOr(null)}
+        billable={billable}
+        documentOf={documentOf}
+        nextStep={nextStep}
+        candidatesFor={candidatesFor}
+        activitiesIn={activitiesIn}
+        splitsByAmount={splitsByAmount}
+        payAccounts={(fiat) =>
+          accountRows
+            .filter((a) => (fiat ? a.currency === 'UAH' : USD_LIKE.includes(a.currency)))
+            .map(({ id, label }) => ({ id, label }))
+        }
+        salaryGroups={salaryGroups}
+        chargesOf={chargesOf}
+        salaryCandidates={(currency) =>
+          (salaryCandidates.get(currency) ?? []).map((c) => ({
+            id: c.id,
+            label: [
+              fmt.date(c.occurredOn),
+              c.counterparty ?? c.description ?? '—',
+              fmt.amount(c.amount, currency),
+            ].join(' · '),
+          }))
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

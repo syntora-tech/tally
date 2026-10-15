@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useDialogScope } from '@/components/v2/form-dialog';
 import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
@@ -31,11 +32,28 @@ import {
   type PayrollFormState,
 } from '@/server/actions/payroll';
 
-function useResult(state: PayrollFormState, success: string) {
+/**
+ * In a v2 dialog the toast fires from the action itself: a successful action can move its row to
+ * another tab, and an effect of the unmounted form would never run. v1 keeps the effect.
+ */
+function useToastAction(
+  run: (prev: PayrollFormState, formData: FormData) => Promise<PayrollFormState>,
+  success: string,
+) {
+  const dialog = useDialogScope();
+  const result = useActionState<PayrollFormState, FormData>(async (prev, formData) => {
+    const next = await run(prev, formData);
+    if (next?.ok && dialog) {
+      toast.success(success);
+      dialog.close();
+    }
+    return next;
+  }, null);
+  const [state] = result;
   useEffect(() => {
-    if (state?.ok) toast.success(success);
-  }, [state, success]);
-  return state && !state.ok ? state.error : null;
+    if (state?.ok && !dialog) toast.success(success);
+  }, [state, success, dialog]);
+  return result;
 }
 
 export type PayDialogProps = {
@@ -90,6 +108,10 @@ export function PayDialog(p: PayDialogProps) {
     null,
   );
   const error = state && !state.ok ? state.error : null;
+  const dialog = useDialogScope();
+  useEffect(() => {
+    if (state?.ok) dialog?.close();
+  }, [state, dialog]);
   const initialRate = p.currentRate ?? p.suggestion?.rate ?? '';
   const [rate, setRate] = useState(initialRate);
   const [source, setSource] = useState(
@@ -146,7 +168,7 @@ export function PayDialog(p: PayDialogProps) {
             (amountNow.isOk() && remainingNow.isOk() && amountNow.value.lt(remainingNow.value))
         : false;
 
-  if (!open) {
+  if (!open && !dialog) {
     return (
       <Button
         size="sm"
@@ -159,7 +181,10 @@ export function PayDialog(p: PayDialogProps) {
     );
   }
   return (
-    <form action={action} className="flex flex-col gap-3 rounded-md border p-3">
+    <form
+      action={action}
+      className={dialog ? 'flex flex-col gap-3' : 'flex flex-col gap-3 rounded-md border p-3'}
+    >
       <input type="hidden" name="itemId" value={p.itemId} />
       {p.fiat && (
         <div className="flex flex-wrap items-end gap-3">
@@ -388,7 +413,8 @@ export function PayDialog(p: PayDialogProps) {
           type="button"
           variant="ghost"
           onClick={() => {
-            setOpen(false);
+            if (dialog) dialog.close();
+            else setOpen(false);
           }}
         >
           {tc('cancel')}
@@ -399,12 +425,9 @@ export function PayDialog(p: PayDialogProps) {
 }
 
 export function OverrideForm({ lineId }: { lineId: string }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    overridePayableAction,
-    null,
-  );
   const t = useTranslations('payDialog');
-  const error = useResult(state, t('released'));
+  const [state, action, pending] = useToastAction(overridePayableAction, t('released'));
+  const error = state && !state.ok ? state.error : null;
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="lineId" value={lineId} />
@@ -425,29 +448,36 @@ export function OverrideForm({ lineId }: { lineId: string }) {
 
 /** Owner only (A-097): a line that does not belong to the payout, e.g. a salary paid by plan. */
 export function RemoveLineForm({ lineId }: { lineId: string }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    removePayoutLineAction,
-    null,
-  );
   const t = useTranslations('payroll');
-  const error = useResult(state, t('lineRemoved'));
+  const [state, action, pending] = useToastAction(removePayoutLineAction, t('lineRemoved'));
+  const error = state && !state.ok ? state.error : null;
+  const dialog = useDialogScope();
+  const form = (
+    <form
+      action={action}
+      className={
+        dialog ? 'flex flex-wrap items-center gap-2' : 'mt-1 flex flex-wrap items-center gap-2'
+      }
+    >
+      <input type="hidden" name="lineId" value={lineId} />
+      <Input
+        name="reason"
+        placeholder={t('removeLineReason')}
+        aria-label={t('removeLineReason')}
+        className="h-8 w-56"
+        required
+      />
+      <Button type="submit" size="sm" variant="destructive" disabled={pending}>
+        {t('removeLine')}
+      </Button>
+      {error && <span className="text-destructive">{error.message}</span>}
+    </form>
+  );
+  if (dialog) return form;
   return (
     <details className="text-xs" data-testid="remove-line">
       <summary className="cursor-pointer text-muted-foreground">{t('removeLine')}</summary>
-      <form action={action} className="mt-1 flex flex-wrap items-center gap-2">
-        <input type="hidden" name="lineId" value={lineId} />
-        <Input
-          name="reason"
-          placeholder={t('removeLineReason')}
-          aria-label={t('removeLineReason')}
-          className="h-8 w-56"
-          required
-        />
-        <Button type="submit" size="sm" variant="destructive" disabled={pending}>
-          {t('removeLine')}
-        </Button>
-        {error && <span className="text-destructive">{error.message}</span>}
-      </form>
+      {form}
     </details>
   );
 }
@@ -463,90 +493,104 @@ export function AdjustClosedForm({
   /** Draft acts of the payout, the act of the rest first: where the adjustment goes (A-100). */
   acts: { id: string; label: string }[];
 }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    adjustClosedPayoutAction,
-    null,
-  );
   const t = useTranslations('payroll');
-  const error = useResult(state, t('adjusted'));
+  const [state, action, pending] = useToastAction(adjustClosedPayoutAction, t('adjusted'));
+  const error = state && !state.ok ? state.error : null;
+  const dialog = useDialogScope();
   const currencies = fiat ? ['USD', 'UAH'] : ['USD', 'USDT', 'USDC'];
+  const form = (
+    <form
+      action={action}
+      className={
+        dialog ? 'flex flex-wrap items-center gap-2' : 'mt-2 flex flex-wrap items-center gap-2'
+      }
+    >
+      <input type="hidden" name="itemId" value={itemId} />
+      <input type="hidden" name="kind" value="correction" />
+      <Input
+        name="amount"
+        inputMode="decimal"
+        placeholder={t('adjustAmount')}
+        aria-label={t('adjustAmount')}
+        className="h-8 w-40"
+        required
+      />
+      <NativeSelect
+        name="currency"
+        aria-label="Currency"
+        className="h-8 w-24"
+        options={currencies.map((c) => ({ value: c, label: c }))}
+      />
+      {acts.length > 1 && (
+        <NativeSelect
+          name="actId"
+          aria-label={t('adjustAct')}
+          className="h-8 w-72"
+          options={acts.map((a) => ({ value: a.id, label: `${t('adjustAct')}: ${a.label}` }))}
+        />
+      )}
+      <Input
+        name="reason"
+        placeholder={t('adjustReason')}
+        aria-label={t('adjustReason')}
+        className="h-8 w-64"
+        required
+      />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {t('adjustSubmit')}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+  if (dialog) return form;
   return (
     <details className="text-sm" data-testid="adjust-closed">
       <summary className="cursor-pointer text-muted-foreground">{t('adjustClosed')}</summary>
-      <form action={action} className="mt-2 flex flex-wrap items-center gap-2">
-        <input type="hidden" name="itemId" value={itemId} />
-        <input type="hidden" name="kind" value="correction" />
-        <Input
-          name="amount"
-          inputMode="decimal"
-          placeholder={t('adjustAmount')}
-          aria-label={t('adjustAmount')}
-          className="h-8 w-40"
-          required
-        />
-        <NativeSelect
-          name="currency"
-          aria-label="Currency"
-          className="h-8 w-24"
-          options={currencies.map((c) => ({ value: c, label: c }))}
-        />
-        {acts.length > 1 && (
-          <NativeSelect
-            name="actId"
-            aria-label={t('adjustAct')}
-            className="h-8 w-72"
-            options={acts.map((a) => ({ value: a.id, label: `${t('adjustAct')}: ${a.label}` }))}
-          />
-        )}
-        <Input
-          name="reason"
-          placeholder={t('adjustReason')}
-          aria-label={t('adjustReason')}
-          className="h-8 w-64"
-          required
-        />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
-          {t('adjustSubmit')}
-        </Button>
-        {error && <span className="text-sm text-destructive">{error.message}</span>}
-      </form>
+      {form}
     </details>
   );
 }
 
 /** Owner only: an unpaid payout closed under the wrong method moves to a USD one (A-092). */
 export function ChangeMethodForm({ itemId, current }: { itemId: string; current: string }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    changePayoutMethodAction,
-    null,
-  );
   const t = useTranslations('payroll');
   const { PAYOUT_METHOD_LABELS } = useLabels();
-  const error = useResult(state, t('methodChanged'));
+  const [state, action, pending] = useToastAction(changePayoutMethodAction, t('methodChanged'));
+  const error = state && !state.ok ? state.error : null;
+  const dialog = useDialogScope();
   const methods = (['bank_usd', 'crypto'] as const).filter((m) => m !== current);
+  const form = (
+    <form
+      action={action}
+      className={
+        dialog ? 'flex flex-wrap items-center gap-2' : 'mt-2 flex flex-wrap items-center gap-2'
+      }
+    >
+      <input type="hidden" name="itemId" value={itemId} />
+      <NativeSelect
+        name="payoutMethod"
+        aria-label={t('changeMethodLabel')}
+        className="h-8 w-40"
+        options={methods.map((m) => ({ value: m, label: PAYOUT_METHOD_LABELS[m] ?? m }))}
+      />
+      <Input
+        name="reason"
+        placeholder={t('changeMethodReason')}
+        aria-label={t('changeMethodReason')}
+        className="h-8 w-56"
+        required
+      />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {t('changeMethod')}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+  if (dialog) return form;
   return (
     <details className="text-sm" data-testid="change-payout-method">
       <summary className="cursor-pointer text-muted-foreground">{t('changeMethod')}</summary>
-      <form action={action} className="mt-2 flex flex-wrap items-center gap-2">
-        <input type="hidden" name="itemId" value={itemId} />
-        <NativeSelect
-          name="payoutMethod"
-          aria-label={t('changeMethodLabel')}
-          className="h-8 w-40"
-          options={methods.map((m) => ({ value: m, label: PAYOUT_METHOD_LABELS[m] ?? m }))}
-        />
-        <Input
-          name="reason"
-          placeholder={t('changeMethodReason')}
-          aria-label={t('changeMethodReason')}
-          className="h-8 w-56"
-          required
-        />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
-          {t('changeMethod')}
-        </Button>
-        {error && <span className="text-sm text-destructive">{error.message}</span>}
-      </form>
+      {form}
     </details>
   );
 }
@@ -564,12 +608,9 @@ export function RateForm({
   rate: string | null;
   source: string | null;
 }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    setPayoutRateAction,
-    null,
-  );
   const t = useTranslations('payDialog');
-  const error = useResult(state, t('rateApproved'));
+  const [state, action, pending] = useToastAction(setPayoutRateAction, t('rateApproved'));
+  const error = state && !state.ok ? state.error : null;
   const [value, setValue] = useState(rate ?? '');
   const unchanged =
     rate !== null &&
@@ -600,12 +641,9 @@ export function RateForm({
 
 /** Merges two neighbouring draft acts of a payout into one act and one period (A-083). */
 export function MergeActsButton({ firstId, secondId }: { firstId: string; secondId: string }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
-    mergeActsAction,
-    null,
-  );
   const t = useTranslations('payDialog');
-  const error = useResult(state, t('merged'));
+  const [state, action, pending] = useToastAction(mergeActsAction, t('merged'));
+  const error = state && !state.ok ? state.error : null;
   return (
     <form action={action} className="flex items-center gap-2">
       <input type="hidden" name="firstId" value={firstId} />
@@ -638,11 +676,11 @@ export function SplitActForm({
   /** The last act of a closed payout: the later act may run on into the next months (A-098). */
   extendable?: boolean;
 }) {
-  const [state, action, pending] = useActionState<PayrollFormState, FormData>(splitActAction, null);
   const t = useTranslations('payDialog');
   const tc = useTranslations('common');
   const fmt = useFormat();
-  const error = useResult(state, t('split'));
+  const [state, action, pending] = useToastAction(splitActAction, t('split'));
+  const error = state && !state.ok ? state.error : null;
   // Open since a given result; a later successful split closes the form.
   const [openedAt, setOpenedAt] = useState<{ state: PayrollFormState } | null>(null);
   const open = openedAt !== null && !(state !== openedAt.state && state?.ok);
@@ -651,7 +689,8 @@ export function SplitActForm({
     periodFrom < periodTo ? midDay(periodFrom, periodTo) : '',
   );
   const byActivity = activities.length > 1;
-  if (!open) {
+  const dialog = useDialogScope();
+  if (!open && !dialog) {
     return (
       <Button
         size="sm"
@@ -666,7 +705,12 @@ export function SplitActForm({
   }
   const after = boundary ? nextDay(boundary) : '';
   return (
-    <form action={action} className="flex w-full flex-col gap-3 rounded-md border p-3">
+    <form
+      action={action}
+      className={
+        dialog ? 'flex flex-col gap-3' : 'flex w-full flex-col gap-3 rounded-md border p-3'
+      }
+    >
       <input type="hidden" name="actId" value={actId} />
       <input type="hidden" name="actFrom" value={periodFrom} />
       <input type="hidden" name="actTo" value={periodTo} />
@@ -761,7 +805,8 @@ export function SplitActForm({
           size="sm"
           variant="ghost"
           onClick={() => {
-            setOpenedAt(null);
+            if (dialog) dialog.close();
+            else setOpenedAt(null);
           }}
         >
           {tc('cancel')}

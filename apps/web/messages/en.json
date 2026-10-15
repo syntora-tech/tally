@@ -18,7 +18,13 @@
     "search": "Search…",
     "empty": "No records",
     "shown": "Showing {shown} of {total}",
-    "comingAtStage": "This module arrives at stage {stage}."
+    "comingAtStage": "This module arrives at stage {stage}.",
+    "help": "Explanation",
+    "actions": "Actions",
+    "previous": "Previous",
+    "next": "Next",
+    "chooseMonth": "Choose a month",
+    "allMonths": "All months"
   },
   "nav": {
     "modules": "Modules",
@@ -1665,7 +1671,60 @@
     "adjusted": "Adjustment added",
     "adjustAct": "Into act",
     "actIssueLink": "Issue or upload…",
-    "actSignLink": "Sign…"
+    "actSignLink": "Sign…",
+    "v2": {
+      "help": "Pay-when-paid: a line becomes payable once the client has paid in full, or at the deadline at the company's expense. Order: document (FOP act or contractor invoice) → signature → payment.",
+      "tabsLabel": "Payout status",
+      "tabs": {
+        "ready": "To pay",
+        "waiting": "Waiting for client",
+        "paid": "Paid"
+      },
+      "total": "Total: {amount}",
+      "stepsLabel": "Payout steps",
+      "steps": {
+        "document": "Document",
+        "signature": "Signature",
+        "payment": "Payment"
+      },
+      "cta": {
+        "issueAct": "Issue act",
+        "issueInvoice": "Issue invoice",
+        "signAct": "Upload signed",
+        "signInvoice": "Mark signed",
+        "pay": "Pay"
+      },
+      "payNow": "Pay now…",
+      "changeMethod": "Change payout method…",
+      "splitAct": "Split act {act}…",
+      "mergeActs": "Merge {first} with {second}…",
+      "mergeHint": "Two neighbouring draft acts become one act for both periods.",
+      "adjust": "Adjustment after close…",
+      "openPayee": "Open payee",
+      "openAct": "Open act {act}",
+      "openInvoice": "Open contractor invoice",
+      "details": "Details of {name}",
+      "documents": "Documents",
+      "lines": "Lines",
+      "rate": "Payout rate",
+      "empty": {
+        "ready": "Nothing to pay right now",
+        "waiting": "Nothing is waiting for a client",
+        "paid": "No payouts paid yet"
+      },
+      "lineActions": "Line actions",
+      "release": "Release the line…",
+      "releaseHint": "The line becomes payable before the client pays, at the company's expense.",
+      "removeLine": "Remove from the payout…",
+      "actStatus": {
+        "draft": "draft",
+        "unsigned": "not signed",
+        "signed": "signed",
+        "paid": "paid"
+      },
+      "fundedBy": "Funded by",
+      "salaryHelp": "A salary paid in parts during the month (planned payments): link a bank payment to each part, no period close needed."
+    }
   },
   "payDialog": {
     "paid": "Payout recorded",
