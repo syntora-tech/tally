@@ -399,7 +399,9 @@
       "mergeAmountWithActivities": "An act of activities cannot be merged with an act split off by amount; merge them into the rest instead",
       "deletePaidPart": "A paid part of the month keeps its act",
       "deleteOnlyPayoutAct": "The only act of a payout cannot be deleted: the payout needs one",
-      "deleteNoNeighbour": "No neighbouring draft act to give this act’s days to: merge or void instead"
+      "deleteNoNeighbour": "No neighbouring draft act to give this act’s days to: merge or void instead",
+      "documentPdf": "Upload the act as a PDF",
+      "numberTaken": "This contract already has an act with this number"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -1642,7 +1644,9 @@
     "adjustReason": "Reason",
     "adjustSubmit": "Add adjustment",
     "adjusted": "Adjustment added",
-    "adjustAct": "Into act"
+    "adjustAct": "Into act",
+    "actIssueLink": "Issue or upload…",
+    "actSignLink": "Sign…"
   },
   "payDialog": {
     "paid": "Payout recorded",
@@ -1749,7 +1753,9 @@
     "fileReady": "The act file is generated — see documents below",
     "fileRendering": "The file is being generated…",
     "newSubtitle": "Trip reimbursement or another service with a manual date",
-    "deleteTitle": "Delete the draft"
+    "deleteTitle": "Delete the draft",
+    "fileOwn": "The act's document is in the documents below",
+    "signedDocument": "Signed copy uploaded"
   },
   "actForms": {
     "draftSaved": "Draft saved",
@@ -1775,7 +1781,18 @@
     "deleteHint": "The draft is deleted; its old values and the reason stay in the history.",
     "deleteMergeHint": "The act is part of a month: its days and work go back to the neighbouring draft act.",
     "deleteReason": "Reason",
-    "deleteDraft": "Delete draft"
+    "deleteDraft": "Delete draft",
+    "ownTitle": "Or my own document",
+    "ownHint": "The act is made outside Tally: type its number and date and upload the PDF. Nothing is generated and the contract's numbering does not move.",
+    "ownNumber": "Act number",
+    "ownFile": "Act PDF",
+    "ownSigned": "Already signed by both sides",
+    "ownIssue": "Issue with my document",
+    "ownIssued": "Act issued with your document",
+    "signedFile": "Or the signed PDF",
+    "signedFileSave": "Upload signed",
+    "signedFileSaved": "Signed act uploaded",
+    "ownDate": "Date on the document"
   },
   "settings": {
     "title": "Settings",

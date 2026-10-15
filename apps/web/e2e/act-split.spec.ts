@@ -93,6 +93,14 @@ test.afterAll(async () => {
   try {
     await d.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
+      // Replica mode skips the FK cascade: links of the acts' documents go first.
+      await tx.execute(
+        sql`create temp table own_docs on commit drop as select document_id as id from public.document_link where entity_id in (select id from public.supplier_act where payee_id = ${ids.payee})`,
+      );
+      await tx.execute(
+        sql`delete from public.document_link where document_id in (select id from own_docs)`,
+      );
+      await tx.execute(sql`delete from public.document where id in (select id from own_docs)`);
       await tx.execute(sql`delete from public.supplier_act where payee_id = ${ids.payee}`);
       await tx.execute(sql`delete from public.payroll_line where payroll_item_id = ${ids.item}`);
       await tx.execute(sql`delete from public.payroll_item where id = ${ids.item}`);
@@ -147,6 +155,36 @@ test('the last act runs on into the next month, up to the last payment (A-098)',
   await expect(acts.getByText('16.09.2052–30.09.2052')).toBeVisible();
   await expect(acts.getByText('01.10.2052–09.10.2052')).toBeVisible();
   await expect(acts.getByText('20,750.00')).toHaveCount(2);
+});
+
+test('a draft act is issued with my own PDF, then marked signed by its copy (A-101)', async ({
+  page,
+}) => {
+  await signIn(page, E2E_OWNER_EMAIL);
+  await page.goto(`/payroll?period=${ids.period}`);
+  await page
+    .getByTestId('payout-acts')
+    .getByRole('link', { name: 'Issue or upload…' })
+    .first()
+    .click();
+  await page.getByLabel('Act number').fill(`${ids.contract.slice(0, 6)} - А1`);
+  await page.getByLabel('Act PDF').setInputFiles({
+    name: 'act.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7'),
+  });
+  await page.getByRole('button', { name: 'Issue with my document' }).click();
+  await expect(page.getByRole('heading', { name: /Act No\. .* - А1/ })).toBeVisible();
+  await expect(page.getByText("The act's document is in the documents below")).toBeVisible();
+  await page.getByLabel('Or the signed PDF').setInputFiles({
+    name: 'signed.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7'),
+  });
+  await page.getByRole('button', { name: 'Upload signed' }).click();
+  await expect(page.getByText('Signed copy uploaded')).toBeVisible();
+  await page.goto(`/payroll?period=${ids.period}`);
+  await expect(page.getByTestId('payout-acts').getByText('signed', { exact: true })).toBeVisible();
 });
 
 test('an empty period opened by mistake is deleted', async ({ page }) => {

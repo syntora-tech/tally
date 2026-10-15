@@ -475,6 +475,15 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                                   {a.signed ? t('signed') : t('unsigned')}
                                 </Badge>
                               )}
+                              {(a.status === 'draft' || (a.status === 'issued' && !a.signed)) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  render={<Link href={`/acts/${a.id}`} />}
+                                >
+                                  {a.status === 'draft' ? t('actIssueLink') : t('actSignLink')}
+                                </Button>
+                              )}
                               {a.amountUsd !== null && (
                                 <span className="text-muted-foreground">
                                   {tp('partOf', {

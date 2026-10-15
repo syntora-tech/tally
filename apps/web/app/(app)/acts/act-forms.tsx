@@ -8,7 +8,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  attachSignedActAction,
   createActAction,
+  issueActWithDocumentAction,
   deleteDraftActAction,
   issueActAction,
   saveActDraftAction,
@@ -165,6 +167,80 @@ export function SignedUrlForm({ id, value }: { id: string; value: string | null 
       <Button type="submit" variant="outline" disabled={pending}>
         {tc('save')}
       </Button>
+    </form>
+  );
+}
+
+/** A draft act issued with a document made outside Tally (A-101). */
+export function OwnDocumentActForm({ id, actDate }: { id: string; actDate: string }) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(
+    issueActWithDocumentAction,
+    null,
+  );
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('ownIssued'));
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="id" value={id} />
+      <p className="w-full text-sm text-muted-foreground">{t('ownHint')}</p>
+      <FormField label={t('ownNumber')} htmlFor="act-own-number" error={error?.fieldErrors?.number}>
+        <Input id="act-own-number" name="number" required className="w-40" />
+      </FormField>
+      <FormField label={t('ownDate')} htmlFor="act-own-date" error={error?.fieldErrors?.actDate}>
+        <Input id="act-own-date" name="actDate" type="date" defaultValue={actDate} />
+      </FormField>
+      <FormField label={t('nonWorkingReason')} htmlFor="act-own-override">
+        <Input id="act-own-override" name="dateOverrideReason" className="w-72" />
+      </FormField>
+      <FormField label={t('ownFile')} htmlFor="act-own-file" error={error?.fieldErrors?.file}>
+        <Input id="act-own-file" name="file" type="file" accept="application/pdf" required />
+      </FormField>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="signed" />
+        {t('ownSigned')}
+      </label>
+      <FormField
+        label={t('signedLink')}
+        htmlFor="act-own-link"
+        error={error?.fieldErrors?.signedUrl}
+      >
+        <Input
+          id="act-own-link"
+          name="signedUrl"
+          placeholder="https://vchasno.ua/…"
+          className="w-80"
+        />
+      </FormField>
+      <Button type="submit" variant="outline" disabled={pending}>
+        {t('ownIssue')}
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+/** The signed copy of an issued act as a PDF, instead of a Vchasno link (A-101). */
+export function SignedFileForm({ id }: { id: string }) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(
+    attachSignedActAction,
+    null,
+  );
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('signedFileSaved'));
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <FormField label={t('signedFile')} htmlFor="act-signed-file" error={error?.fieldErrors?.file}>
+        <Input id="act-signed-file" name="file" type="file" accept="application/pdf" required />
+      </FormField>
+      <Button type="submit" variant="outline" disabled={pending}>
+        {t('signedFileSave')}
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
     </form>
   );
 }

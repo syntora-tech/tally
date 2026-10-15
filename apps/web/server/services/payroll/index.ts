@@ -192,7 +192,7 @@ export const listPayroll = defineService({
           fxRate: a.fxRate,
           rateLocked: a.rateLocked,
           /** Issued and signed (Вчасно link): it may be paid (A-096). */
-          signed: a.status === 'issued' && !!a.signedUrl,
+          signed: a.status === 'issued' && (!!a.signedUrl || !!a.signedDocumentId),
           /** Takes the activities not given to another act (A-085). */
           isRest: a.amountUsd === null,
         })),
@@ -372,7 +372,9 @@ async function unsignedDocument(
       ? acts.find((a) => a.id === pay.actId)
       : acts.find((a) => a.amountUsd === null);
     if (!target || (target.amountUsd === null && !pay.coversRest)) return 'payroll.actFirst';
-    return target.status === 'issued' && target.signedUrl ? null : 'payroll.actNotSigned';
+    return target.status === 'issued' && (target.signedUrl || target.signedDocumentId)
+      ? null
+      : 'payroll.actNotSigned';
   }
   if (p && p.kind !== 'fop' && item.kind === 'person' && item.payoutMethod !== 'fiat') {
     const [inv] = await tx

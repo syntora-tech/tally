@@ -117,7 +117,7 @@ export const actsRegistry = defineService({
             periodTo: supplierAct.periodTo,
             payoutMonth: period.month,
             isLegacy: supplierAct.isLegacy,
-            signed: sql<boolean>`${supplierAct.signedUrl} is not null`,
+            signed: sql<boolean>`${supplierAct.signedUrl} is not null or ${supplierAct.signedDocumentId} is not null`,
             contractId: supplierAct.contractId,
             contractNumber: contract.number,
             payeeId: supplierAct.payeeId,

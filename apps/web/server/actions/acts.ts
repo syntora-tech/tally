@@ -8,6 +8,7 @@ import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
 import { createAct, issueAct, saveActDraft, setSignedUrl, voidAct } from '../services/acts';
 import { deleteDraftAct } from '../services/acts/delete';
+import { attachSignedAct, issueActWithDocument } from '../services/acts/own';
 import type { ActionResult } from './to-action-result';
 
 export type ActFormState = ActionResult<{ id: string }> | null;
@@ -91,4 +92,28 @@ export async function deleteDraftActAction(
   revalidatePath('/periods', 'layout');
   const { mergedInto } = result.value;
   redirect(mergedInto ? `/acts/${mergedInto}` : '/acts');
+}
+
+export async function issueActWithDocumentAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const result = await issueActWithDocument.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/documents');
+  return done(result.value.id);
+}
+
+export async function attachSignedActAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const result = await attachSignedAct.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/documents');
+  return done(result.value.id);
 }

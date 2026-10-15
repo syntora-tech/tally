@@ -14,6 +14,8 @@ import {
   ActDraftForm,
   DeleteDraftActForm,
   IssueActForm,
+  OwnDocumentActForm,
+  SignedFileForm,
   SignedUrlForm,
   VoidActForm,
 } from '../act-forms';
@@ -28,14 +30,17 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
   if (result.isErr()) notFound();
   const { act: a, payeeName, contract } = result.value;
   const draft = a.status === 'draft';
+  const uploaded =
+    typeof a.snapshot === 'object' && a.snapshot !== null && 'uploaded' in a.snapshot;
   const rendering =
     a.status === 'issued' &&
     !a.pdfFileId &&
     (await jobPending.run(ctx, { dedupeKeys: [renderActJob(a.id).dedupeKey ?? ''] })).unwrapOr(
       false,
     );
-  const [t, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
+  const [t, tf, fmt, { DOC_STATUS_LABELS }] = await Promise.all([
     getTranslations('act'),
+    getTranslations('actForms'),
     getFormat(),
     getLabels(),
   ]);
@@ -97,6 +102,17 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
         </Card>
       )}
 
+      {draft && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{tf('ownTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <OwnDocumentActForm id={a.id} actDate={a.actDate} />
+          </CardContent>
+        </Card>
+      )}
+
       {draft && ctx.actor.role === 'owner' && !a.reimbursementId && !a.rateLocked && (
         <Card>
           <CardHeader>
@@ -118,10 +134,15 @@ export default async function ActPage({ params }: { params: Promise<{ id: string
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
-              {a.pdfFileId ? t('fileReady') : t('fileRendering')}
+              {a.pdfFileId ? (uploaded ? t('fileOwn') : t('fileReady')) : t('fileRendering')}
             </p>
             {rendering && <AutoRefresh />}
             <SignedUrlForm id={a.id} value={a.signedUrl} />
+            {a.signedDocumentId ? (
+              <p className="text-sm">{t('signedDocument')}</p>
+            ) : (
+              <SignedFileForm id={a.id} />
+            )}
             <VoidActForm id={a.id} />
           </CardContent>
         </Card>

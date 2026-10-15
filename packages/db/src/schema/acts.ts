@@ -14,6 +14,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, rolePolicies } from './_common';
+import { document } from './documents';
 import { contract } from './engagements';
 import { actType, docStatus, fxSource } from './enums';
 import { payee } from './parties';
@@ -23,7 +24,8 @@ import { reimbursement } from './trips';
 /**
  * Act of a FOP contractor (spec 4.2, 6.6). The monthly act equals `total_uah` of its payroll item;
  * once issued it is immutable (I1), dated on a working day (I3), numbered from the contract's
- * sequence (I2). Signed copies live in Vchasno (`signed_url`).
+ * sequence (I2). Signed copies live in Vchasno (`signed_url`) or
+ * are uploaded (`signed_document_id`, A-101).
  */
 export const supplierAct = pgTable(
   'supplier_act',
@@ -73,6 +75,8 @@ export const supplierAct = pgTable(
     gdocFileId: text(),
     pdfFileId: text(),
     signedUrl: text(),
+    /** The signed act uploaded as a document instead of a Vchasno link (A-101). */
+    signedDocumentId: uuid().references((): AnyPgColumn => document.id, { onDelete: 'set null' }),
     dateOverrideReason: text(),
     voidReason: text(),
   },

@@ -568,6 +568,13 @@
       "when": 1792052966181,
       "tag": "20261015082926_adjustment_act_closed_period",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792056170146,
+      "tag": "20261015092250_act_signed_document",
+      "breakpoints": true
     }
   ]
 }
