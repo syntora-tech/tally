@@ -41,7 +41,7 @@ export default async function ActPage({
   const { id } = await params;
   const result = await getAct.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { act: a, payeeName, contract } = result.value;
+  const { act: a, payeeName, contract, nextNumber } = result.value;
   const draft = a.status === 'draft';
   const uploaded =
     typeof a.snapshot === 'object' && a.snapshot !== null && 'uploaded' in a.snapshot;
@@ -148,11 +148,13 @@ export default async function ActPage({
                       <ActDraftForm
                         id={a.id}
                         actDate={a.actDate}
+                        periodFrom={a.periodFrom}
+                        periodTo={a.periodTo}
                         amountUah={a.amountUah}
                         editableAmount={a.type !== 'monthly'}
                         dateOverrideReason={a.dateOverrideReason}
                       />
-                      <IssueActForm id={a.id} />
+                      <IssueActForm id={a.id} nextNumber={nextNumber} />
                     </>
                   )}
                 </Panel>

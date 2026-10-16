@@ -3,6 +3,7 @@ import {
   adjustment,
   company,
   contract,
+  numberSequence,
   payee,
   payrollItem,
   payrollLine,
@@ -16,6 +17,7 @@ import {
   defaultActDate,
   Decimal,
   endOfMonth,
+  formatSequenceNumber,
   nextPartPeriod,
   payoutPartOf,
   payoutRest,
@@ -688,19 +690,45 @@ export const listActs = defineService({
   },
 });
 
+/**
+ * The number a draft would get if it were issued now (A-107): `issue_number()` read without taking
+ * it — the contract's sequence, the year of the act date, a year-scoped sequence restarting at 1.
+ * Null when the contract has no sequence or the date is before the sequence's year (issuing fails).
+ */
+export function previewActNumber(
+  seq: { template: string; nextValue: number; yearScoped: boolean; currentYear: number | null },
+  actDate: string,
+  contractNumber: string,
+): string | null {
+  const year = Number(actDate.slice(0, 4));
+  if (seq.yearScoped && seq.currentYear !== null && year < seq.currentYear) return null;
+  const value = seq.yearScoped && seq.currentYear !== year ? 1 : seq.nextValue;
+  return formatSequenceNumber(seq.template, value, year, contractNumber);
+}
+
 export const getAct = defineService({
   name: 'acts.get',
   input: z.object({ id: z.uuid() }),
   handler: async (ctx, { id }) => {
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx
+    const found = await inActorScope(ctx, async (tx) => {
+      const [row] = await tx
         .select({ act: supplierAct, payeeName, contract })
         .from(supplierAct)
         .innerJoin(payee, eq(payee.id, supplierAct.payeeId))
         .innerJoin(contract, eq(contract.id, supplierAct.contractId))
-        .where(eq(supplierAct.id, id)),
-    );
-    return row ? ok(row) : err(serviceError('not_found', 'acts.notFound'));
+        .where(eq(supplierAct.id, id));
+      if (!row) return null;
+      const key = row.contract.numberSequenceKey;
+      const [seq] =
+        row.act.status === 'draft' && key
+          ? await tx.select().from(numberSequence).where(eq(numberSequence.key, key))
+          : [];
+      return {
+        ...row,
+        nextNumber: seq ? previewActNumber(seq, row.act.actDate, row.contract.number) : null,
+      };
+    });
+    return found ? ok(found) : err(serviceError('not_found', 'acts.notFound'));
   },
 });
 
@@ -730,25 +758,58 @@ export const createAct = defineService({
     }),
 });
 
-/** Draft edits: date (and amount of a non-monthly act); monthly amounts follow total_uah. */
+const draftPeriodDate = z.preprocess(
+  (v) => (v === '' ? null : v),
+  localDateString.nullable().optional(),
+);
+
+/**
+ * Draft edits: date, period (A-107) and the amount of a non-monthly act; monthly amounts follow
+ * total_uah. A monthly act keeps a period; the database stops periods of one payout or month from
+ * overlapping (A-083, A-098).
+ */
 export const saveActDraft = defineService({
   name: 'acts.saveDraft',
-  input: z.object({
-    id: z.uuid(),
-    actDate: localDateString,
-    amountUah: z.preprocess((v) => (v === '' ? undefined : v), decimalString.optional()),
-    dateOverrideReason: optionalText,
-  }),
+  input: z
+    .object({
+      id: z.uuid(),
+      actDate: localDateString,
+      // Left out = unchanged (older forms, MCP); empty = no period.
+      periodFrom: draftPeriodDate,
+      periodTo: draftPeriodDate,
+      amountUah: z.preprocess((v) => (v === '' ? undefined : v), decimalString.optional()),
+      dateOverrideReason: optionalText,
+    })
+    .superRefine((v, issues) => {
+      if (v.periodFrom === undefined && v.periodTo === undefined) return;
+      if (!v.periodFrom !== !v.periodTo) {
+        const path = v.periodFrom ? 'periodTo' : 'periodFrom';
+        issues.addIssue({ code: 'custom', path: [path], message: 'acts.periodBoth' });
+      } else if (v.periodFrom && v.periodTo && v.periodTo < v.periodFrom) {
+        issues.addIssue({ code: 'custom', path: ['periodTo'], message: 'acts.periodOrder' });
+      }
+    }),
   handler: async (ctx, { id, ...values }) =>
     inActorScope(ctx, async (tx) => {
       const [act] = await tx.select().from(supplierAct).where(eq(supplierAct.id, id));
       if (!act) return err(serviceError('not_found', 'acts.notFound'));
       if (act.status !== 'draft') return err(serviceError('conflict', 'acts.issuedLocked'));
+      const periodGiven = values.periodFrom !== undefined || values.periodTo !== undefined;
+      if (periodGiven && act.type === 'monthly' && !values.periodFrom) {
+        return err(
+          serviceError('validation_error', 'acts.periodBoth', {
+            periodFrom: ['acts.periodBoth'],
+          }),
+        );
+      }
       await tx
         .update(supplierAct)
         .set({
           actDate: values.actDate,
           dateOverrideReason: values.dateOverrideReason,
+          ...(periodGiven
+            ? { periodFrom: values.periodFrom ?? null, periodTo: values.periodTo ?? null }
+            : {}),
           ...(act.type !== 'monthly' && values.amountUah ? { amountUah: values.amountUah } : {}),
         })
         .where(eq(supplierAct.id, id));

@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { HelpTip } from '@/components/v2/help-tip';
 import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
@@ -66,6 +67,8 @@ function ErrorAlert({ message }: { message: string | undefined }) {
 export function ActDraftForm(props: {
   id: string;
   actDate: string;
+  periodFrom?: string | null;
+  periodTo?: string | null;
   amountUah: string;
   editableAmount: boolean;
   dateOverrideReason: string | null;
@@ -82,6 +85,32 @@ export function ActDraftForm(props: {
           <FormField label={t('actDate')} htmlFor="act-date" error={error?.fieldErrors?.actDate}>
             <Input id="act-date" name="actDate" type="date" defaultValue={props.actDate} />
           </FormField>
+          <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:row-start-2">
+            <FormField
+              label={t('v2.periodFrom')}
+              htmlFor="act-period-from"
+              error={error?.fieldErrors?.periodFrom}
+            >
+              <Input
+                id="act-period-from"
+                name="periodFrom"
+                type="date"
+                defaultValue={props.periodFrom ?? ''}
+              />
+            </FormField>
+            <FormField
+              label={t('v2.periodTo')}
+              htmlFor="act-period-to"
+              error={error?.fieldErrors?.periodTo}
+            >
+              <Input
+                id="act-period-to"
+                name="periodTo"
+                type="date"
+                defaultValue={props.periodTo ?? ''}
+              />
+            </FormField>
+          </div>
           {props.editableAmount ? (
             <FormField
               label={t('amountUah')}
@@ -145,16 +174,27 @@ export function ActDraftForm(props: {
   );
 }
 
-export function IssueActForm({ id }: { id: string }) {
+export function IssueActForm({ id, nextNumber }: { id: string; nextNumber?: string | null }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(issueActAction, null);
   const t = useTranslations('actForms');
+  const tc = useTranslations('common');
   const error = useResult(state, t('issued'));
   if (useIsV2()) {
     return (
       <form action={action} className="flex flex-col gap-2 border-t pt-4">
         <input type="hidden" name="id" value={id} />
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground">{t('v2.numberHint')}</span>
+          {nextNumber ? (
+            <span className="flex items-center gap-1.5 text-sm" data-testid="act-next-number">
+              {t.rich('v2.nextNumber', {
+                number: nextNumber,
+                b: (chunks) => <b>{chunks}</b>,
+              })}
+              <HelpTip label={tc('help')}>{t('v2.nextNumberHelp')}</HelpTip>
+            </span>
+          ) : (
+            <span className="text-sm text-muted-foreground">{t('v2.numberHint')}</span>
+          )}
           <Button type="submit" disabled={pending} className="ml-auto">
             {t('issue')}
           </Button>

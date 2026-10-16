@@ -147,6 +147,13 @@ test('v2 act: generate or my own PDF, then the signing step', async ({ page }) =
   await page.getByRole('link', { name: 'My own PDF' }).click();
   await expect(page.getByLabel('Act PDF')).toBeVisible();
   await page.getByRole('link', { name: 'Generate' }).click();
+  // A-107: the number it would get now, and its period changed in the draft.
+  await expect(page.getByTestId('act-next-number')).toContainText('Will be issued as № DV - А1');
+  await page.getByLabel('Period from').fill('2054-01-10');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Draft saved')).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Period from')).toHaveValue('2054-01-10');
   await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
   await expect(page.getByRole('heading', { name: /Act No\. DV - А1/ })).toBeVisible();
   await expect(page.getByTestId('act-status')).toHaveText('Active');

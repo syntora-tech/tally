@@ -26,7 +26,15 @@ import { runNextJob } from '../../jobs/worker';
 import { HtmlRenderer } from '../../render/renderers';
 import { LocalStorage } from '../../storage/local-storage';
 import { payItem } from '../payroll';
-import { createAct, issueAct, listActs, saveActDraft, setSignedUrl } from '.';
+import {
+  createAct,
+  getAct,
+  issueAct,
+  listActs,
+  previewActNumber,
+  saveActDraft,
+  setSignedUrl,
+} from '.';
 import { actsRegistry } from './registry';
 
 // August 2045: the 31st is a Thursday, the 26th a Saturday.
@@ -191,6 +199,62 @@ describe('FOP acts (6.6)', () => {
       periodTo: '2045-08-31',
       type: 'monthly',
     });
+  });
+
+  it('a draft changes its period; a save without one keeps it (A-107)', async () => {
+    const id = ids.acts[0] ?? '';
+    const ctx = h.ctxFor(finance);
+    const period = async () => {
+      const [act] = await h.db.select().from(supplierAct).where(eq(supplierAct.id, id));
+      return [act?.periodFrom, act?.periodTo];
+    };
+    await saveActDraft.run(ctx, {
+      id,
+      actDate: '2045-08-31',
+      periodFrom: '2045-08-05',
+      periodTo: '2045-08-31',
+    });
+    expect(await period()).toEqual(['2045-08-05', '2045-08-31']);
+    await saveActDraft.run(ctx, { id, actDate: '2045-08-31' });
+    expect(await period()).toEqual(['2045-08-05', '2045-08-31']);
+    const backwards = await saveActDraft.run(ctx, {
+      id,
+      actDate: '2045-08-31',
+      periodFrom: '2045-08-20',
+      periodTo: '2045-08-10',
+    });
+    expect(backwards._unsafeUnwrapErr().fieldErrors?.periodTo).toEqual(['acts.periodOrder']);
+    const half = await saveActDraft.run(ctx, {
+      id,
+      actDate: '2045-08-31',
+      periodFrom: '2045-08-01',
+      periodTo: '',
+    });
+    expect(half._unsafeUnwrapErr().fieldErrors?.periodTo).toEqual(['acts.periodBoth']);
+    const cleared = await saveActDraft.run(ctx, {
+      id,
+      actDate: '2045-08-31',
+      periodFrom: '',
+      periodTo: '',
+    });
+    expect(cleared._unsafeUnwrapErr().fieldErrors?.periodFrom).toEqual(['acts.periodBoth']);
+    await saveActDraft.run(ctx, {
+      id,
+      actDate: '2045-08-31',
+      periodFrom: '2045-08-01',
+      periodTo: '2045-08-31',
+    });
+    expect(await period()).toEqual(['2045-08-01', '2045-08-31']);
+  });
+
+  it('a draft shows the number issuing would give it now (A-107)', async () => {
+    const act = (await getAct.run(h.ctxFor(finance), { id: ids.acts[0] ?? '' }))._unsafeUnwrap();
+    expect(act.nextNumber).toBe('9099 - А7');
+    const seq = { template: '{yy}/{seq}', nextValue: 12, yearScoped: true, currentYear: 2045 };
+    expect(previewActNumber(seq, '2045-08-31', 'X')).toBe('45/12');
+    expect(previewActNumber(seq, '2046-01-02', 'X')).toBe('46/1');
+    expect(previewActNumber(seq, '2044-12-31', 'X')).toBeNull();
+    expect(previewActNumber({ ...seq, currentYear: null }, '2045-01-02', 'X')).toBe('45/1');
   });
 
   it('a Saturday date is rejected; issue numbers from the contract sequence', async () => {

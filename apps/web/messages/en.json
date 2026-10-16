@@ -440,7 +440,9 @@
       "deleteOnlyPayoutAct": "The only act of a payout cannot be deleted: the payout needs one",
       "deleteNoNeighbour": "No neighbouring draft act to give this act’s days to: merge or void instead",
       "documentPdf": "Upload the act as a PDF",
-      "numberTaken": "This contract already has an act with this number"
+      "numberTaken": "This contract already has an act with this number",
+      "periodBoth": "Give both ends of the period",
+      "periodOrder": "The period ends before it starts"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -2042,7 +2044,11 @@
     "v2": {
       "addOverride": "+ The date is a non-working day: give the reason",
       "saveDraft": "Save changes",
-      "numberHint": "The number is assigned on issue, by the contract's rule"
+      "numberHint": "The number is assigned on issue, by the contract's rule",
+      "nextNumber": "Will be issued as № <b>{number}</b>",
+      "nextNumberHelp": "The next free number of the contract sequence for the act date. If another act of this contract is issued first, this one takes the number after it.",
+      "periodFrom": "Period from",
+      "periodTo": "Period to"
     }
   },
   "settings": {
