@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Suspense, use } from 'react';
 import { cn } from 'cn';
 import {
   Sidebar,
@@ -18,11 +19,62 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { navItemForPath, type NavSection } from '@/lib/navigation';
+import type { NavCounter } from '@/server/services/dashboard/nav-counters';
 import { UserMenu, type UserMenuProps } from './user-menu';
 
 const UNLABELLED = new Set(['overview', 'system']);
 
-export function V2AppSidebar({ sections, user }: { sections: NavSection[]; user: UserMenuProps }) {
+type CounterKey =
+  'dashboard' | 'periods' | 'invoices' | 'payroll' | 'acts' | 'ledger' | 'documents';
+
+function Counter({
+  counters,
+  href,
+  title,
+}: {
+  counters: Promise<Record<string, NavCounter>>;
+  href: string;
+  title: string;
+}) {
+  const t = useTranslations('nav.counters');
+  const c = use(counters)[href];
+  if (!c) return null;
+  const label = t(title as CounterKey, { count: c.count ?? 0 });
+  if (c.count === null) {
+    return (
+      <span
+        role="img"
+        data-nav-counter=""
+        aria-label={label}
+        title={label}
+        className={cn('ml-auto size-2 shrink-0 rounded-full', c.urgent ? 'bg-red-500' : 'bg-neon')}
+      />
+    );
+  }
+  return (
+    <span
+      data-nav-counter={c.count}
+      title={label}
+      className={cn(
+        'ml-auto min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums',
+        c.urgent ? 'bg-red-500 text-white' : 'bg-white/12 text-white',
+      )}
+    >
+      <span aria-hidden>{c.count}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+export function V2AppSidebar({
+  sections,
+  user,
+  counters,
+}: {
+  sections: NavSection[];
+  user: UserMenuProps;
+  counters: Promise<Record<string, NavCounter>>;
+}) {
   const pathname = usePathname();
   const t = useTranslations('nav');
   const active = navItemForPath(
@@ -83,6 +135,9 @@ export function V2AppSidebar({ sections, user }: { sections: NavSection[]; user:
                             )}
                           />
                           <span>{t(item.title)}</span>
+                          <Suspense>
+                            <Counter counters={counters} href={item.href} title={item.title} />
+                          </Suspense>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );

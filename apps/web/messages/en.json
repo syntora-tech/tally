@@ -64,6 +64,15 @@
       "money": "Money",
       "directory": "Directory",
       "system": "System"
+    },
+    "counters": {
+      "dashboard": "Cash may run short in the next 30 days",
+      "periods": "An earlier month is still open",
+      "invoices": "{count, plural, one {# invoice is} other {# invoices are}} overdue",
+      "payroll": "{count, plural, one {# payout is} other {# payouts are}} ready to pay",
+      "acts": "{count, plural, one {# counterparty has} other {# counterparties have}} months without an act this year",
+      "ledger": "{count, plural, one {# planned payment is} other {# planned payments are}} due today or overdue",
+      "documents": "{count, plural, =0 {Checks found gaps} one {# document to sort out} other {# documents to sort out}}"
     }
   },
   "roles": {

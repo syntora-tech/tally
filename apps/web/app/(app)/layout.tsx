@@ -8,10 +8,12 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { ALL_ROLES, navItemsFor, navSectionsFor } from '@/lib/navigation';
 import { signOut } from '@/server/actions/auth';
 import { requireRole } from '@/server/request-context';
+import { navCounters } from '@/server/services/dashboard/nav-counters';
 import { getUiPrefs } from '@/server/ui-prefs';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { actor } = await requireRole(ALL_ROLES);
+  const ctx = await requireRole(ALL_ROLES);
+  const { actor } = ctx;
   const t = await getTranslations('roles');
   const locale = await getLocale();
   const { version, theme } = await getUiPrefs();
@@ -21,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <SidebarProvider>
         <V2AppSidebar
           sections={navSectionsFor(actor.role)}
+          counters={navCounters.run(ctx, {}).then((r) => r.unwrapOr({}))}
           user={{
             email: actor.email,
             roleLabel: t(actor.role),

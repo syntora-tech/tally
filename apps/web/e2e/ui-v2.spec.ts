@@ -36,7 +36,9 @@ test('A-102: v1 by default; v2 is an opt-in per browser and can be switched back
   await page.getByRole('button', { name: 'Account and preferences' }).click();
   await page.getByRole('menuitemradio', { name: 'Українська' }).click();
   await expect(html).toHaveAttribute('lang', 'uk');
-  await expect(page.getByRole('navigation', { name: 'Модулі' }).getByText('Місяць')).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Модулі' }).getByText('Місяць', { exact: true }),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Обліковий запис і налаштування' }).click();
   await page.getByRole('menuitemradio', { name: 'English' }).click();
