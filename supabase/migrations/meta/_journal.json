@@ -575,6 +575,13 @@
       "when": 1792056170146,
       "tag": "20261015092250_act_signed_document",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792135838295,
+      "tag": "20261016073038_account_hidden_position",
+      "breakpoints": true
     }
   ]
 }

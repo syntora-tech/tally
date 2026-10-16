@@ -154,21 +154,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           <CardContent>
             <Table>
               <TableBody>
-                {o.balances.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell>
-                      <Link href={`/ledger?accountId=${b.id}`} className="hover:underline">
-                        {b.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmt.amount(b.balance, b.currency)}
-                      {b.currency !== 'USD' && (
-                        <div className="text-xs text-muted-foreground">≈ {usd(b.usd)}</div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {o.balances
+                  .filter((b) => !b.hidden)
+                  .map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell>
+                        <Link href={`/ledger?accountId=${b.id}`} className="hover:underline">
+                          {b.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt.amount(b.balance, b.currency)}
+                        {b.currency !== 'USD' && (
+                          <div className="text-xs text-muted-foreground">≈ {usd(b.usd)}</div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </CardContent>

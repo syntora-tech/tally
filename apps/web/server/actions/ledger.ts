@@ -5,11 +5,14 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject, nestPrefixed } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
+import { linkTargets, type LinkTargets } from '../services/allocations/link-targets';
 import { saveManualRate } from '../services/fx';
 import {
   createTransaction,
   deleteTransaction,
+  moveAccount,
   saveAccount,
+  setAccountHidden,
   saveCategory,
   updateTransaction,
 } from '../services/ledger';
@@ -64,6 +67,32 @@ export async function saveAccountAction(
   return { ok: true, data: result.value };
 }
 
+async function accountChange(
+  service: typeof moveAccount | typeof setAccountHidden,
+  formData: FormData,
+): Promise<LedgerFormState> {
+  const ctx = await requireUserContext();
+  const result = await service.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/ledger', 'layout');
+  revalidatePath('/dashboard');
+  return { ok: true, data: result.value };
+}
+
+export async function moveAccountAction(
+  _prev: LedgerFormState,
+  formData: FormData,
+): Promise<LedgerFormState> {
+  return accountChange(moveAccount, formData);
+}
+
+export async function setAccountHiddenAction(
+  _prev: LedgerFormState,
+  formData: FormData,
+): Promise<LedgerFormState> {
+  return accountChange(setAccountHidden, formData);
+}
+
 export async function saveCategoryAction(
   _prev: LedgerFormState,
   formData: FormData,
@@ -87,5 +116,13 @@ export async function saveManualRateAction(
   });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger/rates');
+  return { ok: true, data: result.value };
+}
+
+/** Read-only: what a Ledger row can be linked to, loaded when its dialog opens (A-106). */
+export async function linkTargetsAction(transactionId: string): Promise<ActionResult<LinkTargets>> {
+  const ctx = await requireUserContext();
+  const result = await linkTargets.run(ctx, { transactionId });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   return { ok: true, data: result.value };
 }

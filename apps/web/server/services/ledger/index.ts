@@ -53,6 +53,9 @@ export const TWO_LEG_TYPES: readonly TxType[] = [
 const balanceSql = (asOf?: string | null) =>
   sql<string>`${account.openingBalance} + coalesce((select sum(p.amount) from ${posting} p join ${transaction} t on t.id = p.transaction_id where p.account_id = "account"."id"${asOf ? sql` and t.occurred_on <= ${asOf}` : sql``}), 0)`;
 
+/** Hand-set order first, the never-ordered rest by name (A-106). */
+const ACCOUNT_ORDER = [sql`${account.position} asc nulls last`, asc(account.name)];
+
 export const listAccounts = defineService({
   name: 'ledger.accounts.list',
   input: z.object({
@@ -68,7 +71,7 @@ export const listAccounts = defineService({
           .select({ account, balance: balanceSql(asOf) })
           .from(account)
           .where(includeInactive ? undefined : eq(account.isActive, true))
-          .orderBy(asc(account.name)),
+          .orderBy(...ACCOUNT_ORDER),
       ),
     ),
 });
@@ -154,6 +157,55 @@ export const saveAccount = defineService({
         .where(eq(account.id, id))
         .returning({ id: account.id });
       return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
+    }),
+});
+
+/** Hides an account from lists and pickers, or shows it again; its balance still counts (A-106). */
+export const setAccountHidden = defineService({
+  name: 'ledger.accounts.setHidden',
+  input: z.object({ id: z.uuid(), hidden: checkbox }),
+  handler: async (ctx, { id, hidden }) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .update(account)
+        .set({ isHidden: hidden })
+        .where(eq(account.id, id))
+        .returning({ id: account.id }),
+    );
+    return row ? ok(row) : err(serviceError('not_found', 'ledger.accountNotFound'));
+  },
+});
+
+/**
+ * Moves an account one place up or down in the display order. The whole list is renumbered from
+ * its current order, so accounts never ordered before take their place by name.
+ */
+export const moveAccount = defineService({
+  name: 'ledger.accounts.move',
+  input: z.object({ id: z.uuid(), direction: z.enum(['up', 'down']) }),
+  handler: async (ctx, { id, direction }) =>
+    inActorScope(ctx, async (tx) => {
+      // Locked, so two moves at once renumber one after the other.
+      const rows = await tx
+        .select({ id: account.id, position: account.position })
+        .from(account)
+        .orderBy(...ACCOUNT_ORDER)
+        .for('update');
+      const current = new Map(rows.map((r) => [r.id, r.position]));
+      const ids = rows.map((r) => r.id);
+      const from = ids.indexOf(id);
+      if (from < 0) return err(serviceError('not_found', 'ledger.accountNotFound'));
+      const to = direction === 'up' ? from - 1 : from + 1;
+      if (to >= 0 && to < ids.length) [ids[from], ids[to]] = [ids[to] ?? id, id];
+      // Only changed rows are written, so the audit log shows the move, not a renumbering.
+      for (const [i, accountId] of ids.entries()) {
+        if (current.get(accountId) === i + 1) continue;
+        await tx
+          .update(account)
+          .set({ position: i + 1 })
+          .where(eq(account.id, accountId));
+      }
+      return ok({ id });
     }),
 });
 

@@ -51,6 +51,10 @@ export const account = pgTable(
     openingBalance: numeric({ precision: 20, scale: 8 }).notNull().default('0'),
     openingDate: date({ mode: 'string' }).notNull(),
     isActive: boolean().notNull().default(true),
+    /** Kept out of lists and pickers; its balance still counts in the treasury (A-106). */
+    isHidden: boolean().notNull().default(false),
+    /** Display order set by hand; accounts never ordered (null) follow by name. */
+    position: integer(),
   },
   (t) => [
     unique('account_legacy_ref_key').on(t.legacyRef),

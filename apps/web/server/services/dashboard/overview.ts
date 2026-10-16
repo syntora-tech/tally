@@ -122,6 +122,8 @@ export const dashboardOverview = defineService({
     const balances = accounts.unwrapOr([]).map(({ account: a, balance }) => ({
       id: a.id,
       name: a.name,
+      /** Left out of the list on the dashboard; still in the treasury (A-106). */
+      hidden: a.isHidden,
       currency: a.currency,
       balance,
       usd: usd(balance, a.currency)?.toFixed(2) ?? null,

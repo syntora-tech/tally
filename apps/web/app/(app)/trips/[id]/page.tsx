@@ -1,4 +1,5 @@
 import { addDays, toDecimal, type LocalDate } from '@tally/domain';
+import { shownAccounts } from '@/lib/accounts';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -62,7 +63,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
       ])
     : [];
   const name = (personId: string) => participants.find((p) => p.personId === personId)?.name ?? '';
-  const accountOptions = (accounts?.unwrapOr([]) ?? []).map(({ account: a }) => ({
+  const accountOptions = shownAccounts(accounts?.unwrapOr([]) ?? []).map(({ account: a }) => ({
     value: a.id,
     label: `${a.name} (${a.currency})`,
     currency: a.currency,

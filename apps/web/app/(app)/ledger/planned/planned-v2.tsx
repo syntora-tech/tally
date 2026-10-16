@@ -92,7 +92,7 @@ export async function PlannedV2({
     const rows = payments.unwrapOr([]);
     const accountRows = accounts
       .unwrapOr([])
-      .filter(({ account: a }) => a.isActive)
+      .filter(({ account: a }) => a.isActive && !a.isHidden)
       .map(({ account: a, balance }) => ({
         id: a.id,
         currency: a.currency,

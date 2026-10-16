@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -12,7 +12,9 @@ import { editableDecimal } from '@/lib/format';
 import { toOptions, useLabels } from '@/lib/labels';
 import {
   deleteTransactionAction,
+  moveAccountAction,
   saveAccountAction,
+  setAccountHiddenAction,
   saveCategoryAction,
   saveManualRateAction,
   type LedgerFormState,
@@ -60,6 +62,69 @@ export function DeleteTransactionButton({ id }: { id: string }) {
 }
 
 /** v2: the confirmation of a delete, in the row's ⋯ dialog. */
+function useQuietAction(
+  run: (prev: LedgerFormState, formData: FormData) => Promise<LedgerFormState>,
+) {
+  return useActionState<LedgerFormState, FormData>(async (prev, formData) => {
+    const result = await run(prev, formData);
+    if (result && !result.ok) toast.error(result.error.message);
+    return result;
+  }, null);
+}
+
+/** Order and visibility of an account (A-106): one click each, no dialog. */
+export function AccountControls({
+  id,
+  name,
+  hidden,
+  first,
+  last,
+}: {
+  id: string;
+  name: string;
+  hidden: boolean;
+  first: boolean;
+  last: boolean;
+}) {
+  const t = useTranslations('ledgerForms');
+  const [, move, moving] = useQuietAction(moveAccountAction);
+  const [, toggle, toggling] = useQuietAction(setAccountHiddenAction);
+  return (
+    <div className="flex items-center gap-0.5">
+      {(['up', 'down'] as const).map((direction) => (
+        <form key={direction} action={move}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="direction" value={direction} />
+          <Button
+            type="submit"
+            size="icon-sm"
+            variant="ghost"
+            disabled={moving || (direction === 'up' ? first : last)}
+            aria-label={t(direction === 'up' ? 'moveUp' : 'moveDown', { name })}
+            title={t(direction === 'up' ? 'moveUp' : 'moveDown', { name })}
+          >
+            {direction === 'up' ? <ArrowUp /> : <ArrowDown />}
+          </Button>
+        </form>
+      ))}
+      <form action={toggle}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="hidden" value={hidden ? 'false' : 'true'} />
+        <Button
+          type="submit"
+          size="icon-sm"
+          variant="ghost"
+          disabled={toggling}
+          aria-label={t(hidden ? 'showAccount' : 'hideAccount', { name })}
+          title={t(hidden ? 'showAccount' : 'hideAccount', { name })}
+        >
+          {hidden ? <Eye /> : <EyeOff />}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 export function DeleteTransactionForm({ id }: { id: string }) {
   const t = useTranslations('ledgerForms');
   const tc = useTranslations('common');

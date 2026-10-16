@@ -23,7 +23,8 @@ import { Status } from '@/components/v2/status';
 import { TabsNav } from '@/components/v2/tabs-nav';
 import { getFormat, getLabels } from '@/server/i18n';
 import { impliedRate, type listAccounts, type listTransactions } from '@/server/services/ledger';
-import { RowMenu } from '@/components/v2/form-dialog';
+import { DialogButton, RowMenu } from '@/components/v2/form-dialog';
+import { LinkTransaction } from './link-transaction';
 import { DeleteTransactionForm } from './ledger-forms';
 
 type OkOf<T> = T extends Result<infer V, unknown> ? V : never;
@@ -91,9 +92,10 @@ export async function LedgerV2({
   moreHref: string;
   today: LocalDate;
 }) {
-  const [t, tc, fmt, { TX_TYPE_LABELS }, locale] = await Promise.all([
+  const [t, tc, tl, fmt, { TX_TYPE_LABELS }, locale] = await Promise.all([
     getTranslations('ledger'),
     getTranslations('common'),
+    getTranslations('ledgerLink'),
     getFormat(),
     getLabels(),
     getLocale(),
@@ -329,14 +331,26 @@ export async function LedgerV2({
                       <div className="col-start-2 md:col-start-auto">
                         {settles ? (
                           open ? (
-                            <Status tone="warning" testId="allocation">
-                              {allocated.isZero()
-                                ? t('v2.notAllocated')
-                                : t('allocatedOf', {
-                                    allocated: fmt.amount(tx.allocated),
-                                    total: fmt.amount(tx.mainAmount ?? '0'),
-                                  })}
-                            </Status>
+                            <span className="flex flex-wrap items-center gap-1.5">
+                              <Status tone="warning" testId="allocation">
+                                {allocated.isZero()
+                                  ? t('v2.notAllocated')
+                                  : t('allocatedOf', {
+                                      allocated: fmt.amount(tx.allocated),
+                                      total: fmt.amount(tx.mainAmount ?? '0'),
+                                    })}
+                              </Status>
+                              <DialogButton
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-1.5 text-xs text-link"
+                                testId="link-transaction"
+                                title={`${tl('title')}: ${title}`}
+                                content={<LinkTransaction transactionId={tx.transaction.id} />}
+                              >
+                                {tl('action')}
+                              </DialogButton>
+                            </span>
                           ) : (
                             <span
                               className="text-xs text-muted-foreground"

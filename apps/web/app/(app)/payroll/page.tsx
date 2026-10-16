@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { shownAccounts } from '@/lib/accounts';
 import { getTranslations } from 'next-intl/server';
 import { addMonths, endOfMonth, startOfMonth, sum, toDecimal, type LocalDate } from '@tally/domain';
 import Link from 'next/link';
@@ -100,7 +101,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
     (LINE_STATUSES as readonly string[]).includes(s)
       ? t(`lineStatus.${s as (typeof LINE_STATUSES)[number]}`)
       : s;
-  const accountRows = accounts.unwrapOr([]).map(({ account: a, balance }) => ({
+  const accountRows = shownAccounts(accounts.unwrapOr([])).map(({ account: a, balance }) => ({
     id: a.id,
     currency: a.currency,
     label: `${a.name} · ${fmt.amount(balance, a.currency)}`,
@@ -241,6 +242,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
           .map(({ period: p }) => ({ id: p.id, month: p.month }))}
         periodId={periodId}
         tab={typeof params.tab === 'string' ? params.tab : undefined}
+        linkPay={
+          typeof params.pay === 'string' && typeof params.tx === 'string'
+            ? { itemId: params.pay, transactionId: params.tx }
+            : null
+        }
         isOwner={isOwner}
         today={ctx.today}
         contractorInvoices={contractorInvoices}

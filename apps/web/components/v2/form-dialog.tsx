@@ -2,6 +2,7 @@
 
 import { MoreHorizontal } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   createContext,
   useContext,
@@ -77,6 +78,25 @@ function FormDialog({
         <DialogScope.Provider value={scope}>{open && spec.content}</DialogScope.Provider>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * A dialog that is open when the page loads, for a link that asks for it (e.g. "pay this payout
+ * with this transaction"); closing it drops that request from the URL.
+ */
+export function OpenedDialog({ closeHref, ...spec }: DialogSpec & { closeHref: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(true);
+  return (
+    <FormDialog
+      spec={spec}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) router.replace(closeHref, { scroll: false });
+      }}
+    />
   );
 }
 

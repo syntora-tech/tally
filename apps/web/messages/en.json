@@ -749,7 +749,8 @@
       "zeroColumns": "Columns where every value is 0 are hidden.",
       "cashShort": "cash {amount}",
       "showTable": "Show the table",
-      "hideTable": "Hide the table"
+      "hideTable": "Hide the table",
+      "hiddenAccounts": "{count, plural, one {# hidden account} other {# hidden accounts}}"
     }
   },
   "trips": {
@@ -1387,7 +1388,9 @@
       "lastMonth": "Last month",
       "thisYear": "This year",
       "deleteAction": "Delete…",
-      "deleteTitle": "Delete the transaction?"
+      "deleteTitle": "Delete the transaction?",
+      "hidden": "Hidden",
+      "accountsHelp": "Bank, wallets, cash. The currency of an account with postings cannot change. Arrows set the order of accounts everywhere; a hidden account leaves the overview and the pickers, but its balance still counts in the treasury."
     }
   },
   "ledgerForms": {
@@ -1408,7 +1411,11 @@
     "rateUah": "Rate, UAH per 1",
     "saveManualRate": "Save manual rate",
     "address": "Wallet address",
-    "addressHint": "For crypto accounts: our address on the network"
+    "addressHint": "For crypto accounts: our address on the network",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "hideAccount": "Hide {name}",
+    "showAccount": "Show {name}"
   },
   "newTransaction": {
     "subtitle": "For an exchange enter both actual amounts from the statement — the rate is derived from them"
@@ -2412,5 +2419,28 @@
         "payment": "Payment"
       }
     }
+  },
+  "ledgerLink": {
+    "action": "Link…",
+    "title": "Link payment",
+    "loading": "Looking for what it can pay…",
+    "free": "Free to link: {amount}",
+    "what": "What it pays",
+    "kind": {
+      "invoice": "Invoice",
+      "planned": "Planned expense",
+      "payout": "Payout",
+      "reimbursement": "Trip reimbursement"
+    },
+    "left": "{amount} left",
+    "match": "Same party",
+    "amountIn": "Amount, {currency}",
+    "rate": "Rate",
+    "link": "Link",
+    "linked": "Payment linked",
+    "openPayout": "Open the payout",
+    "payoutHint": "A payout is paid from its own dialog on Payroll (rate, act, signatures); it opens with this transaction already chosen.",
+    "nothingRevenue": "No open invoices to link this receipt to.",
+    "nothingExpense": "Nothing fits this expense: no planned payments due in its currency around its date, no unpaid trip reimbursements in UAH, and no open payouts (those take Contractors and Payroll expenses)."
   }
 }

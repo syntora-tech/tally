@@ -1,4 +1,5 @@
 import { isCryptoNetwork, shortAddress, toDecimal, transactionExplorerUrl } from '@tally/domain';
+import { shownAccounts } from '@/lib/accounts';
 import { ExternalLink, Pencil } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
@@ -60,7 +61,7 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
     listCategories.run(ctx, {}),
     listTransactions.run(ctx, { ...filters, ...search, limit }),
   ]);
-  const accountRows = accounts.unwrapOr([]);
+  const accountRows = shownAccounts(accounts.unwrapOr([]), filters.accountId);
   const [t, fmt, { TX_TYPE_LABELS }] = await Promise.all([
     getTranslations('ledger'),
     getFormat(),

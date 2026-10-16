@@ -70,6 +70,8 @@ export type PayDialogProps = {
   accounts: { id: string; label: string }[];
   /** Unallocated payout expenses already in the Ledger (statement rows), best matches first. */
   candidates: { id: string; label: string; remaining: string }[];
+  /** Chosen up front when the dialog is opened from a Ledger row (A-106). */
+  defaultTransactionId?: string;
   isOwner: boolean;
   /** A FOP act follows the payout: a part payment gets an act of its own (A-083). */
   hasAct: boolean;
@@ -127,7 +129,9 @@ export function PayDialog(p: PayDialogProps) {
   const [paidFrom, setPaidFrom] = useState<'new' | 'existing'>(
     p.candidates.length > 0 ? 'existing' : 'new',
   );
-  const [transactionId, setTransactionId] = useState('');
+  const [transactionId, setTransactionId] = useState(
+    p.candidates.some((c) => c.id === p.defaultTransactionId) ? (p.defaultTransactionId ?? '') : '',
+  );
   const picked = p.candidates.find((c) => c.id === transactionId);
   const itemAmount = p.remaining ?? preview ?? '';
   const itemLeft = parseDecimal(itemAmount);

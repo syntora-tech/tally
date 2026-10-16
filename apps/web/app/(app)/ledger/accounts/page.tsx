@@ -1,9 +1,10 @@
+import { cn } from 'cn';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
 import { listAccounts } from '@/server/services/ledger';
-import { AccountForm } from '../ledger-forms';
+import { AccountControls, AccountForm } from '../ledger-forms';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, pageTitle } from '@/server/i18n';
 import { DialogButton } from '@/components/v2/form-dialog';
@@ -22,19 +23,26 @@ export default async function AccountsPage() {
     const tc = await getTranslations('common');
     return (
       <div className="flex flex-col gap-5">
-        <LedgerHeader section="accounts" help={t('accountsSubtitle')}>
+        <LedgerHeader section="accounts" help={t('v2.accountsHelp')}>
           <DialogButton title={t('newAccount')} wide content={<AccountForm today={ctx.today} />}>
             + {t('newAccount')}
           </DialogButton>
         </LedgerHeader>
         <ul className="divide-y rounded-lg border bg-card">
-          {accounts.map(({ account: a, balance }) => (
+          {accounts.map(({ account: a, balance }, i) => (
             <li
               key={a.id}
               data-testid="account-row"
               className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm"
             >
-              <div className="min-w-48 flex-1">
+              <AccountControls
+                id={a.id}
+                name={a.name}
+                hidden={a.isHidden}
+                first={i === 0}
+                last={i === accounts.length - 1}
+              />
+              <div className={cn('min-w-48 flex-1', a.isHidden && 'text-muted-foreground')}>
                 <div className="font-medium">{a.name}</div>
                 <div className="text-xs text-muted-foreground">
                   {[
@@ -46,6 +54,7 @@ export default async function AccountsPage() {
                     .join(' · ')}
                 </div>
               </div>
+              {a.isHidden && <Status>{t('v2.hidden')}</Status>}
               {!a.isActive && <Status>{t('v2.inactive')}</Status>}
               <span className="min-w-36 text-right font-semibold tabular-nums">
                 {fmt.amount(balance, a.currency)}

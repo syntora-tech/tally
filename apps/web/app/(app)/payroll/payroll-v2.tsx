@@ -3,7 +3,7 @@ import type { Result } from 'neverthrow';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Button } from '@/components/ui/button';
-import { DialogButton, RowMenu, type MenuEntry } from '@/components/v2/form-dialog';
+import { DialogButton, OpenedDialog, RowMenu, type MenuEntry } from '@/components/v2/form-dialog';
 import { HelpTip } from '@/components/v2/help-tip';
 import { MonthStepper } from '@/components/v2/month-stepper';
 import { PageHeader } from '@/components/v2/page-header';
@@ -49,6 +49,8 @@ export type PayrollV2Props = {
   months: { id: string; month: string }[];
   periodId: string;
   tab: string | undefined;
+  /** `?pay=<item>&tx=<transaction>` from a Ledger row: that payout's dialog opens on load. */
+  linkPay: { itemId: string; transactionId: string } | null;
   isOwner: boolean;
   today: string;
   contractorInvoices: ContractorInvoice[];
@@ -107,8 +109,12 @@ export async function PayrollV2(p: PayrollV2Props) {
     waiting: items.filter((i) => i.group === 'waiting').length,
     paid: items.filter((i) => i.group === 'paid').length + paidParts.length,
   };
+  const linked = p.linkPay ? items.find((i) => i.item.id === p.linkPay?.itemId) : undefined;
   const tab: PayrollGroup =
-    GROUPS.find((g) => g === p.tab) ?? GROUPS.find((g) => counts[g] > 0) ?? 'ready';
+    GROUPS.find((g) => g === p.tab) ??
+    GROUPS.find((g) => g !== 'paid' && g === linked?.group) ??
+    GROUPS.find((g) => counts[g] > 0) ??
+    'ready';
   const rows = items.filter((i) => i.group === tab);
 
   const amountOf = (i: PayrollRow) => {
@@ -144,7 +150,7 @@ export async function PayrollV2(p: PayrollV2Props) {
           ? { tone: 'info', label: t('v2.actStatus.signed') }
           : { tone: 'warning', label: t('v2.actStatus.unsigned') };
 
-  const payDialog = (i: PayrollRow) => {
+  const payDialog = (i: PayrollRow, defaultTransactionId?: string) => {
     const fiat = i.item.payoutMethod === 'fiat';
     return (
       <PayDialog
@@ -159,6 +165,7 @@ export async function PayrollV2(p: PayrollV2Props) {
         remaining={i.remaining}
         isOwner={p.isOwner}
         candidates={p.candidatesFor(i)}
+        defaultTransactionId={defaultTransactionId}
         fee={i.payeeFee}
         hasAct={i.acts.length > 0}
         payableActs={i.acts
@@ -676,6 +683,13 @@ export async function PayrollV2(p: PayrollV2Props) {
         </section>
       )}
 
+      {linked && linked.group !== 'paid' && p.linkPay && (
+        <OpenedDialog
+          title={`${tp('pay')}: ${nameOf(linked)}`}
+          content={payDialog(linked, p.linkPay.transactionId)}
+          closeHref={query(p.periodId, tab)}
+        />
+      )}
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed px-6 py-12 text-center text-muted-foreground">
           {t('empty')}

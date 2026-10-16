@@ -241,22 +241,34 @@ export async function DashboardV2({
         {panel(
           t('balances'),
           <ul className="flex flex-col divide-y text-sm">
-            {o.balances.map((b) => (
-              <li key={b.id} className="flex items-baseline justify-between gap-3 py-2">
+            {o.balances
+              .filter((b) => !b.hidden)
+              .map((b) => (
+                <li key={b.id} className="flex items-baseline justify-between gap-3 py-2">
+                  <Link
+                    href={`/ledger?accountId=${b.id}`}
+                    className="min-w-0 truncate hover:underline"
+                  >
+                    {b.name}
+                  </Link>
+                  <span className="text-right tabular-nums">
+                    <span className="font-medium">{fmt.amount(b.balance, b.currency)}</span>
+                    {b.currency !== 'USD' && b.usd !== null && (
+                      <span className="block text-xs text-muted-foreground">≈ {usd(b.usd)}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            {o.balances.some((b) => b.hidden) && (
+              <li className="py-2">
                 <Link
-                  href={`/ledger?accountId=${b.id}`}
-                  className="min-w-0 truncate hover:underline"
+                  href="/ledger/accounts"
+                  className="text-xs text-muted-foreground hover:underline"
                 >
-                  {b.name}
+                  {tv('hiddenAccounts', { count: o.balances.filter((b) => b.hidden).length })}
                 </Link>
-                <span className="text-right tabular-nums">
-                  <span className="font-medium">{fmt.amount(b.balance, b.currency)}</span>
-                  {b.currency !== 'USD' && b.usd !== null && (
-                    <span className="block text-xs text-muted-foreground">≈ {usd(b.usd)}</span>
-                  )}
-                </span>
               </li>
-            ))}
+            )}
           </ul>,
           <Link href="/ledger/reconcile" className="text-sm text-link hover:underline">
             {tl('reconcile')}

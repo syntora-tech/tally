@@ -91,7 +91,7 @@ export default async function PlannedExpensesPage({
     const rows = payments.unwrapOr([]);
     const accountRows = accounts
       .unwrapOr([])
-      .filter(({ account: a }) => a.isActive)
+      .filter(({ account: a }) => a.isActive && !a.isHidden)
       .map(({ account: a, balance }) => ({
         id: a.id,
         currency: a.currency,

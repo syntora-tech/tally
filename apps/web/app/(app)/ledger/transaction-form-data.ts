@@ -1,4 +1,5 @@
 import type { ServiceContext } from '@/server/services/context';
+import { shownAccounts } from '@/lib/accounts';
 import { listClients } from '@/server/services/clients';
 import { listAccounts, listCategories } from '@/server/services/ledger';
 import { searchPeople } from '@/server/services/people';
@@ -12,12 +13,15 @@ export async function transactionFormData(ctx: ServiceContext, includeInactive =
     listClients.run(ctx, {}),
   ]);
   return {
-    accounts: accounts.unwrapOr([]).map(({ account: a }) => ({
-      id: a.id,
-      name: a.name,
-      currency: a.currency,
-      kind: a.kind,
-    })),
+    // A new transaction offers only shown accounts; an edited one may already use a hidden one.
+    accounts: (includeInactive ? accounts.unwrapOr([]) : shownAccounts(accounts.unwrapOr([]))).map(
+      ({ account: a }) => ({
+        id: a.id,
+        name: a.name,
+        currency: a.currency,
+        kind: a.kind,
+      }),
+    ),
     categories: categories.unwrapOr([]).map((c) => ({ id: c.id, txType: c.txType, name: c.name })),
     people: people.unwrapOr([]).map((p) => ({ id: p.id, name: p.fullName })),
     clients: clients.unwrapOr([]).map((c) => ({ id: c.id, name: c.shortName ?? c.legalName })),
