@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { WorkCalendar } from './calendar';
 import { parseLocalDate, type LocalDate } from './local-date';
-import { sum } from './money';
+import { roundHalfUp, sum, toDecimal } from './money';
 import {
   nextPartPeriod,
   payoutPartOf,
   payoutRest,
   payoutRestUah,
+  rateForUah,
   derivedRate,
   payrollItemStatus,
   payrollTotalUah,
@@ -217,5 +218,31 @@ describe('payout parts (A-083)', () => {
       from: '2026-09-21',
       to: '2026-09-21',
     });
+  });
+});
+
+describe('rateForUah', () => {
+  it('finds a 6-place rate that gives exactly the typed UAH sum', () => {
+    const rate = rateForUah('704', '31649.52');
+    expect(rate?.toFixed(6)).toBe('44.956705');
+    expect(roundHalfUp(toDecimal('704').times(rate ?? 0)).toFixed(2)).toBe('31649.52');
+  });
+
+  it('hits every cent for sums up to 10 000 USD', () => {
+    for (const [usd, uah] of [
+      ['1', '41.37'],
+      ['3', '100.01'],
+      ['9999.99', '415000.00'],
+      ['2020', '89849.60'],
+    ] as const) {
+      const rate = rateForUah(usd, uah);
+      expect(rate).not.toBeNull();
+      expect(roundHalfUp(toDecimal(usd).times(rate ?? 0)).toFixed(2)).toBe(uah);
+    }
+  });
+
+  it('gives up on nonsense', () => {
+    expect(rateForUah('0', '100')).toBeNull();
+    expect(rateForUah('100', '0')).toBeNull();
   });
 });

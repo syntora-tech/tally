@@ -513,6 +513,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                               itemId={i.item.id}
                               rate={i.item.payoutFxRate}
                               source={i.item.fxSource}
+                              totalUah={i.item.totalUah}
                             />
                           )
                         )}

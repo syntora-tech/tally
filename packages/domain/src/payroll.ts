@@ -202,6 +202,22 @@ export function payoutRestUah(rest: PayoutRest, rate: DecimalInput | null): Deci
 }
 
 /**
+ * The rate (6 places, as payout_fx) at which round2(usd × rate) is exactly `uah` — for typing the
+ * UAH sum instead of the rate. Null when no 6-place rate lands on it (over 10 000 USD a step of
+ * 0.000001 moves the sum by more than a cent) or the sum is not positive.
+ */
+export function rateForUah(usd: DecimalInput, uah: DecimalInput): Decimal | null {
+  const u = toDecimal(usd);
+  const target = toDecimal(uah);
+  if (!u.gt(0) || !target.gt(0)) return null;
+  const hits = (r: Decimal) => roundHalfUp(u.times(r)).eq(target);
+  const near = target.div(u).toDecimalPlaces(6, Decimal.ROUND_HALF_UP);
+  if (hits(near)) return near;
+  const lowest = target.minus('0.005').div(u).toDecimalPlaces(6, Decimal.ROUND_UP);
+  return lowest.gt(0) && hits(lowest) ? lowest : null;
+}
+
+/**
  * The part a payment of `paidUah` covers (A-083): USD first, at the payment rate, then the UAH
  * lines. A payment of the whole rest covers it all, so no cents are left over by rounding.
  */

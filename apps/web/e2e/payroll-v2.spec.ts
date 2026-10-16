@@ -185,6 +185,14 @@ test('v2 payroll: tabs by status, the next step and the details of a payout', as
   await expect(fop.getByTestId('payout-acts')).toContainText('01.03.2053–31.03.2053');
   await expect(fop.getByTestId('payout-acts')).toContainText('draft');
   await expect(fop.getByLabel('Payout rate USD→UAH')).toHaveValue('41.500000');
+  // A-109: the UAH sum typed instead of the rate; the rate follows it.
+  await fop.getByRole('radio', { name: 'UAH sum' }).click();
+  await expect(fop.getByLabel('Payout sum, UAH')).toHaveValue('83000.00');
+  await fop.getByLabel('Payout sum, UAH').fill('83 246.90');
+  await fop.getByRole('button', { name: 'Approve rate' }).click();
+  await expect(page.getByText('Rate 41.623450 approved')).toBeVisible();
+  await expect(fop.getByLabel('Payout rate USD→UAH')).toHaveValue('41.623450');
+  await expect(fop.getByTestId('payout-acts')).toContainText('83,246.90');
 
   // Rare actions live in the ⋯ menu; paying before the act is signed is one of them.
   await fop.getByRole('button', { name: 'Actions', exact: true }).click();

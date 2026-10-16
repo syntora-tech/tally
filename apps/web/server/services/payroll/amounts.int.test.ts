@@ -161,6 +161,23 @@ describe('acts split off by amount (A-086)', () => {
       { amountUah: '168000.00', rateLocked: true },
       { amountUsd: null, amountUah: '43000.00' },
     ]);
+
+    // A-109: the UAH sum typed instead of the rate; the paid part keeps its own.
+    const byTotal = await setPayoutRate.run(h.ctxFor(finance), {
+      itemId: ids.item,
+      totalUah: '211123.45',
+    });
+    expect(byTotal._unsafeUnwrap()).toMatchObject({ rate: '43.123450', totalUah: '211123.45' });
+    expect(await acts()).toMatchObject([
+      { amountUah: '168000.00', rateLocked: true },
+      { amountUsd: null, amountUah: '43123.45' },
+    ]);
+    const below = await setPayoutRate.run(h.ctxFor(finance), {
+      itemId: ids.item,
+      totalUah: '100000',
+    });
+    expect(below.isErr()).toBe(true);
+    await setPayoutRate.run(h.ctxFor(finance), { itemId: ids.item, rate: '43' });
   });
 
   it('merges an amount act back into the rest', async () => {

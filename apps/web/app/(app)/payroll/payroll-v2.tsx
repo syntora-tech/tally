@@ -430,7 +430,12 @@ export async function PayrollV2(p: PayrollV2Props) {
               {t('v2.rate')}
             </h3>
             {rateEditable ? (
-              <RateForm itemId={i.item.id} rate={i.item.payoutFxRate} source={i.item.fxSource} />
+              <RateForm
+                itemId={i.item.id}
+                rate={i.item.payoutFxRate}
+                source={i.item.fxSource}
+                totalUah={i.item.totalUah}
+              />
             ) : (
               <span>
                 {i.item.payoutFxRate ?? t('noRate')}

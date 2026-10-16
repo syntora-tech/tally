@@ -24,6 +24,7 @@ import {
   payoutDeadline,
   payoutRest,
   payoutRestUah,
+  rateForUah,
   payrollTotalUah,
   sum,
   toDecimal,
@@ -228,11 +229,21 @@ export const listPayroll = defineService({
  * Fiat payout rate (5.4): snapshot of rate, source, who and when; total_uah per 5.2. Fixed once
  * money has been paid against the item.
  */
+const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
+
 export const setPayoutRate = defineService({
   name: 'payroll.setRate',
   input: z.object({
     itemId: z.uuid(),
-    rate: decimalString.refine((v) => toDecimal(v).gt(0), 'fx.ratePositive2'),
+    rate: z.preprocess(
+      emptyToUndefined,
+      decimalString.refine((v) => toDecimal(v).gt(0), 'fx.ratePositive2').optional(),
+    ),
+    /** Or the UAH sum the payout should come to: the rate is derived from it (A-109). */
+    totalUah: z.preprocess(
+      emptyToUndefined,
+      decimalString.refine((v) => toDecimal(v).gt(0), 'field.positive').optional(),
+    ),
     source: z.enum(['bank_actual', 'nbu', 'manual']).default('manual'),
   }),
   handler: async (ctx, input) => inActorScope(ctx, (tx) => applyRate(tx, ctx, input)),
@@ -241,7 +252,12 @@ export const setPayoutRate = defineService({
 async function applyRate(
   tx: Parameters<Parameters<typeof inActorScope>[1]>[0],
   ctx: Parameters<typeof inActorScope>[0],
-  input: { itemId: string; rate: string; source: 'bank_actual' | 'nbu' | 'manual' },
+  input: {
+    itemId: string;
+    rate?: string;
+    totalUah?: string;
+    source: 'bank_actual' | 'nbu' | 'manual';
+  },
 ) {
   const [item] = await tx
     .select()
@@ -282,13 +298,31 @@ async function applyRate(
           ),
         )
     : [];
+  const rest = payoutRest(lines, adjustments, parts);
+  let rate = input.rate;
+  if (input.totalUah !== undefined) {
+    // What the rate still moves: the typed total less the paid parts and the UAH lines.
+    const usdPartUah = toDecimal(input.totalUah)
+      .minus(sum(parts.map((p) => p.uah)))
+      .minus(rest.uah);
+    const derived = rateForUah(rest.usd, usdPartUah);
+    if (!derived) {
+      return err(
+        serviceError('validation_error', 'payroll.totalUnreachable', {
+          totalUah: ['payroll.totalUnreachable'],
+        }),
+      );
+    }
+    rate = derived.toFixed(6);
+  }
+  if (rate === undefined) {
+    return err(
+      serviceError('validation_error', 'fx.ratePositive2', { rate: ['fx.ratePositive2'] }),
+    );
+  }
   const totalUah = parts.length
-    ? ok(
-        sum(parts.map((p) => p.uah)).plus(
-          payoutRestUah(payoutRest(lines, adjustments, parts), input.rate) ?? 0,
-        ),
-      )
-    : payrollTotalUah(lines, adjustments, input.rate);
+    ? ok(sum(parts.map((p) => p.uah)).plus(payoutRestUah(rest, rate) ?? 0))
+    : payrollTotalUah(lines, adjustments, rate);
   if (totalUah.isErr()) {
     if (totalUah.error.code === 'rate_required') {
       return err(serviceError('validation_error', 'payroll.rateFirst'));
@@ -303,7 +337,7 @@ async function applyRate(
   await tx
     .update(payrollItem)
     .set({
-      payoutFxRate: toDecimal(input.rate).toFixed(6),
+      payoutFxRate: toDecimal(rate).toFixed(6),
       fxSource: input.source,
       fxSetBy: ctx.actor.kind === 'user' ? ctx.actor.userId : null,
       fxSetAt: new Date(),
@@ -313,10 +347,8 @@ async function applyRate(
   // A month closed without a rate gets its act now, so it can be signed before the payout (A-096).
   await ensureMonthlyActDraft(tx, item.id);
   await syncMonthlyActDraft(tx, item.id);
-  return ok({ id: item.id, totalUah: totalUah.value.toFixed(2) });
+  return ok({ id: item.id, totalUah: totalUah.value.toFixed(2), rate: toDecimal(rate).toFixed(6) });
 }
-
-const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
 export const payItemInput = z
   .object({

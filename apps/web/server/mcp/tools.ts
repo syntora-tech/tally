@@ -263,7 +263,7 @@ export const TOOLS: readonly ToolDef[] = [
     kind: 'write',
     destructive: true,
     description:
-      "Owner only, on an explicit request to delete this act. Deletes one unnumbered draft (A-091), retaining the audited old row and reason: a standalone draft or a person's only act of a month before the close is removed; an act split off a month gives its days and work back to the neighbouring draft (the result names it in mergedInto); the only act of a payout stays. Refuses issued or signed acts, paid parts, files, registry-document links and reimbursement acts. Read get_act and identify the exact counterparty and period first. Always run dryRun first and show what will be deleted. Issued acts must be voided in the UI; their numbers remain reserved.",
+      "Owner only, on an explicit request to delete this act. Deletes one unnumbered draft (A-091), retaining the audited old row and reason: a standalone draft or a person's only act of a month before the close is removed; an act split off a month gives its days and work back to the neighbouring draft (the result names it in mergedInto); the only act of an unpaid payout is deleted too and a fresh draft returns with the next rate approval or payment (A-109); a paid payout keeps its act. Refuses issued or signed acts, paid parts, files, registry-document links and reimbursement acts. Read get_act and identify the exact counterparty and period first. Always run dryRun first and show what will be deleted. Issued acts must be voided in the UI; their numbers remain reserved.",
     service: deleteDraftAct,
   }),
   tool({

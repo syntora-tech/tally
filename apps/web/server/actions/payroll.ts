@@ -12,7 +12,7 @@ import { adjustClosedPayout, removePayoutLine } from '../services/payroll/lines'
 import { changePayoutMethod } from '../services/payroll/method';
 import type { ActionResult } from './to-action-result';
 
-export type PayrollFormState = ActionResult<{ id: string }> | null;
+export type PayrollFormState = ActionResult<{ id: string; rate?: string }> | null;
 
 const decimalField = (v: unknown) => (typeof v === 'string' ? v.replace(',', '.').trim() : v);
 
@@ -41,11 +41,20 @@ export async function setPayoutRateAction(
 ): Promise<PayrollFormState> {
   const ctx = await requireUserContext();
   const input = formDataToObject(formData);
-  const result = await setPayoutRate.run(ctx, { ...input, rate: decimalField(input.rate) });
+  const result = await setPayoutRate.run(ctx, {
+    ...input,
+    rate: decimalField(input.rate),
+    totalUah:
+      typeof input.totalUah === 'string'
+        ? input.totalUah.replace(/\s/g, '').replace(',', '.')
+        : undefined,
+  });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   revalidatePath('/acts');
-  return { ok: true, data: { id: result.value.id } };
+  // The rate is reported back only when it was derived from a typed UAH sum.
+  const derived = typeof input.totalUah === 'string' && input.totalUah.trim() !== '';
+  return { ok: true, data: { id: result.value.id, rate: derived ? result.value.rate : undefined } };
 }
 
 /** Takes a line out of an unpaid payout of a closed month (A-097). */

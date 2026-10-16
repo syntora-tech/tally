@@ -15,6 +15,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { deleteDraftAct } from './delete';
+import { ensureMonthlyActDraft } from '.';
 
 const h = intHarness();
 let owner: Awaited<ReturnType<typeof h.user>>;
@@ -155,7 +156,8 @@ describe('delete mistaken standalone draft act', () => {
         .where(and(eq(auditLog.rowId, ids.acts[0] ?? ''), eq(auditLog.action, 'DELETE'))),
     ).toHaveLength(0);
   });
-  it('refuses issued, linked, payout-backed and file-bearing drafts', async () => {
+  it('refuses issued, linked, paid-payout and file-bearing drafts', async () => {
+    await h.db.update(payrollItem).set({ paidAmount: '1' }).where(eq(payrollItem.id, ids.item));
     for (const id of ids.acts.slice(1))
       expect(
         (await deleteDraftAct.run(h.ctxFor(owner), { id, reason, dryRun: true })).isErr(),
@@ -173,6 +175,7 @@ describe('delete mistaken standalone draft act', () => {
       .update(supplierAct)
       .set({ pdfFileId: null })
       .where(eq(supplierAct.id, ids.acts[0] ?? ''));
+    await h.db.update(payrollItem).set({ paidAmount: '0' }).where(eq(payrollItem.id, ids.item));
   });
   it('deletes only the selected draft and records its old values and reason', async () => {
     expect((await deleteDraftAct.run(h.ctxFor(owner), { id: ids.acts[0], reason })).isOk()).toBe(
@@ -281,10 +284,23 @@ describe('delete a draft act split off a month (A-091)', () => {
     });
   });
 
-  it('keeps the only act of a payout', async () => {
+  it('deletes the only act of an unpaid payout; a paid one keeps it (A-109)', async () => {
+    await h.db.update(payrollItem).set({ paidAmount: '1' }).where(eq(payrollItem.id, split.item));
     expect(
       (await deleteDraftAct.run(h.ctxFor(owner), { id: split.rest, reason }))._unsafeUnwrapErr()
         .message,
     ).toBe('acts.deleteOnlyPayoutAct');
+    await h.db.update(payrollItem).set({ paidAmount: '0' }).where(eq(payrollItem.id, split.item));
+
+    const result = await deleteDraftAct.run(h.ctxFor(owner), { id: split.rest, reason });
+    expect(result._unsafeUnwrap().mergedInto).toBeNull();
+    expect(
+      await h.db.select().from(supplierAct).where(eq(supplierAct.payrollItemId, split.item)),
+    ).toHaveLength(0);
+    // The next approval brings a fresh draft back.
+    await h.db.transaction((tx) => ensureMonthlyActDraft(tx, split.item));
+    expect(
+      await h.db.select().from(supplierAct).where(eq(supplierAct.payrollItemId, split.item)),
+    ).toHaveLength(1);
   });
 });

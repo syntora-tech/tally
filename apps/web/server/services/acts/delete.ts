@@ -1,6 +1,12 @@
 import type { DbTransaction } from '@tally/db';
-import { documentLink, reimbursement, supplierAct, type SupplierAct } from '@tally/db/schema';
-import { addDays, startOfMonth, type LocalDate } from '@tally/domain';
+import {
+  documentLink,
+  payrollItem,
+  reimbursement,
+  supplierAct,
+  type SupplierAct,
+} from '@tally/db/schema';
+import { addDays, startOfMonth, toDecimal, type LocalDate } from '@tally/domain';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -103,7 +109,17 @@ export const deleteDraftAct = defineService({
 
       const siblings = act.type === 'monthly' ? await siblingsOf(tx, act) : [];
       if (siblings.length === 0) {
-        if (act.payrollItemId) return err(serviceError('conflict', 'acts.deleteOnlyPayoutAct'));
+        if (act.payrollItemId) {
+          // The only act of an unpaid payout may go (A-109): a fresh draft comes back from the
+          // current contract with the next rate approval or payment. A paid payout keeps its act.
+          const [item] = await tx
+            .select({ paid: payrollItem.paidAmount })
+            .from(payrollItem)
+            .where(eq(payrollItem.id, act.payrollItemId));
+          if (item && toDecimal(item.paid).gt(0)) {
+            return err(serviceError('conflict', 'acts.deleteOnlyPayoutAct'));
+          }
+        }
         await tx.delete(supplierAct).where(eq(supplierAct.id, act.id));
         return ok({ dryRun: input.dryRun, deleted, mergedInto: null as string | null });
       }

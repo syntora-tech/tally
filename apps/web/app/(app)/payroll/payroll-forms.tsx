@@ -601,21 +601,42 @@ export function ChangeMethodForm({ itemId, current }: { itemId: string; current:
 
 /**
  * The payout rate set at period close from the NBU (A-076): approve it as is or correct it; the
- * draft FOP act follows. Hidden once the act is issued or money is paid.
+ * draft FOP act follows. Or type the UAH sum the payout should come to and the rate follows it
+ * (A-109). Hidden once the act is issued or money is paid.
  */
 export function RateForm({
   itemId,
   rate,
   source,
+  totalUah,
 }: {
   itemId: string;
   rate: string | null;
   source: string | null;
+  totalUah?: string | null;
 }) {
   const t = useTranslations('payDialog');
-  const [state, action, pending] = useToastAction(setPayoutRateAction, t('rateApproved'));
-  const error = state && !state.ok ? state.error : null;
+  const dialog = useDialogScope();
+  const [byTotal, setByTotal] = useState(false);
   const [value, setValue] = useState(rate ?? '');
+  const [total, setTotal] = useState(totalUah ?? '');
+  const [state, action, pending] = useActionState<PayrollFormState, FormData>(
+    async (prev, formData) => {
+      const next = await setPayoutRateAction(prev, formData);
+      if (next?.ok) {
+        const derived = next.data.rate;
+        toast.success(derived ? t('rateDerived', { rate: derived }) : t('rateApproved'));
+        if (derived) {
+          setValue(derived);
+          setByTotal(false);
+        }
+        dialog?.close();
+      }
+      return next;
+    },
+    null,
+  );
+  const error = state && !state.ok ? state.error : null;
   const unchanged =
     rate !== null &&
     parseDecimal(value.replace(',', '.')).isOk() &&
@@ -623,18 +644,62 @@ export function RateForm({
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="itemId" value={itemId} />
-      <input type="hidden" name="source" value={unchanged ? (source ?? 'manual') : 'manual'} />
-      <Input
-        name="rate"
-        inputMode="decimal"
-        aria-label={t('rateLabel')}
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-        }}
-        className="h-8 w-28"
-        required
+      <input
+        type="hidden"
+        name="source"
+        value={!byTotal && unchanged ? (source ?? 'manual') : 'manual'}
       />
+      <div
+        role="radiogroup"
+        aria-label={t('rateMode')}
+        className="inline-flex rounded-md bg-muted p-0.5"
+      >
+        {([false, true] as const).map((mode) => (
+          <button
+            key={String(mode)}
+            type="button"
+            role="radio"
+            aria-checked={byTotal === mode}
+            onClick={() => {
+              setByTotal(mode);
+            }}
+            className={
+              byTotal === mode
+                ? 'h-7 rounded px-2.5 text-xs font-medium text-foreground shadow-sm bg-card'
+                : 'h-7 rounded px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground'
+            }
+          >
+            {t(mode ? 'byTotal' : 'byRate')}
+          </button>
+        ))}
+      </div>
+      {byTotal ? (
+        <Input
+          key="total"
+          name="totalUah"
+          inputMode="decimal"
+          aria-label={t('totalLabel')}
+          value={total}
+          onChange={(e) => {
+            setTotal(e.target.value);
+          }}
+          className="h-8 w-36"
+          required
+        />
+      ) : (
+        <Input
+          key="rate"
+          name="rate"
+          inputMode="decimal"
+          aria-label={t('rateLabel')}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+          }}
+          className="h-8 w-28"
+          required
+        />
+      )}
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         {t('approveRate')}
       </Button>
