@@ -3,8 +3,11 @@ import {
   adjustment,
   company,
   contract,
+  documentLink,
   numberSequence,
   payee,
+  reimbursement,
+  trip,
   payrollItem,
   payrollLine,
   period,
@@ -723,8 +726,42 @@ export const getAct = defineService({
         row.act.status === 'draft' && key
           ? await tx.select().from(numberSequence).where(eq(numberSequence.key, key))
           : [];
+      const trips = await tx
+        .select({
+          reimbursementId: reimbursement.id,
+          tripId: trip.id,
+          title: trip.title,
+          amount: reimbursement.amount,
+        })
+        .from(reimbursement)
+        .innerJoin(trip, eq(trip.id, reimbursement.tripId))
+        .where(eq(reimbursement.supplierActId, id));
+      // Other trip drafts of the same contract it can be merged with (A-108).
+      const mergeable =
+        row.act.status === 'draft' && row.act.type === 'reimbursement'
+          ? await tx
+              .select({
+                id: supplierAct.id,
+                actDate: supplierAct.actDate,
+                periodFrom: supplierAct.periodFrom,
+                periodTo: supplierAct.periodTo,
+                amountUah: supplierAct.amountUah,
+              })
+              .from(supplierAct)
+              .where(
+                and(
+                  eq(supplierAct.contractId, row.act.contractId),
+                  eq(supplierAct.type, 'reimbursement'),
+                  eq(supplierAct.status, 'draft'),
+                  ne(supplierAct.id, id),
+                ),
+              )
+              .orderBy(asc(supplierAct.periodFrom))
+          : [];
       return {
         ...row,
+        trips,
+        mergeable,
         nextNumber: seq ? previewActNumber(seq, row.act.actDate, row.contract.number) : null,
       };
     });
@@ -860,6 +897,67 @@ export const issueAct = defineService({
         .where(eq(supplierAct.id, id));
       await enqueueJob(tx, renderActJob(id));
       return ok({ id, number });
+    }),
+});
+
+/**
+ * One act for several trips (A-108): two draft reimbursement acts of one FOP contract become the
+ * first one — amounts added, the period from the earlier start to the later end, the later date —
+ * and the trips of the second move to it before it is deleted.
+ */
+export const mergeReimbursementActs = defineService({
+  name: 'acts.mergeReimbursements',
+  input: z.object({
+    id: z.uuid(),
+    otherId: z.uuid({ error: 'acts.chooseActToMerge' }),
+  }),
+  handler: async (ctx, { id, otherId }) =>
+    inActorScope(ctx, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(supplierAct)
+        .where(inArray(supplierAct.id, [id, otherId]))
+        .for('update');
+      const keep = rows.find((r) => r.id === id);
+      const gone = rows.find((r) => r.id === otherId);
+      if (!keep || !gone || id === otherId) return err(serviceError('not_found', 'acts.notFound'));
+      if (
+        keep.status !== 'draft' ||
+        gone.status !== 'draft' ||
+        keep.type !== 'reimbursement' ||
+        gone.type !== 'reimbursement' ||
+        keep.contractId !== gone.contractId
+      ) {
+        return err(serviceError('validation_error', 'acts.mergeTripDrafts'));
+      }
+      const [linked] = await tx
+        .select({ id: documentLink.id })
+        .from(documentLink)
+        .where(and(eq(documentLink.entityType, 'supplier_act'), eq(documentLink.entityId, gone.id)))
+        .limit(1);
+      if (linked || gone.pdfFileId || gone.gdocFileId || gone.signedUrl) {
+        return err(serviceError('conflict', 'db.referenced'));
+      }
+      const ends = [keep, gone];
+      const froms = ends.flatMap((a) => (a.periodFrom ? [a.periodFrom] : [])).sort();
+      const tos = ends.flatMap((a) => (a.periodTo ? [a.periodTo] : [])).sort();
+      await tx
+        .update(reimbursement)
+        .set({ supplierActId: keep.id })
+        .where(eq(reimbursement.supplierActId, gone.id));
+      await tx.delete(supplierAct).where(eq(supplierAct.id, gone.id));
+      await tx
+        .update(supplierAct)
+        .set({
+          amountUah: toDecimal(keep.amountUah).plus(gone.amountUah).toFixed(2),
+          periodFrom: froms[0] ?? null,
+          periodTo: tos.at(-1) ?? null,
+          actDate: keep.actDate > gone.actDate ? keep.actDate : gone.actDate,
+          dateOverrideReason:
+            keep.actDate >= gone.actDate ? keep.dateOverrideReason : gone.dateOverrideReason,
+        })
+        .where(eq(supplierAct.id, keep.id));
+      return ok({ id: keep.id });
     }),
 });
 

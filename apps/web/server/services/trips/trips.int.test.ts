@@ -12,6 +12,7 @@ import {
   payee,
   period,
   person,
+  reimbursement,
   supplierAct,
   transaction,
   trip,
@@ -22,6 +23,7 @@ import { intHarness } from '../../../test/int-helpers';
 import { LocalStorage } from '../../storage/local-storage';
 import { deleteTripExpense, getTrip, listTrips, saveTrip, tripExpenseServices } from '.';
 import { tripBatchServices, upsertTrips } from './batch';
+import { getAct, mergeReimbursementActs } from '../acts';
 import { createReimbursement, payReimbursement } from './reimbursements';
 
 const h = intHarness('2048-06-01');
@@ -82,6 +84,10 @@ beforeAll(async () => {
 
 afterAll(() =>
   h.cleanup(async (db) => {
+    await db
+      .update(reimbursement)
+      .set({ supplierActId: null })
+      .where(eq(reimbursement.payeeId, ids.payee));
     await db.delete(supplierAct).where(eq(supplierAct.payeeId, ids.payee));
     if (ids.transactions.length) {
       await db.delete(transaction).where(inArray(transaction.id, ids.transactions));
@@ -258,10 +264,11 @@ describe('trips (6.8, A-070)', () => {
       })
     )._unsafeUnwrap();
     const [draft] = await h.db
-      .select()
+      .select({ act: supplierAct })
       .from(supplierAct)
-      .where(eq(supplierAct.reimbursementId, act.id));
-    expect(draft).toMatchObject({
+      .innerJoin(reimbursement, eq(reimbursement.supplierActId, supplierAct.id))
+      .where(eq(reimbursement.id, act.id));
+    expect(draft?.act).toMatchObject({
       type: 'reimbursement',
       status: 'draft',
       amountUah: '500.00',
@@ -276,6 +283,59 @@ describe('trips (6.8, A-070)', () => {
       participantIds: [ids.people[0]],
     });
     expect(dropped._unsafeUnwrapErr().code).toBe('conflict');
+  });
+
+  it('two trip acts of one contract merge into one act for both (A-108)', async () => {
+    const [, b = ''] = ids.trips;
+    const second = (
+      await createReimbursement.run(h.ctxFor(finance), {
+        tripId: b,
+        personId: ids.people[1],
+        amount: '300.50',
+        method: 'act',
+        payeeId: ids.payee,
+        actDate: '2048-06-02',
+      })
+    )._unsafeUnwrap();
+    const acts = await h.db
+      .select({ act: supplierAct, reimbursementId: reimbursement.id })
+      .from(supplierAct)
+      .innerJoin(reimbursement, eq(reimbursement.supplierActId, supplierAct.id))
+      .where(eq(supplierAct.payeeId, ids.payee));
+    const keep = acts.find((x) => x.reimbursementId !== second.id)?.act;
+    const gone = acts.find((x) => x.reimbursementId === second.id)?.act;
+    await h.db
+      .update(supplierAct)
+      .set({ periodFrom: '2048-05-28', periodTo: '2048-05-31' })
+      .where(eq(supplierAct.id, gone?.id ?? ''));
+
+    const merged = await mergeReimbursementActs.run(h.ctxFor(finance), {
+      id: keep?.id ?? '',
+      otherId: gone?.id ?? '',
+    });
+    expect(merged.isOk()).toBe(true);
+    const act = (await getAct.run(h.ctxFor(finance), { id: keep?.id ?? '' }))._unsafeUnwrap();
+    expect(act.act).toMatchObject({
+      amountUah: '800.50',
+      periodFrom: '2048-05-10',
+      periodTo: '2048-05-31',
+      actDate: '2048-06-02',
+    });
+    expect(act.trips).toHaveLength(2);
+    expect(act.mergeable).toEqual([]);
+    const [left] = await h.db
+      .select()
+      .from(supplierAct)
+      .where(eq(supplierAct.id, gone?.id ?? ''));
+    expect(left).toBeUndefined();
+    const card = (await getTrip.run(h.ctxFor(finance), { id: b }))._unsafeUnwrap();
+    expect(new Set(card.acts.map((x) => x.id))).toEqual(new Set([keep?.id]));
+
+    const again = await mergeReimbursementActs.run(h.ctxFor(finance), {
+      id: keep?.id ?? '',
+      otherId: keep?.id ?? '',
+    });
+    expect(again.isErr()).toBe(true);
   });
 
   it('a payroll reimbursement becomes an adjustment of the open month', async () => {

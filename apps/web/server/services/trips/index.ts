@@ -147,12 +147,13 @@ export const getTrip = defineService({
               number: supplierAct.number,
               status: supplierAct.status,
               actDate: supplierAct.actDate,
-              reimbursementId: supplierAct.reimbursementId,
+              reimbursementId: reimbursement.id,
             })
-            .from(supplierAct)
+            .from(reimbursement)
+            .innerJoin(supplierAct, eq(supplierAct.id, reimbursement.supplierActId))
             .where(
               inArray(
-                supplierAct.reimbursementId,
+                reimbursement.id,
                 loaded.reimbursements.map((r) => r.id),
               ),
             )

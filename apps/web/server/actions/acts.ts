@@ -6,7 +6,14 @@ import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
 import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
-import { createAct, issueAct, saveActDraft, setSignedUrl, voidAct } from '../services/acts';
+import {
+  createAct,
+  issueAct,
+  mergeReimbursementActs,
+  saveActDraft,
+  setSignedUrl,
+  voidAct,
+} from '../services/acts';
 import { deleteDraftAct } from '../services/acts/delete';
 import { attachSignedAct, issueActWithDocument } from '../services/acts/own';
 import type { ActionResult } from './to-action-result';
@@ -115,5 +122,18 @@ export async function attachSignedActAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   revalidatePath('/documents');
+  return done(result.value.id);
+}
+
+export async function mergeReimbursementActsAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await mergeReimbursementActs.run(ctx, input);
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  if (typeof input.otherId === 'string') revalidatePath(`/acts/${input.otherId}`);
+  revalidatePath('/trips', 'layout');
   return done(result.value.id);
 }

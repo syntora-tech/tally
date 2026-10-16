@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileInput } from '@/components/file-input';
 import {
+  mergeReimbursementActsAction,
   attachSignedActAction,
   createActAction,
   issueActWithDocumentAction,
@@ -494,6 +495,59 @@ export function NewActForm(props: { contracts: { id: string; label: string }[]; 
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
         <Button type="submit" disabled={pending}>
           {t('createDraft')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** One act for several trips (A-108): another draft trip act of this contract joins this one. */
+export function MergeTripActsForm({
+  id,
+  others,
+}: {
+  id: string;
+  others: { id: string; label: string }[];
+}) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(
+    mergeReimbursementActsAction,
+    null,
+  );
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('v2.tripsMerged'));
+  const [picked, setPicked] = useState('');
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-sm text-muted-foreground">{t('v2.mergeTripsHint')}</p>
+      <div
+        role="radiogroup"
+        aria-label={t('v2.mergeWith')}
+        className="flex flex-col divide-y rounded-lg border"
+      >
+        {others.map((o) => (
+          <label
+            key={o.id}
+            className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50"
+          >
+            <input
+              type="radio"
+              name="otherId"
+              value={o.id}
+              checked={picked === o.id}
+              onChange={() => {
+                setPicked(o.id);
+              }}
+              className="accent-foreground"
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+      <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      <div className="flex justify-end border-t pt-4">
+        <Button type="submit" disabled={pending || !picked}>
+          {t('v2.mergeTrips')}
         </Button>
       </div>
     </form>

@@ -14,6 +14,7 @@ import {
   ActDraftForm,
   DeleteDraftActForm,
   IssueActForm,
+  MergeTripActsForm,
   OwnDocumentActForm,
   SignedFileForm,
   SignedUrlForm,
@@ -41,7 +42,7 @@ export default async function ActPage({
   const { id } = await params;
   const result = await getAct.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { act: a, payeeName, contract, nextNumber } = result.value;
+  const { act: a, payeeName, contract, nextNumber, trips, mergeable } = result.value;
   const draft = a.status === 'draft';
   const uploaded =
     typeof a.snapshot === 'object' && a.snapshot !== null && 'uploaded' in a.snapshot;
@@ -66,7 +67,7 @@ export default async function ActPage({
     ]);
     const own = (await searchParams).mode === 'own';
     const signed = !!a.signedUrl || !!a.signedDocumentId;
-    const deletable = draft && ctx.actor.role === 'owner' && !a.reimbursementId && !a.rateLocked;
+    const deletable = draft && ctx.actor.role === 'owner' && trips.length === 0 && !a.rateLocked;
     const tone = draft
       ? 'neutral'
       : a.status === 'void'
@@ -100,6 +101,26 @@ export default async function ActPage({
                       partOfMonth={
                         a.type === 'monthly' && (a.amountUsd !== null || !!a.payrollItemId)
                       }
+                    />
+                  ),
+                },
+              },
+              mergeable.length > 0 && {
+                label: tf('v2.mergeTrips') + '…',
+                dialog: {
+                  title: tf('v2.mergeTrips'),
+                  content: (
+                    <MergeTripActsForm
+                      id={a.id}
+                      others={mergeable.map((m) => ({
+                        id: m.id,
+                        label: [
+                          m.periodFrom && m.periodTo
+                            ? `${fmt.date(m.periodFrom)} – ${fmt.date(m.periodTo)}`
+                            : fmt.date(m.actDate),
+                          fmt.amount(m.amountUah, 'UAH'),
+                        ].join(' · '),
+                      }))}
                     />
                   ),
                 },
@@ -192,6 +213,21 @@ export default async function ActPage({
                       {contract.number}
                     </Link>
                   </Fact>
+                  {trips.length > 0 && (
+                    <Fact label={tf('v2.trips')}>
+                      <span className="flex flex-col items-end">
+                        {trips.map((x) => (
+                          <Link
+                            key={x.reimbursementId}
+                            href={`/trips/${x.tripId}`}
+                            className="text-link hover:underline"
+                          >
+                            {x.title}
+                          </Link>
+                        ))}
+                      </span>
+                    </Fact>
+                  )}
                   <Fact label={t('date')}>{fmt.date(a.actDate)}</Fact>
                   <Fact label={t('period')}>
                     {a.periodFrom && a.periodTo
@@ -304,7 +340,7 @@ export default async function ActPage({
         </Card>
       )}
 
-      {draft && ctx.actor.role === 'owner' && !a.reimbursementId && !a.rateLocked && (
+      {draft && ctx.actor.role === 'owner' && trips.length === 0 && !a.rateLocked && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('deleteTitle')}</CardTitle>

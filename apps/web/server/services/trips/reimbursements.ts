@@ -152,16 +152,22 @@ export const createReimbursement = defineService({
           );
         }
         const from = (t.startsOn ?? startOfMonth(input.actDate)) as LocalDate;
-        await tx.insert(supplierAct).values({
-          contractId: fop.id,
-          payeeId,
-          reimbursementId: row.id,
-          type: 'reimbursement',
-          actDate: input.actDate,
-          periodFrom: from,
-          periodTo: (t.endsOn ?? endOfMonth(from)) as LocalDate,
-          amountUah: toDecimal(input.amount).toFixed(2),
-        });
+        const [act] = await tx
+          .insert(supplierAct)
+          .values({
+            contractId: fop.id,
+            payeeId,
+            type: 'reimbursement',
+            actDate: input.actDate,
+            periodFrom: from,
+            periodTo: (t.endsOn ?? endOfMonth(from)) as LocalDate,
+            amountUah: toDecimal(input.amount).toFixed(2),
+          })
+          .returning({ id: supplierAct.id });
+        await tx
+          .update(reimbursement)
+          .set({ supplierActId: act?.id ?? null })
+          .where(eq(reimbursement.id, row.id));
       }
       return ok({ id: row.id, tripId: input.tripId });
     }),

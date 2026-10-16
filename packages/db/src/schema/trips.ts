@@ -11,8 +11,10 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { baseColumns, currencyCheck, rolePolicies } from './_common';
+import { supplierAct } from './acts';
 import { document } from './documents';
 import { fxSource } from './enums';
 import { adjustment } from './payroll';
@@ -130,6 +132,11 @@ export const reimbursement = pgTable(
     method: text().notNull(),
     status: text().notNull().default('planned'),
     adjustmentId: uuid().references(() => adjustment.id, { onDelete: 'set null' }),
+    /**
+     * The FOP act of an `act` reimbursement (6.6, A-070); several reimbursements may share one act
+     * (A-108). Fixed once the act is issued.
+     */
+    supplierActId: uuid().references((): AnyPgColumn => supplierAct.id),
     notes: text(),
   },
   (t) => [
@@ -145,6 +152,7 @@ export const reimbursement = pgTable(
     check('reimbursement_status_check', sql`${t.status} in ('planned', 'paid')`),
     check('reimbursement_payee_check', sql`${t.method} <> 'act' or ${t.payeeId} is not null`),
     index('reimbursement_trip_idx').on(t.tripId),
+    index('reimbursement_supplier_act_idx').on(t.supplierActId),
     ...rolePolicies('reimbursement', { read: 'finance', write: 'finance' }),
   ],
 );

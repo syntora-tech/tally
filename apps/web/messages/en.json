@@ -442,7 +442,9 @@
       "documentPdf": "Upload the act as a PDF",
       "numberTaken": "This contract already has an act with this number",
       "periodBoth": "Give both ends of the period",
-      "periodOrder": "The period ends before it starts"
+      "periodOrder": "The period ends before it starts",
+      "mergeTripDrafts": "Only two draft trip acts of the same contract can be merged",
+      "chooseActToMerge": "Choose the act to merge in"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -2048,7 +2050,12 @@
       "nextNumber": "Will be issued as № <b>{number}</b>",
       "nextNumberHelp": "The next free number of the contract sequence for the act date. If another act of this contract is issued first, this one takes the number after it.",
       "periodFrom": "Period from",
-      "periodTo": "Period to"
+      "periodTo": "Period to",
+      "mergeTrips": "Merge with another trip act",
+      "mergeWith": "Act to merge in",
+      "mergeTripsHint": "One act for several trips of this contract: the amounts add up, the period runs from the earlier start to the later end, the date is the later one. Both trips then show this act. You can still change the date and period before issuing.",
+      "tripsMerged": "Acts merged",
+      "trips": "Trips"
     }
   },
   "settings": {

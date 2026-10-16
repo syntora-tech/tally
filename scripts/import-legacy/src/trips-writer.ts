@@ -86,7 +86,7 @@ export async function writeTrips(
           if (!act) {
             problems.push(`${t.sheet}: act "${number}" not found — import the acts registry first`);
           } else {
-            const id = await upsert(
+            await upsert(
               tx,
               reimbursement,
               'reimbursement',
@@ -99,13 +99,14 @@ export async function writeTrips(
                 method: 'act',
                 status: 'paid',
                 notes: `Legacy act ${number}`,
+                supplierActId: act.id,
               },
               stats,
             );
-            if (act.reimbursementId !== id || act.type !== 'reimbursement') {
+            if (act.type !== 'reimbursement') {
               await tx
                 .update(supplierAct)
-                .set({ type: 'reimbursement', reimbursementId: id })
+                .set({ type: 'reimbursement' })
                 .where(eq(supplierAct.id, act.id));
             }
             reimbursedUah = act.amountUah;

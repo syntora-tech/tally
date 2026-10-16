@@ -1,5 +1,5 @@
 import type { DbTransaction } from '@tally/db';
-import { documentLink, supplierAct, type SupplierAct } from '@tally/db/schema';
+import { documentLink, reimbursement, supplierAct, type SupplierAct } from '@tally/db/schema';
 import { addDays, startOfMonth, type LocalDate } from '@tally/domain';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
@@ -81,7 +81,12 @@ export const deleteDraftAct = defineService({
         .from(documentLink)
         .where(and(eq(documentLink.entityType, 'supplier_act'), eq(documentLink.entityId, act.id)))
         .limit(1);
-      if (act.reimbursementId || act.pdfFileId || act.gdocFileId || act.signedUrl || linked) {
+      const [paysTrip] = await tx
+        .select({ id: reimbursement.id })
+        .from(reimbursement)
+        .where(eq(reimbursement.supplierActId, act.id))
+        .limit(1);
+      if (paysTrip || act.pdfFileId || act.gdocFileId || act.signedUrl || linked) {
         return err(serviceError('conflict', 'db.referenced'));
       }
       if (act.rateLocked) return err(serviceError('conflict', 'acts.deletePaidPart'));
