@@ -205,7 +205,13 @@ export async function PayrollV2(p: PayrollV2Props) {
       return (
         <DialogButton
           title={`${tp('payee')}: ${nameOf(i)}`}
-          content={<SetPayeeForm itemId={i.item.id} payees={p.payees} current={i.item.payeeId} />}
+          content={
+            <SetPayeeForm
+              itemId={i.item.id}
+              payees={p.payees}
+              current={i.item.payeeId ?? i.defaultPayeeId}
+            />
+          }
           variant={i.group === 'ready' ? 'default' : 'outline'}
           className="min-w-32"
           testId="create-act"
@@ -285,7 +291,13 @@ export async function PayrollV2(p: PayrollV2Props) {
           label: t('v2.setPayee'),
           dialog: {
             title: `${tp('payee')}: ${nameOf(i)}`,
-            content: <SetPayeeForm itemId={i.item.id} payees={p.payees} current={i.item.payeeId} />,
+            content: (
+              <SetPayeeForm
+                itemId={i.item.id}
+                payees={p.payees}
+                current={i.item.payeeId ?? i.defaultPayeeId}
+              />
+            ),
           },
         },
       step !== null &&

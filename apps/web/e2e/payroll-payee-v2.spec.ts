@@ -47,6 +47,10 @@ test.beforeAll(async () => {
     await d.execute(
       sql`update public.payroll_item set payout_fx_rate = 40, fx_source = 'manual', total_uah = 4000 where id = ${ids.item}`,
     );
+    // The person got a default after the close (A-114): the dialog starts from it.
+    await d.execute(
+      sql`update public.person set default_payee_id = ${ids.payee} where id = ${ids.person}`,
+    );
   } finally {
     await client.end();
   }
@@ -88,7 +92,7 @@ test('a payout without a recipient gets a FOP and its act from the row', async (
   await expect(row.getByRole('link', { name: 'Issue act' })).toHaveCount(0);
   await row.getByRole('button', { name: 'Create act' }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Recipient').selectOption({ label: `ФОП ${tag}` });
+  await expect(dialog.getByLabel('Recipient')).toHaveValue(ids.payee);
   // A refused save keeps the choice and what was typed.
   await dialog.getByLabel('Contract number').fill(`${tag} TAKEN`);
   await dialog.getByRole('button', { name: 'Save recipient' }).click();
