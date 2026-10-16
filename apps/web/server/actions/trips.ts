@@ -7,7 +7,11 @@ import { localizeForUser } from '../i18n';
 import { requireUserContext } from '../request-context';
 import { deleteTripExpense, saveTrip } from '../services/trips';
 import { addTripExpense } from '../services/trips/live';
-import { createReimbursement, payReimbursement } from '../services/trips/reimbursements';
+import {
+  createReimbursement,
+  payReimbursement,
+  payReimbursementsFromTransaction,
+} from '../services/trips/reimbursements';
 import type { ActionResult } from './to-action-result';
 
 export type TripFormState = ActionResult<{ id: string }> | null;
@@ -79,4 +83,32 @@ export async function payReimbursementAction(
   revalidatePath(`/trips/${result.value.tripId}`);
   revalidatePath('/ledger');
   return { ok: true, data: result.value };
+}
+
+/** Several reimbursements from one Ledger expense (A-108); `items` is JSON from the link dialog. */
+export async function payReimbursementsAction(
+  _prev: TripFormState,
+  formData: FormData,
+): Promise<TripFormState> {
+  const ctx = await requireUserContext();
+  const raw = formData.get('items');
+  let items: unknown;
+  try {
+    items = typeof raw === 'string' ? JSON.parse(raw) : [];
+  } catch {
+    items = [];
+  }
+  const result = await payReimbursementsFromTransaction.run(ctx, {
+    transactionId: formData.get('transactionId'),
+    items: Array.isArray(items)
+      ? items.map((i: { reimbursementId?: unknown; amount?: unknown }) => ({
+          reimbursementId: i.reimbursementId,
+          amount: decimal(i.amount),
+        }))
+      : [],
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  for (const id of result.value.tripIds) revalidatePath(`/trips/${id}`);
+  revalidatePath('/ledger');
+  return { ok: true, data: { id: result.value.id } };
 }

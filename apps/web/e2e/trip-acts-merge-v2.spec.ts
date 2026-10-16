@@ -15,6 +15,7 @@ const ids = {
   tripB: '',
   actA: '',
   actB: '',
+  account: '',
 };
 
 function db() {
@@ -42,6 +43,16 @@ test.beforeAll(async () => {
     ids.contract = await one(
       sql`insert into public.contract (kind, number, company_id, payee_id, number_sequence_key) values ('fop', ${tag}, ${ids.company}, ${ids.payee}, ${tag}) returning id`,
     );
+    ids.account = await one(sql`
+      insert into public.account (name, kind, currency, opening_date) values (${tag}, 'bank', 'UAH', '2055-01-01') returning id`);
+    await d.execute(sql`
+      with t as (
+        insert into public.transaction (occurred_on, type, category_id, description)
+        select '2055-11-20', 'expense', id, ${`${tag} transfer`} from public.category
+          where tx_type = 'expense' and name = 'Travel / Conf.'
+        returning id)
+      insert into public.posting (transaction_id, account_id, amount, currency)
+      select t.id, ${ids.account}, -38951.44, 'UAH' from t`);
     for (const [key, actKey, title, from, to, amount, actDate] of [
       ['tripA', 'actA', `${tag} Sep`, '2055-09-28', '2055-09-30', '6771.72', '2055-10-13'],
       ['tripB', 'actB', `${tag} Nov`, '2055-11-09', '2055-11-12', '32179.72', '2055-11-15'],
@@ -67,7 +78,9 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const { db: d, sql: client } = db();
   try {
+    await d.execute(sql`delete from public.transaction where description = ${`${tag} transfer`}`);
     await d.execute(sql`delete from public.trip where id in (${ids.tripA}, ${ids.tripB})`);
+    await d.execute(sql`delete from public.account where id = ${ids.account}`);
     await d.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
       await tx.execute(sql`delete from public.job where payload ->> 'actId' = ${ids.actA}`);
@@ -120,4 +133,22 @@ test('two trip act drafts become one act for both trips', async ({ page }) => {
   ).toHaveAttribute('href', `/acts/${ids.actA}`);
   await page.goto(`/acts/${ids.actB}`);
   await expect(page.getByText(/not found|404/i).first()).toBeVisible();
+
+  // One transfer for both trips (A-108): both reimbursements ticked in one dialog.
+  await page.goto(`/ledger?accountId=${ids.account}`);
+  const row = page.getByTestId('ledger-row').filter({ hasText: `${tag} transfer` });
+  await row.getByTestId('link-transaction').click();
+  const link = page.getByRole('dialog');
+  const kinds = link.getByRole('radiogroup', { name: 'What it pays' });
+  if (await kinds.count()) await kinds.getByRole('radio', { name: 'Trip reimbursement' }).click();
+  await link.getByRole('checkbox', { name: new RegExp(`${tag} Nov`) }).check();
+  await link.getByRole('checkbox', { name: new RegExp(`${tag} Sep`) }).check();
+  await expect(link.getByLabel(new RegExp(`Amount for .*${tag} Nov`))).toHaveValue('32179.72');
+  await expect(link.getByLabel(new RegExp(`Amount for .*${tag} Sep`))).toHaveValue('6771.72');
+  await expect(link.getByTestId('split-total')).toContainText('38,951.44');
+  await link.getByRole('button', { name: 'Link', exact: true }).click();
+  await expect(link).toHaveCount(0);
+  await expect(row.getByTestId('allocation')).toContainText('Allocated');
+  await page.goto(`/trips/${ids.tripA}`);
+  await expect(page.getByTestId('reimbursement')).toContainText('paid');
 });

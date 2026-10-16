@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   account,
+  allocation,
+  category,
   adjustment,
   company,
   contract,
@@ -12,6 +14,7 @@ import {
   payee,
   period,
   person,
+  posting,
   reimbursement,
   supplierAct,
   transaction,
@@ -24,7 +27,11 @@ import { LocalStorage } from '../../storage/local-storage';
 import { deleteTripExpense, getTrip, listTrips, saveTrip, tripExpenseServices } from '.';
 import { tripBatchServices, upsertTrips } from './batch';
 import { getAct, mergeReimbursementActs } from '../acts';
-import { createReimbursement, payReimbursement } from './reimbursements';
+import {
+  createReimbursement,
+  payReimbursement,
+  payReimbursementsFromTransaction,
+} from './reimbursements';
 
 const h = intHarness('2048-06-01');
 let finance: Awaited<ReturnType<typeof h.user>>;
@@ -336,6 +343,53 @@ describe('trips (6.8, A-070)', () => {
       otherId: keep?.id ?? '',
     });
     expect(again.isErr()).toBe(true);
+  });
+
+  it('one expense pays both reimbursements of a shared act, all or nothing (A-108)', async () => {
+    const [, b = ''] = ids.trips;
+    const rows = await h.db
+      .select({ id: reimbursement.id, amount: reimbursement.amount })
+      .from(reimbursement)
+      .where(and(eq(reimbursement.tripId, b), eq(reimbursement.method, 'act')));
+    expect(rows).toHaveLength(2);
+    const [cat] = await h.db
+      .select({ id: category.id })
+      .from(category)
+      .where(and(eq(category.txType, 'expense'), eq(category.name, 'Travel / Conf.')));
+    const t = await h.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(transaction)
+        .values({ occurredOn: '2048-06-03', type: 'expense', categoryId: cat?.id ?? '' })
+        .returning();
+      await tx.insert(posting).values({
+        transactionId: row?.id ?? '',
+        accountId: ids.account,
+        amount: '-800.50',
+        currency: 'UAH',
+      });
+      return row;
+    });
+    ids.transactions.push(t?.id ?? '');
+    const items = rows.map((r) => ({ reimbursementId: r.id, amount: r.amount }));
+
+    const tooMuch = await payReimbursementsFromTransaction.run(h.ctxFor(finance), {
+      transactionId: t?.id ?? '',
+      items: [items[0], { ...items[1], amount: '9999' }].filter((x) => x !== undefined),
+    });
+    expect(tooMuch.isErr()).toBe(true);
+    const none = await h.db
+      .select()
+      .from(allocation)
+      .where(eq(allocation.transactionId, t?.id ?? ''));
+    expect(none).toEqual([]);
+
+    const paid = await payReimbursementsFromTransaction.run(h.ctxFor(finance), {
+      transactionId: t?.id ?? '',
+      items,
+    });
+    expect(paid._unsafeUnwrap().tripIds).toEqual([b]);
+    const card = (await getTrip.run(h.ctxFor(finance), { id: b }))._unsafeUnwrap();
+    expect(card.reimbursements.filter((r) => r.method === 'act').every((r) => r.paid)).toBe(true);
   });
 
   it('a payroll reimbursement becomes an adjustment of the open month', async () => {

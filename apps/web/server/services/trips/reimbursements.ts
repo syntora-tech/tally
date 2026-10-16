@@ -190,75 +190,116 @@ export const payReimbursementInput = z
   });
 
 /** Pays an `act` or `direct_payment` reimbursement: an expense allocated to it (I7, A-070). */
+async function payReimbursementIn(
+  tx: DbTransaction,
+  today: LocalDate,
+  input: z.output<typeof payReimbursementInput>,
+) {
+  const [r] = await tx
+    .select({ r: reimbursement, title: trip.title, name: person.fullName })
+    .from(reimbursement)
+    .innerJoin(trip, eq(trip.id, reimbursement.tripId))
+    .innerJoin(person, eq(person.id, reimbursement.personId))
+    .where(eq(reimbursement.id, input.reimbursementId));
+  if (!r) return err(serviceError('not_found', 'trips.reimbursementNotFound'));
+  if (r.r.method === 'payroll') {
+    return err(serviceError('conflict', 'trips.paidWithPayroll'));
+  }
+  let transactionId = input.transactionId;
+  if (!transactionId && input.accountId) {
+    const [acc] = await tx.select().from(account).where(eq(account.id, input.accountId));
+    if (!acc) return err(serviceError('not_found', 'ledger.accountNotFound'));
+    if (acc.currency !== 'UAH') {
+      return err(
+        serviceError('validation_error', 'payroll.accountCurrency', {
+          accountId: ['payroll.chooseUahAccount'],
+        }),
+      );
+    }
+    const [cat] = await tx
+      .select({ id: category.id })
+      .from(category)
+      .where(and(eq(category.txType, 'expense'), eq(category.name, 'Travel / Conf.')));
+    if (!cat) return err(serviceError('not_found', 'trips.noTravelCategory'));
+    const booked = await bookTransaction(
+      tx,
+      {
+        type: 'expense',
+        occurredOn: input.occurredOn ?? today,
+        categoryId: cat.id,
+        description: `Trip reimbursement: ${r.title}`,
+        counterparty: r.name,
+        externalRef: null,
+        personId: r.r.personId,
+        clientId: null,
+        counterpartyAddress: null,
+        from: { accountId: acc.id, amount: input.amount },
+        to: undefined,
+        fee: undefined,
+      },
+      { personId: r.r.personId, clientId: null, counterpartyAddress: null },
+    );
+    transactionId = booked.id;
+  }
+  if (!transactionId) return err(serviceError('validation_error', 'ledger.chooseFromAccount'));
+  const [linked] = await tx
+    .select({ type: transaction.type })
+    .from(transaction)
+    .where(eq(transaction.id, transactionId));
+  if (linked?.type !== 'expense') {
+    return err(
+      serviceError('validation_error', 'trips.notExpense', {
+        transactionId: ['trips.notExpense'],
+      }),
+    );
+  }
+  await tx.insert(allocation).values({
+    transactionId,
+    reimbursementId: r.r.id,
+    amount: input.amount,
+    currency: 'UAH',
+  });
+  return ok({ id: r.r.id, tripId: r.r.tripId, transactionId });
+}
+
 export const payReimbursement = defineService({
   name: 'trips.payReimbursement',
   input: payReimbursementInput,
   handler: async (ctx, input) =>
+    inActorScopeAtomic(ctx, { dryRun: false }, (tx) => payReimbursementIn(tx, ctx.today, input)),
+});
+
+/**
+ * One Ledger expense paying several trip reimbursements at once (A-108), e.g. a transfer for two
+ * trips under one act; all parts are linked together or none.
+ */
+export const payReimbursementsFromTransaction = defineService({
+  name: 'trips.payReimbursementsFromTransaction',
+  input: z.object({
+    transactionId: z.uuid(),
+    items: z
+      .array(
+        z.object({
+          reimbursementId: z.uuid(),
+          amount: decimalString.refine((v) => toDecimal(v).gt(0), 'field.positive'),
+        }),
+      )
+      .min(1, 'trips.chooseReimbursement')
+      .max(20),
+  }),
+  handler: async (ctx, { transactionId, items }) =>
     inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
-      const [r] = await tx
-        .select({ r: reimbursement, title: trip.title, name: person.fullName })
-        .from(reimbursement)
-        .innerJoin(trip, eq(trip.id, reimbursement.tripId))
-        .innerJoin(person, eq(person.id, reimbursement.personId))
-        .where(eq(reimbursement.id, input.reimbursementId));
-      if (!r) return err(serviceError('not_found', 'trips.reimbursementNotFound'));
-      if (r.r.method === 'payroll') {
-        return err(serviceError('conflict', 'trips.paidWithPayroll'));
+      const trips = new Set<string>();
+      for (const item of items) {
+        const paid = await payReimbursementIn(tx, ctx.today, {
+          ...item,
+          transactionId,
+          accountId: undefined,
+          occurredOn: undefined,
+        });
+        if (paid.isErr()) return err(paid.error);
+        trips.add(paid.value.tripId);
       }
-      let transactionId = input.transactionId;
-      if (!transactionId && input.accountId) {
-        const [acc] = await tx.select().from(account).where(eq(account.id, input.accountId));
-        if (!acc) return err(serviceError('not_found', 'ledger.accountNotFound'));
-        if (acc.currency !== 'UAH') {
-          return err(
-            serviceError('validation_error', 'payroll.accountCurrency', {
-              accountId: ['payroll.chooseUahAccount'],
-            }),
-          );
-        }
-        const [cat] = await tx
-          .select({ id: category.id })
-          .from(category)
-          .where(and(eq(category.txType, 'expense'), eq(category.name, 'Travel / Conf.')));
-        if (!cat) return err(serviceError('not_found', 'trips.noTravelCategory'));
-        const booked = await bookTransaction(
-          tx,
-          {
-            type: 'expense',
-            occurredOn: input.occurredOn ?? ctx.today,
-            categoryId: cat.id,
-            description: `Trip reimbursement: ${r.title}`,
-            counterparty: r.name,
-            externalRef: null,
-            personId: r.r.personId,
-            clientId: null,
-            counterpartyAddress: null,
-            from: { accountId: acc.id, amount: input.amount },
-            to: undefined,
-            fee: undefined,
-          },
-          { personId: r.r.personId, clientId: null, counterpartyAddress: null },
-        );
-        transactionId = booked.id;
-      }
-      if (!transactionId) return err(serviceError('validation_error', 'ledger.chooseFromAccount'));
-      const [linked] = await tx
-        .select({ type: transaction.type })
-        .from(transaction)
-        .where(eq(transaction.id, transactionId));
-      if (linked?.type !== 'expense') {
-        return err(
-          serviceError('validation_error', 'trips.notExpense', {
-            transactionId: ['trips.notExpense'],
-          }),
-        );
-      }
-      await tx.insert(allocation).values({
-        transactionId,
-        reimbursementId: r.r.id,
-        amount: input.amount,
-        currency: 'UAH',
-      });
-      return ok({ id: r.r.id, tripId: r.r.tripId, transactionId });
+      return ok({ id: transactionId, tripIds: [...trips] });
     }),
 });

@@ -598,7 +598,8 @@
       "choosePayee": "Choose who receives the money",
       "noFopContract": "This payee has no FOP contract for an act",
       "reimbursementNotFound": "Reimbursement not found",
-      "paidWithPayroll": "This reimbursement is paid with the monthly payout"
+      "paidWithPayroll": "This reimbursement is paid with the monthly payout",
+      "chooseReimbursement": "Tick at least one reimbursement"
     },
     "contractorInvoices": {
       "notForPayout": "An invoice is prepared for a person’s USD payout to a contractor who is not a FOP",
@@ -2454,6 +2455,8 @@
     "openPayout": "Open the payout",
     "payoutHint": "A payout is paid from its own dialog on Payroll (rate, act, signatures); it opens with this transaction already chosen.",
     "nothingRevenue": "No open invoices to link this receipt to.",
-    "nothingExpense": "Nothing fits this expense: no planned payments due in its currency around its date, no unpaid trip reimbursements in UAH, and no open payouts (those take Contractors and Payroll expenses)."
+    "nothingExpense": "Nothing fits this expense: no planned payments due in its currency around its date, no unpaid trip reimbursements in UAH, and no open payouts (those take Contractors and Payroll expenses).",
+    "amountFor": "Amount for {name}",
+    "splitTotal": "Linking {total} of {free} free"
   }
 }
