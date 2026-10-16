@@ -3,6 +3,7 @@ import {
   assignment,
   company,
   contract,
+  numberSequence,
   payee,
   payrollItem,
   payrollLine,
@@ -13,11 +14,13 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
-import { setPayoutPayee } from './payee';
+import { payoutPayees, setPayoutPayee } from './payee';
 
 const h = intHarness();
 let finance: Awaited<ReturnType<typeof h.user>>;
 let viewer: Awaited<ReturnType<typeof h.user>>;
+let owner: Awaited<ReturnType<typeof h.user>>;
+const NUMBER = `PT-${randomUUID().slice(0, 6)}`;
 const ids = {
   company: '',
   person: '',
@@ -32,6 +35,7 @@ const ids = {
 beforeAll(async () => {
   finance = await h.user('finance');
   viewer = await h.user('viewer');
+  owner = await h.user('owner');
   const [co] = await h.db.insert(company).values({ nameEn: 'Payee', nameUa: 'Одерж' }).returning();
   const [p] = await h.db.insert(person).values({ fullName: 'No payee yet' }).returning();
   const [fop, bare] = await h.db
@@ -101,6 +105,8 @@ afterAll(() =>
     await db.delete(assignment).where(eq(assignment.id, ids.assignment));
     await db.update(person).set({ defaultPayeeId: null }).where(eq(person.id, ids.person));
     await db.delete(contract).where(eq(contract.id, ids.contract));
+    await db.delete(contract).where(eq(contract.payeeId, ids.bare));
+    await db.delete(numberSequence).where(eq(numberSequence.key, `act:${NUMBER}`));
     await db.delete(payee).where(inArray(payee.id, [ids.fop, ids.bare]));
     await db.delete(person).where(eq(person.id, ids.person));
     await db.delete(company).where(eq(company.id, ids.company));
@@ -123,25 +129,51 @@ describe('recipient of a payout chosen after the close (A-113)', () => {
     expect(item?.payeeId).toBeNull();
   });
 
-  it('sets the FOP, remembers it for the person and makes the draft act', async () => {
-    const res = await setPayoutPayee.run(h.ctxFor(finance), {
+  it('creates the contract and act numbering of a FOP without one, then its draft act', async () => {
+    const before = (await payoutPayees.run(h.ctxFor(finance), {}))._unsafeUnwrap();
+    expect(before.find((p) => p.id === ids.bare)).toMatchObject({ fop: true, hasContract: false });
+    expect(before.find((p) => p.id === ids.fop)).toMatchObject({ hasContract: true });
+
+    const byFinance = await setPayoutPayee.run(h.ctxFor(finance), {
       itemId: ids.item,
-      payeeId: ids.fop,
+      payeeId: ids.bare,
+      contractNumber: NUMBER,
+    });
+    expect(byFinance._unsafeUnwrapErr().message).toBe('payroll.contractOwnerOnly');
+
+    const res = await setPayoutPayee.run(h.ctxFor(owner), {
+      itemId: ids.item,
+      payeeId: ids.bare,
       remember: 'on',
+      contractNumber: NUMBER,
+      contractSignedOn: '2093-01-15',
     });
     const { actId } = res._unsafeUnwrap();
     const [item] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item));
-    expect(item?.payeeId).toBe(ids.fop);
+    expect(item?.payeeId).toBe(ids.bare);
     const [who] = await h.db.select().from(person).where(eq(person.id, ids.person));
-    expect(who?.defaultPayeeId).toBe(ids.fop);
+    expect(who?.defaultPayeeId).toBe(ids.bare);
+    const [made] = await h.db.select().from(contract).where(eq(contract.payeeId, ids.bare));
+    expect(made).toMatchObject({
+      kind: 'fop',
+      number: NUMBER,
+      signedOn: '2093-01-15',
+      currency: 'UAH',
+      numberSequenceKey: `act:${NUMBER}`,
+    });
+    const [seq] = await h.db
+      .select()
+      .from(numberSequence)
+      .where(eq(numberSequence.key, `act:${NUMBER}`));
+    expect(seq).toMatchObject({ template: `${NUMBER} - А{seq}`, nextValue: 1 });
     const [act] = await h.db
       .select()
       .from(supplierAct)
       .where(eq(supplierAct.id, actId ?? ''));
     expect(act).toMatchObject({
       status: 'draft',
-      payeeId: ids.fop,
-      contractId: ids.contract,
+      payeeId: ids.bare,
+      contractId: made?.id,
       amountUah: '4000.00',
       periodFrom: '2093-02-01',
       periodTo: '2093-02-28',

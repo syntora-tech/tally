@@ -4,9 +4,10 @@ import { sql } from 'drizzle-orm';
 import { E2E_OWNER_EMAIL } from '../playwright.config';
 import { localEnv, signIn, unique } from './helpers';
 
-// A-113: a fiat payout of a person without a recipient gets a FOP from its row, and its act.
+// A-113: a fiat payout of a person without a recipient gets a FOP from its row, and its act;
+// a FOP without a contract gets one with its act numbering in the same dialog.
 const tag = unique('E2E PAYEE');
-const ids = { company: '', period: '', person: '', payee: '', contract: '', item: '' };
+const ids = { company: '', period: '', person: '', payee: '', item: '' };
 
 function db() {
   return createDb(
@@ -33,8 +34,8 @@ test.beforeAll(async () => {
     ids.payee = await one(
       sql`insert into public.payee (kind, legal_name_ua) values ('fop', ${`ФОП ${tag}`}) returning id`,
     );
-    ids.contract = await one(
-      sql`insert into public.contract (kind, number, company_id, payee_id) values ('fop', ${tag}, ${ids.company}, ${ids.payee}) returning id`,
+    await d.execute(
+      sql`insert into public.number_sequence (key, template) values (${`act:${tag} TAKEN`}, 'X{seq}')`,
     );
     ids.item = await one(
       sql`insert into public.payroll_item (period_id, person_id, payout_method) values (${ids.period}, ${ids.person}, 'fiat') returning id`,
@@ -63,7 +64,10 @@ test.afterAll(async () => {
       await tx.execute(
         sql`update public.person set default_payee_id = null where id = ${ids.person}`,
       );
-      await tx.execute(sql`delete from public.contract where id = ${ids.contract}`);
+      await tx.execute(sql`delete from public.contract where payee_id = ${ids.payee}`);
+      await tx.execute(
+        sql`delete from public.number_sequence where key in (${`act:${tag} TAKEN`}, ${`act:${tag}`})`,
+      );
       await tx.execute(sql`delete from public.payee where id = ${ids.payee}`);
       await tx.execute(sql`delete from public.assignment where person_id = ${ids.person}`);
       await tx.execute(sql`delete from public.person where id = ${ids.person}`);
@@ -86,6 +90,15 @@ test('a payout without a recipient gets a FOP and its act from the row', async (
   await page.getByRole('menuitem', { name: 'Choose recipient…' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Recipient').selectOption({ label: `ФОП ${tag}` });
+  // A refused save keeps the choice and what was typed.
+  await dialog.getByLabel('Contract number').fill(`${tag} TAKEN`);
+  await dialog.getByRole('button', { name: 'Save recipient' }).click();
+  await expect(
+    dialog.getByText('Act numbering for a contract with this number already exists'),
+  ).toBeVisible();
+  await expect(dialog.getByLabel('Recipient')).not.toHaveValue('');
+  await dialog.getByLabel('Contract number').fill(tag);
+  await expect(dialog.getByLabel('Act number', { exact: true })).toHaveValue(`${tag} - А{seq}`);
   await dialog.getByRole('button', { name: 'Save recipient' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(row).toContainText(`ФОП ${tag}`);

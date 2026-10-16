@@ -10,7 +10,7 @@ import {
   type TransferFee,
 } from '@tally/domain';
 import { useTranslations } from 'next-intl';
-import { useActionState, useEffect, useState } from 'react';
+import { startTransition, useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FormField, NativeSelect } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -716,13 +716,31 @@ export function SetPayeeForm({
   payees,
 }: {
   itemId: string;
-  payees: { id: string; label: string }[];
+  payees: { id: string; label: string; fop: boolean; hasContract: boolean }[];
 }) {
   const t = useTranslations('payDialog');
   const [state, action, pending] = useToastAction(setPayoutPayeeAction, t('payeeSet'));
   const error = state && !state.ok ? state.error : null;
+  // Controlled, so a refused save keeps what was chosen and typed.
+  const [payeeId, setPayeeId] = useState('');
+  const [number, setNumber] = useState('');
+  const [template, setTemplate] = useState<string | null>(null);
+  const [signedOn, setSignedOn] = useState('');
+  const [nextValue, setNextValue] = useState('1');
+  const chosen = payees.find((p) => p.id === payeeId);
+  const needsContract = !!chosen && chosen.fop && !chosen.hasContract;
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <form
+      // Submitted by hand: a form action resets the form, and a refused save would lose the choice.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => {
+          action(data);
+        });
+      }}
+      className="flex flex-col gap-3"
+    >
       <input type="hidden" name="itemId" value={itemId} />
       <p className="text-sm text-muted-foreground">{t('payeeHint')}</p>
       <FormField label={t('payee')} htmlFor="payout-payee" error={error?.fieldErrors?.payeeId}>
@@ -730,10 +748,77 @@ export function SetPayeeForm({
           id="payout-payee"
           name="payeeId"
           required
+          value={payeeId}
+          onChange={(e) => {
+            setPayeeId(e.target.value);
+          }}
           placeholder={t('choosePayee')}
           options={payees.map((p) => ({ value: p.id, label: p.label }))}
         />
       </FormField>
+      {needsContract && (
+        <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
+          <legend className="px-1 text-sm font-medium">{t('newContract')}</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              label={t('contractNumber')}
+              htmlFor="payee-contract-number"
+              error={error?.fieldErrors?.contractNumber}
+            >
+              <Input
+                id="payee-contract-number"
+                name="contractNumber"
+                required
+                value={number}
+                onChange={(e) => {
+                  setNumber(e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField label={t('contractSignedOn')} htmlFor="payee-contract-date">
+              <Input
+                id="payee-contract-date"
+                name="contractSignedOn"
+                type="date"
+                value={signedOn}
+                onChange={(e) => {
+                  setSignedOn(e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField
+              label={t('actTemplate')}
+              htmlFor="payee-act-template"
+              error={error?.fieldErrors?.actTemplate}
+            >
+              <Input
+                id="payee-act-template"
+                name="actTemplate"
+                value={template ?? (number ? `${number} - А{seq}` : '')}
+                onChange={(e) => {
+                  setTemplate(e.target.value);
+                }}
+              />
+            </FormField>
+            <FormField
+              label={t('actNextValue')}
+              htmlFor="payee-act-next"
+              error={error?.fieldErrors?.actNextValue}
+            >
+              <Input
+                id="payee-act-next"
+                name="actNextValue"
+                inputMode="numeric"
+                value={nextValue}
+                onChange={(e) => {
+                  setNextValue(e.target.value);
+                }}
+              />
+            </FormField>
+          </div>
+          <p className="text-xs text-muted-foreground">{t('newContractHint')}</p>
+        </fieldset>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="remember" defaultChecked className="accent-foreground" />
         {t('rememberPayee')}
