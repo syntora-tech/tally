@@ -12,6 +12,7 @@ import {
   mergeReimbursementActs,
   saveActDraft,
   setSignedUrl,
+  restoreAct,
   voidAct,
 } from '../services/acts';
 import { deleteDraftAct } from '../services/acts/delete';
@@ -71,6 +72,17 @@ export async function voidActAction(
 ): Promise<ActFormState> {
   const ctx = await requireUserContext();
   const result = await voidAct.run(ctx, formDataToObject(formData));
+  return result.isErr()
+    ? { ok: false, error: await localizeForUser(result.error) }
+    : done(result.value.id);
+}
+
+export async function restoreActAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const result = await restoreAct.run(ctx, formDataToObject(formData));
   return result.isErr()
     ? { ok: false, error: await localizeForUser(result.error) }
     : done(result.value.id);

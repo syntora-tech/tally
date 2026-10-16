@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
 import { overridePayable } from '../services/payroll/payability';
-import { mergeActs, splitActByActivity } from '../services/acts';
+import { createRestAct, mergeActs, splitActByActivity } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
 import { adjustClosedPayout, removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
@@ -157,4 +157,17 @@ export async function splitActAction(
   revalidatePath('/payroll');
   revalidatePath('/periods/[id]', 'page');
   return { ok: true, data: result.value };
+}
+
+/** A new act of the rest once the old one was voided (A-111). */
+export async function createRestActAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await createRestAct.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/acts');
+  return { ok: true, data: { id: result.value.id } };
 }

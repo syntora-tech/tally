@@ -18,6 +18,7 @@ import {
   issueActAction,
   saveActDraftAction,
   setSignedUrlAction,
+  restoreActAction,
   voidActAction,
   type ActFormState,
 } from '@/server/actions/acts';
@@ -229,6 +230,31 @@ export function VoidActForm({ id }: { id: string }) {
       </FormField>
       <Button type="submit" variant="destructive" disabled={pending}>
         {t('void')}
+      </Button>
+      <div className="w-full">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function RestoreActForm({ id }: { id: string }) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(restoreActAction, null);
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('restored'));
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="id" value={id} />
+      <p className="w-full text-sm text-muted-foreground">{t('restoreHint')}</p>
+      <FormField
+        label={t('restoreReason')}
+        htmlFor="act-restore"
+        error={error?.fieldErrors?.reason}
+      >
+        <Input id="act-restore" name="reason" required className="w-80" />
+      </FormField>
+      <Button type="submit" disabled={pending}>
+        {t('restore')}
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />

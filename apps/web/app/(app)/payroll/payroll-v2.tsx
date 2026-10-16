@@ -19,6 +19,7 @@ import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-i
 import {
   AdjustClosedForm,
   ChangeMethodForm,
+  CreateRestActButton,
   MergeActsButton,
   OverrideForm,
   PayDialog,
@@ -218,6 +219,15 @@ export async function PayrollV2(p: PayrollV2Props) {
       step === 'issue'
         ? (open.find((a) => a.status === 'draft') ?? i.acts.at(-1))
         : open.find((a) => a.status === 'issued' && !a.signed);
+    // Every act left is paid and the act of the rest was voided: a new one is made here (A-111).
+    if (
+      !target &&
+      step === 'issue' &&
+      i.item.payoutMethod === 'fiat' &&
+      !i.acts.some((a) => a.isRest)
+    ) {
+      return <CreateRestActButton itemId={i.item.id} />;
+    }
     if (!target) return null;
     return (
       <Button

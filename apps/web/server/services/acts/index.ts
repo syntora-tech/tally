@@ -109,6 +109,90 @@ export async function ensureMonthlyActDraft(tx: DbTransaction, itemId: string) {
 }
 
 /** Non-void monthly acts of a payout by period: one, or one per part (A-083). */
+/**
+ * A new draft act for the rest of a payout (A-111) once its act of the rest was voided: it starts
+ * the day after the payout's last act (or on the 1st) and runs to the month's end, or one day when
+ * the earlier acts already took the month (A-098). Its amount is the rest, as for any act of the
+ * rest; splitting it by activity picks what it is for.
+ */
+export async function createRestActIn(tx: DbTransaction, itemId: string) {
+  const [row] = await tx
+    .select({ item: payrollItem, month: period.month, payeeKind: payee.kind })
+    .from(payrollItem)
+    .innerJoin(period, eq(period.id, payrollItem.periodId))
+    .leftJoin(payee, eq(payee.id, payrollItem.payeeId))
+    .where(eq(payrollItem.id, itemId))
+    .for('update', { of: payrollItem });
+  if (!row) return err(serviceError('not_found', 'payroll.notFound'));
+  if (!row.item.payeeId || row.payeeKind !== 'fop' || row.item.payoutMethod !== 'fiat') {
+    return err(serviceError('validation_error', 'acts.restActFopOnly'));
+  }
+  if (!row.item.totalUah) return err(serviceError('validation_error', 'payroll.rateFirst'));
+  const acts = await monthlyActsOf(tx, itemId);
+  if (acts.some((a) => a.amountUsd === null)) {
+    return err(serviceError('conflict', 'acts.restActExists'));
+  }
+  // A paid part voided by mistake goes back first; otherwise the rest would take its days.
+  const [voidPaid] = await tx
+    .select({ number: supplierAct.number })
+    .from(supplierAct)
+    .where(
+      and(
+        eq(supplierAct.payrollItemId, itemId),
+        eq(supplierAct.status, 'void'),
+        eq(supplierAct.rateLocked, true),
+      ),
+    )
+    .limit(1);
+  if (voidPaid) {
+    return err(
+      serviceError('conflict', msg('acts.restActPaidVoid', { number: voidPaid.number ?? '' })),
+    );
+  }
+  const taken = sum(acts.map((a) => a.amountUah));
+  if (!toDecimal(row.item.totalUah).gt(taken)) {
+    return err(serviceError('conflict', 'acts.restActNothingLeft'));
+  }
+  const [fop] = await tx
+    .select()
+    .from(contract)
+    .where(and(eq(contract.payeeId, row.item.payeeId), eq(contract.kind, 'fop')))
+    .orderBy(desc(contract.signedOn))
+    .limit(1);
+  if (!fop) return err(serviceError('validation_error', 'acts.restActFopOnly'));
+  const month = row.month as LocalDate;
+  const last = acts
+    .map((a) => a.periodTo)
+    .filter((d): d is string => d !== null)
+    .sort()
+    .at(-1);
+  const from = last ? addDays(last as LocalDate, 1) : month;
+  const to = from > endOfMonth(month) ? from : endOfMonth(month);
+  const cal = await loadCalendar(tx);
+  const [act] = await tx
+    .insert(supplierAct)
+    .values({
+      contractId: fop.id,
+      payeeId: row.item.payeeId,
+      payrollItemId: itemId,
+      type: 'monthly',
+      actDate: partActDate(cal, to, from),
+      periodFrom: from,
+      periodTo: to,
+      amountUah: toDecimal(row.item.totalUah).minus(taken).toFixed(2),
+    })
+    .returning({ id: supplierAct.id });
+  if (!act) return err(serviceError('forbidden', 'general.forbidden'));
+  await syncMonthlyActDraft(tx, itemId);
+  return ok(act);
+}
+
+export const createRestAct = defineService({
+  name: 'acts.createRest',
+  input: z.object({ itemId: z.uuid() }),
+  handler: async (ctx, { itemId }) => inActorScope(ctx, (tx) => createRestActIn(tx, itemId)),
+});
+
 export function monthlyActsOf(tx: DbTransaction, itemId: string) {
   return tx
     .select()
@@ -974,6 +1058,30 @@ export const voidAct = defineService({
     );
     return row ? ok(row) : err(serviceError('conflict', 'acts.voidState'));
   },
+});
+
+/**
+ * Takes back a mistaken void (A-111): owner only, with a reason kept in the audit log. The act
+ * returns as issued with its number and files; the DB refuses it when another act of the payout
+ * already took its days.
+ */
+export const restoreAct = defineService({
+  name: 'acts.restore',
+  input: z.object({ id: z.uuid(), reason: requiredText('field.reason') }),
+  handler: async (ctx, { id, reason }) =>
+    inActorScope(ctx, async (tx) => {
+      const [permission] = await tx.execute<{ role: string }>(
+        sql`select public.current_app_role() as role`,
+      );
+      if (permission?.role !== 'owner') return err(serviceError('forbidden', 'general.forbidden'));
+      await tx.execute(sql`select set_config('app.reason', ${reason}, true)`);
+      const [row] = await tx
+        .update(supplierAct)
+        .set({ status: 'issued', voidReason: null })
+        .where(and(eq(supplierAct.id, id), eq(supplierAct.status, 'void')))
+        .returning({ id: supplierAct.id });
+      return row ? ok(row) : err(serviceError('conflict', 'acts.restoreState'));
+    }),
 });
 
 /** After signing in Vchasno the act keeps a link to the signed document (6.6). */

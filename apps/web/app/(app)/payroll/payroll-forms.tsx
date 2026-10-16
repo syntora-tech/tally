@@ -22,6 +22,7 @@ import { useFormat } from '@/lib/format';
 import { useLabels } from '@/lib/labels';
 import {
   changePayoutMethodAction,
+  createRestActAction,
   removePayoutLineAction,
   adjustClosedPayoutAction,
   mergeActsAction,
@@ -702,6 +703,22 @@ export function RateForm({
       )}
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         {t('approveRate')}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/** A new draft act of the rest when the payout has none left (A-111). */
+export function CreateRestActButton({ itemId }: { itemId: string }) {
+  const t = useTranslations('payDialog');
+  const [state, action, pending] = useToastAction(createRestActAction, t('restActCreated'));
+  const error = state && !state.ok ? state.error : null;
+  return (
+    <form action={action} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="itemId" value={itemId} />
+      <Button type="submit" size="sm" variant="outline" className="min-w-32" disabled={pending}>
+        {t('createRestAct')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
     </form>

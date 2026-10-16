@@ -18,6 +18,7 @@ import {
   OwnDocumentActForm,
   SignedFileForm,
   SignedUrlForm,
+  RestoreActForm,
   VoidActForm,
 } from '../act-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
@@ -130,6 +131,11 @@ export default async function ActPage({
                 destructive: true,
                 dialog: { title: tf('void'), content: <VoidActForm id={a.id} /> },
               },
+              a.status === 'void' &&
+                ctx.actor.role === 'owner' && {
+                  label: tv('restoreAction'),
+                  dialog: { title: tf('restore'), content: <RestoreActForm id={a.id} /> },
+                },
             ]}
           />
         </PageHeader>
