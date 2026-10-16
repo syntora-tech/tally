@@ -14,6 +14,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { setDefaultPayee } from '../payees';
 import { payoutPayees, setPayoutPayee } from './payee';
 
 const h = intHarness();
@@ -30,6 +31,8 @@ const ids = {
   period: '',
   item: '',
   assignment: '',
+  period2: '',
+  item2: '',
 };
 
 beforeAll(async () => {
@@ -97,11 +100,12 @@ afterAll(() =>
   h.cleanup(async (db) => {
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local session_replication_role = replica`);
-      await tx.delete(supplierAct).where(eq(supplierAct.payrollItemId, ids.item));
-      await tx.delete(payrollLine).where(eq(payrollLine.payrollItemId, ids.item));
-      await tx.delete(payrollItem).where(eq(payrollItem.id, ids.item));
+      const items = [ids.item, ids.item2].filter(Boolean);
+      await tx.delete(supplierAct).where(inArray(supplierAct.payrollItemId, items));
+      await tx.delete(payrollLine).where(inArray(payrollLine.payrollItemId, items));
+      await tx.delete(payrollItem).where(inArray(payrollItem.id, items));
     });
-    await db.delete(period).where(eq(period.id, ids.period));
+    await db.delete(period).where(inArray(period.id, [ids.period, ids.period2].filter(Boolean)));
     await db.delete(assignment).where(eq(assignment.id, ids.assignment));
     await db.update(person).set({ defaultPayeeId: null }).where(eq(person.id, ids.person));
     await db.delete(contract).where(eq(contract.id, ids.contract));
@@ -184,5 +188,47 @@ describe('recipient of a payout chosen after the close (A-113)', () => {
       payeeId: ids.fop,
     });
     expect(again._unsafeUnwrapErr().message).toBe('payroll.payeeHasAct');
+  });
+
+  it('fills open payouts without a recipient when the person gets a default later (A-114)', async () => {
+    const [per] = await h.db
+      .insert(period)
+      .values({ month: '2093-03-01', workHours: '160' })
+      .returning();
+    const [item] = await h.db
+      .insert(payrollItem)
+      .values({
+        periodId: per?.id ?? '',
+        personId: ids.person,
+        payoutMethod: 'fiat',
+        totalUsd: '50',
+        payoutFxRate: '40',
+        fxSource: 'manual',
+        totalUah: '2000',
+      })
+      .returning();
+    Object.assign(ids, { period2: per?.id, item2: item?.id });
+
+    (
+      await setDefaultPayee.run(h.ctxFor(finance), { personId: ids.person, payeeId: ids.fop })
+    )._unsafeUnwrap();
+    const [filled] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item2));
+    expect(filled?.payeeId).toBe(ids.fop);
+    const acts = await h.db
+      .select()
+      .from(supplierAct)
+      .where(eq(supplierAct.payrollItemId, ids.item2));
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toMatchObject({
+      status: 'draft',
+      contractId: ids.contract,
+      amountUah: '2000.00',
+    });
+    const [kept] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item));
+    expect(kept?.payeeId).toBe(ids.bare);
+
+    await setDefaultPayee.run(h.ctxFor(finance), { personId: ids.person, payeeId: ids.bare });
+    const [still] = await h.db.select().from(payrollItem).where(eq(payrollItem.id, ids.item2));
+    expect(still?.payeeId).toBe(ids.fop);
   });
 });

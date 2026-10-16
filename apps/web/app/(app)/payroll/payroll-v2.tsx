@@ -186,11 +186,34 @@ export async function PayrollV2(p: PayrollV2Props) {
     );
   };
 
+  const needsPayee = (i: PayrollRow) =>
+    i.group !== 'paid' &&
+    i.item.kind === 'person' &&
+    i.item.payoutMethod === 'fiat' &&
+    i.acts.length === 0 &&
+    toDecimal(i.item.paidAmount).isZero() &&
+    (i.item.payeeId === null || p.documentOf(i)?.kind === 'act');
+
   const primaryAction = (i: PayrollRow) => {
     if (i.group === 'paid') return null;
     const step = p.nextStep(i);
     const doc = p.documentOf(i);
     const ci = p.contractorInvoices.find((x) => x.payrollItemId === i.item.id);
+    // A fiat payout without a recipient, or with a FOP that has no contract yet, gets its act by
+    // choosing the recipient (A-113/A-114): the act is the next step, not paying without one.
+    if (needsPayee(i)) {
+      return (
+        <DialogButton
+          title={`${tp('payee')}: ${nameOf(i)}`}
+          content={<SetPayeeForm itemId={i.item.id} payees={p.payees} current={i.item.payeeId} />}
+          variant={i.group === 'ready' ? 'default' : 'outline'}
+          className="min-w-32"
+          testId="create-act"
+        >
+          {t('v2.cta.createAct')}
+        </DialogButton>
+      );
+    }
     if (step === 'pay' || !doc) {
       return (
         <DialogButton
@@ -262,12 +285,11 @@ export async function PayrollV2(p: PayrollV2Props) {
           label: t('v2.setPayee'),
           dialog: {
             title: `${tp('payee')}: ${nameOf(i)}`,
-            content: <SetPayeeForm itemId={i.item.id} payees={p.payees} />,
+            content: <SetPayeeForm itemId={i.item.id} payees={p.payees} current={i.item.payeeId} />,
           },
         },
       step !== null &&
-        step !== 'pay' &&
-        p.documentOf(i) !== null && {
+        (needsPayee(i) || (step !== 'pay' && p.documentOf(i) !== null)) && {
           label: t('v2.payNow'),
           dialog: { title: `${tp('pay')}: ${nameOf(i)}`, content: payDialog(i) },
         },

@@ -1858,6 +1858,7 @@
         "payment": "Payment"
       },
       "cta": {
+        "createAct": "Create act",
         "issueAct": "Issue act",
         "issueInvoice": "Issue invoice",
         "signAct": "Upload signed",

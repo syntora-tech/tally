@@ -7,7 +7,8 @@ import {
   person,
   supplierAct,
 } from '@tally/db/schema';
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
+import type { DbTransaction } from '@tally/db';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScopeAtomic } from '../atomic';
@@ -138,6 +139,34 @@ export const setPayoutPayee = defineService({
     });
   },
 });
+
+/**
+ * A default payee set on the person later fills their open payouts that had none at the close
+ * (A-114), by the same rule as the close: never a crypto payee and never a crypto payout. A payout
+ * that already has a recipient, money or an act keeps what it has.
+ */
+export async function adoptDefaultPayee(tx: DbTransaction, personId: string, payeeId: string) {
+  const [chosen] = await tx.select({ kind: payee.kind }).from(payee).where(eq(payee.id, payeeId));
+  if (!chosen || chosen.kind === 'crypto') return [];
+  const items = await tx
+    .update(payrollItem)
+    .set({ payeeId })
+    .where(
+      and(
+        eq(payrollItem.personId, personId),
+        eq(payrollItem.kind, 'person'),
+        isNull(payrollItem.payeeId),
+        ne(payrollItem.payoutMethod, 'crypto'),
+        sql`not exists (select 1 from public.allocation a where a.payroll_item_id = ${payrollItem.id})`,
+        sql`not exists (select 1 from public.supplier_act s where s.payroll_item_id = ${payrollItem.id} and s.status <> 'void')`,
+      ),
+    )
+    .returning({ id: payrollItem.id });
+  for (const { id } of items) {
+    if (await ensureMonthlyActDraft(tx, id)) await syncMonthlyActDraft(tx, id);
+  }
+  return items.map((i) => i.id);
+}
 
 /** Recipients a payout can get (A-113): FOPs first, and whether each already has a FOP contract. */
 export const payoutPayees = defineService({

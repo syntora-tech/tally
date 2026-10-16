@@ -29,5 +29,6 @@ export async function saveDefaultPayee(
   const result = await setDefaultPayee.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/people/${result.value.id}`);
+  revalidatePath('/payroll');
   return { ok: true, data: result.value };
 }

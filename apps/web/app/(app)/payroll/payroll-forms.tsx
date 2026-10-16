@@ -714,15 +714,17 @@ export function RateForm({
 export function SetPayeeForm({
   itemId,
   payees,
+  current = null,
 }: {
   itemId: string;
   payees: { id: string; label: string; fop: boolean; hasContract: boolean }[];
+  current?: string | null;
 }) {
   const t = useTranslations('payDialog');
   const [state, action, pending] = useToastAction(setPayoutPayeeAction, t('payeeSet'));
   const error = state && !state.ok ? state.error : null;
   // Controlled, so a refused save keeps what was chosen and typed.
-  const [payeeId, setPayeeId] = useState('');
+  const [payeeId, setPayeeId] = useState(current ?? '');
   const [number, setNumber] = useState('');
   const [template, setTemplate] = useState<string | null>(null);
   const [signedOn, setSignedOn] = useState('');

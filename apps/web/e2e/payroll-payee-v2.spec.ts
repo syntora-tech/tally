@@ -86,8 +86,7 @@ test('a payout without a recipient gets a FOP and its act from the row', async (
   await page.goto(`/payroll?period=${ids.period}`);
   const row = page.getByTestId('payroll-row').filter({ hasText: tag });
   await expect(row.getByRole('link', { name: 'Issue act' })).toHaveCount(0);
-  await row.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Choose recipient…' }).click();
+  await row.getByRole('button', { name: 'Create act' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Recipient').selectOption({ label: `ФОП ${tag}` });
   // A refused save keeps the choice and what was typed.

@@ -3,6 +3,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
+import { adoptDefaultPayee } from '../payroll/payee';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import {
@@ -147,13 +148,15 @@ export const setDefaultPayee = defineService({
   name: 'people.setDefaultPayee',
   input: z.object({ personId: z.uuid(), payeeId: optionalUuid }),
   handler: async (ctx, { personId, payeeId }) => {
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx
+    const row = await inActorScope(ctx, async (tx) => {
+      const [updated] = await tx
         .update(person)
         .set({ defaultPayeeId: payeeId })
         .where(eq(person.id, personId))
-        .returning({ id: person.id }),
-    );
+        .returning({ id: person.id });
+      if (updated && payeeId) await adoptDefaultPayee(tx, personId, payeeId);
+      return updated;
+    });
     return row ? ok(row) : err(serviceError('not_found', 'people.notFound'));
   },
 });

@@ -7,6 +7,7 @@ import { defineService } from '../define-service';
 import { msg, serviceError } from '../errors';
 import { CRYPTO_NETWORK_HINT } from '../fields';
 import { definedOnly } from '../patch';
+import { adoptDefaultPayee } from '../payroll/payee';
 import { PAYEE_KINDS, payeeInput } from '.';
 
 const text = (description: string) => z.string().trim().nullable().optional().describe(description);
@@ -119,6 +120,7 @@ export const upsertPayees = defineService({
             errors[key] = ['people.notFound'];
             continue;
           }
+          await adoptDefaultPayee(tx, parsed.data.personId, payeeId);
           if (status === 'unchanged') status = 'updated';
         }
         if (payeeId) results.push({ index, id: payeeId, status });
