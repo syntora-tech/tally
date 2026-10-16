@@ -19,6 +19,7 @@ import {
   SignedFileForm,
   SignedUrlForm,
   RestoreActForm,
+  ReviseActForm,
   VoidActForm,
 } from '../act-forms';
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
@@ -126,6 +127,25 @@ export default async function ActPage({
                   ),
                 },
               },
+              a.status === 'issued' &&
+                !signed &&
+                !a.rateLocked &&
+                !a.isLegacy &&
+                ctx.actor.role !== 'viewer' && {
+                  label: tv('reviseAction'),
+                  dialog: {
+                    title: tf('revise'),
+                    content: (
+                      <ReviseActForm
+                        id={a.id}
+                        actDate={a.actDate}
+                        periodFrom={a.periodFrom}
+                        periodTo={a.periodTo}
+                        dateOverrideReason={a.dateOverrideReason}
+                      />
+                    ),
+                  },
+                },
               a.status === 'issued' && {
                 label: tv('voidAction'),
                 destructive: true,

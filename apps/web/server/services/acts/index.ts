@@ -57,10 +57,11 @@ import { buildActSnapshot } from './snapshot';
 
 const payeeName = sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`;
 
-export const renderActJob = (actId: string): NewJob => ({
+export const renderActJob = (actId: string, version = 1): NewJob => ({
   kind: 'render_act',
   payload: { actId },
-  dedupeKey: `render_act:${actId}`,
+  // A revision (A-112) renders again even while the first render is still queued.
+  dedupeKey: version === 1 ? `render_act:${actId}` : `render_act:${actId}:v${String(version)}`,
 });
 
 /**
@@ -981,6 +982,102 @@ export const issueAct = defineService({
         .where(eq(supplierAct.id, id));
       await enqueueJob(tx, renderActJob(id));
       return ok({ id, number });
+    }),
+});
+
+/**
+ * New dates for an issued act not signed and not paid yet (A-112): same number, a new snapshot and
+ * a new PDF; the old file and values stay in the documents registry and the audit log with the
+ * reason. The amount and parties never change here, and the date stays in the number's year.
+ */
+export const reviseAct = defineService({
+  name: 'acts.revise',
+  input: z
+    .object({
+      id: z.uuid(),
+      actDate: localDateString,
+      periodFrom: z.preprocess((v) => (v === '' ? undefined : v), localDateString.optional()),
+      periodTo: z.preprocess((v) => (v === '' ? undefined : v), localDateString.optional()),
+      dateOverrideReason: optionalText,
+      reason: requiredText('acts.reviseReason'),
+    })
+    .superRefine((v, issues) => {
+      if (!v.periodFrom !== !v.periodTo) {
+        const path = v.periodFrom ? 'periodTo' : 'periodFrom';
+        issues.addIssue({ code: 'custom', path: [path], message: 'acts.periodBoth' });
+      } else if (v.periodFrom && v.periodTo && v.periodTo < v.periodFrom) {
+        issues.addIssue({ code: 'custom', path: ['periodTo'], message: 'acts.periodOrder' });
+      }
+    }),
+  handler: async (ctx, input) =>
+    inActorScope(ctx, async (tx) => {
+      const [row] = await tx
+        .select({ act: supplierAct, contract, payee })
+        .from(supplierAct)
+        .innerJoin(contract, eq(contract.id, supplierAct.contractId))
+        .innerJoin(payee, eq(payee.id, supplierAct.payeeId))
+        .where(eq(supplierAct.id, input.id))
+        .for('update', { of: supplierAct });
+      if (!row) return err(serviceError('not_found', 'acts.notFound'));
+      const { act } = row;
+      if (
+        act.status !== 'issued' ||
+        act.isLegacy ||
+        !act.number ||
+        act.signedUrl ||
+        act.signedDocumentId ||
+        act.rateLocked
+      ) {
+        return err(serviceError('conflict', 'acts.reviseState'));
+      }
+      if (input.actDate.slice(0, 4) !== act.actDate.slice(0, 4)) {
+        return err(
+          serviceError('validation_error', 'acts.reviseYear', { actDate: ['acts.reviseYear'] }),
+        );
+      }
+      if (act.type === 'monthly' && !input.periodFrom) {
+        return err(
+          serviceError('validation_error', 'acts.periodBoth', { periodFrom: ['acts.periodBoth'] }),
+        );
+      }
+      const [co] = await tx.select().from(company).orderBy(asc(company.createdAt)).limit(1);
+      if (!co) return err(serviceError('conflict', 'company.missingShort'));
+      const periodFrom = input.periodFrom ?? null;
+      const periodTo = input.periodTo ?? null;
+      const previous = act.snapshot as { version?: number } | null;
+      const snapshot = {
+        ...buildActSnapshot({
+          number: act.number,
+          actDate: input.actDate,
+          periodFrom,
+          periodTo,
+          amountUah: act.amountUah,
+          company: co,
+          contract: {
+            number: row.contract.number,
+            signedOn: row.contract.signedOn as LocalDate | null,
+          },
+          payee: { ...row.payee, edrDate: row.payee.edrDate as LocalDate | null },
+        }),
+        version: (previous?.version ?? 1) + 1,
+      };
+      await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
+      await tx.execute(sql`select set_config('app.act_revision', 'on', true)`);
+      await tx
+        .update(supplierAct)
+        .set({
+          actDate: input.actDate,
+          periodFrom,
+          periodTo,
+          dateOverrideReason: input.dateOverrideReason,
+          snapshot,
+          pdfFileId: null,
+          gdocFileId: null,
+        })
+        .where(eq(supplierAct.id, act.id));
+      await tx.execute(sql`select set_config('app.act_revision', '', true)`);
+      await enqueueJob(tx, renderActJob(act.id, snapshot.version));
+      return ok({ id: act.id, number: act.number });
     }),
 });
 

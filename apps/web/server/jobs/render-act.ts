@@ -44,6 +44,8 @@ export function renderActHandler(deps: ActRenderDeps): JobHandler {
     if (!row || !act?.number || !act.snapshot || act.status !== 'issued' || act.pdfFileId) {
       return { skipped: true };
     }
+    // A revision while this render runs changes the snapshot; its own render files the new PDF.
+    const version = String((act.snapshot as { version?: number }).version ?? 1);
     const fileName = actFileName(act.number, act.actDate);
     const out = await deps.renderer.render({
       layout: 'act_fop',
@@ -83,7 +85,13 @@ export function renderActHandler(deps: ActRenderDeps): JobHandler {
       await tx
         .update(supplierAct)
         .set({ pdfFileId: doc?.key ?? null, gdocFileId: out.sourceFileId })
-        .where(and(eq(supplierAct.id, actId), isNull(supplierAct.pdfFileId)));
+        .where(
+          and(
+            eq(supplierAct.id, actId),
+            isNull(supplierAct.pdfFileId),
+            sql`coalesce(${supplierAct.snapshot} ->> 'version', '1') = ${version}`,
+          ),
+        );
     });
     return { documentId: created.id };
   };

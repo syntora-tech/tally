@@ -426,6 +426,9 @@
       "restActExists": "This payout already has an act of the rest",
       "restActNothingLeft": "The acts of this payout already cover all of it",
       "restActPaidVoid": "Act {number} of a paid part is void: restore it first",
+      "reviseReason": "Enter why the act is changed",
+      "reviseState": "Only an issued act that is not signed or paid yet can be changed",
+      "reviseYear": "The act date stays in the year of its number",
       "restoreState": "Only a void act can be restored",
       "linkIssuedOnly": "A link is added only to an issued act",
       "mergeAdjacentDrafts": "Only two neighbouring draft acts of one payout can be merged",
@@ -2008,6 +2011,7 @@
     "signedDocument": "Signed copy uploaded",
     "v2": {
       "deleteAction": "Delete the draft…",
+      "reviseAction": "Change dates…",
       "restoreAction": "Restore…",
       "voidAction": "Void…",
       "issueTitle": "Issue the act",
@@ -2025,6 +2029,10 @@
     }
   },
   "actForms": {
+    "revise": "Change dates",
+    "reviseHint": "The act keeps its number and amount; a new PDF is made with these dates. The old file stays in Documents.",
+    "reviseReason": "Why change",
+    "revised": "Act changed; a new PDF is being made",
     "restore": "Restore act",
     "restoreHint": "The act becomes issued again with its number, files and signature. Only if it was voided by mistake.",
     "restoreReason": "Why restore",

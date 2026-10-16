@@ -154,6 +154,8 @@ test('v2 act: generate or my own PDF, then the signing step', async ({ page }) =
   await expect(page.getByText('Draft saved')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Period from')).toHaveValue('2054-01-10');
+  // A-112: what is typed but not saved goes into the act on issue.
+  await page.getByLabel('Period to').fill('2054-01-28');
   await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
   await expect(page.getByRole('heading', { name: /Act No\. DV - А1/ })).toBeVisible();
   await expect(page.getByTestId('act-status')).toHaveText('Active');
@@ -162,4 +164,18 @@ test('v2 act: generate or my own PDF, then the signing step', async ({ page }) =
 
   await page.getByRole('button', { name: 'Actions' }).click();
   await expect(page.getByRole('menuitem', { name: 'Void…' })).toBeVisible();
+
+  // An issued, unsigned act gets new dates under its number (A-112).
+  await page.getByRole('menuitem', { name: 'Change dates…' }).click();
+  const revise = page.getByRole('dialog');
+  await expect(revise.getByLabel('Period to')).toHaveValue('2054-01-28');
+  await revise.getByLabel('Period from').fill('2054-01-12');
+  await revise.getByLabel('Why change').fill('Agreed with the FOP');
+  await revise.getByRole('button', { name: 'Change dates' }).click();
+  await expect(page.getByText('Act changed; a new PDF is being made')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Act No\. DV - А1/ })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Change dates…' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Period from')).toHaveValue('2054-01-12');
 });

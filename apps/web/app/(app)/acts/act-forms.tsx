@@ -19,6 +19,7 @@ import {
   saveActDraftAction,
   setSignedUrlAction,
   restoreActAction,
+  reviseActAction,
   voidActAction,
   type ActFormState,
 } from '@/server/actions/acts';
@@ -66,6 +67,9 @@ function ErrorAlert({ message }: { message: string | undefined }) {
   );
 }
 
+// "Issue" submits the draft form, so the dates typed there are saved before the number is given.
+const DRAFT_FORM_ID = 'act-draft-form';
+
 export function ActDraftForm(props: {
   id: string;
   actDate: string;
@@ -81,7 +85,7 @@ export function ActDraftForm(props: {
   const error = useResult(state, t('draftSaved'));
   if (useIsV2()) {
     return (
-      <form action={action} className="flex flex-col gap-3">
+      <form id={DRAFT_FORM_ID} action={action} className="flex flex-col gap-3">
         <input type="hidden" name="id" value={props.id} />
         <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <FormField label={t('actDate')} htmlFor="act-date" error={error?.fieldErrors?.actDate}>
@@ -197,7 +201,13 @@ export function IssueActForm({ id, nextNumber }: { id: string; nextNumber?: stri
           ) : (
             <span className="text-sm text-muted-foreground">{t('v2.numberHint')}</span>
           )}
-          <Button type="submit" disabled={pending} className="ml-auto">
+          <Button
+            type="submit"
+            form={DRAFT_FORM_ID}
+            formAction={action}
+            disabled={pending}
+            className="ml-auto"
+          >
             {t('issue')}
           </Button>
         </div>
@@ -233,6 +243,67 @@ export function VoidActForm({ id }: { id: string }) {
       </Button>
       <div className="w-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+export function ReviseActForm(props: {
+  id: string;
+  actDate: string;
+  periodFrom: string | null;
+  periodTo: string | null;
+  dateOverrideReason: string | null;
+}) {
+  const [state, action, pending] = useActionState<ActFormState, FormData>(reviseActAction, null);
+  const t = useTranslations('actForms');
+  const error = useResult(state, t('revised'));
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <input type="hidden" name="id" value={props.id} />
+      <p className="text-sm text-muted-foreground">{t('reviseHint')}</p>
+      <FormField label={t('actDate')} htmlFor="act-revise-date" error={error?.fieldErrors?.actDate}>
+        <Input id="act-revise-date" name="actDate" type="date" defaultValue={props.actDate} />
+      </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          label={t('v2.periodFrom')}
+          htmlFor="act-revise-from"
+          error={error?.fieldErrors?.periodFrom}
+        >
+          <Input
+            id="act-revise-from"
+            name="periodFrom"
+            type="date"
+            defaultValue={props.periodFrom ?? ''}
+          />
+        </FormField>
+        <FormField
+          label={t('v2.periodTo')}
+          htmlFor="act-revise-to"
+          error={error?.fieldErrors?.periodTo}
+        >
+          <Input
+            id="act-revise-to"
+            name="periodTo"
+            type="date"
+            defaultValue={props.periodTo ?? ''}
+          />
+        </FormField>
+      </div>
+      <OverrideReason id="act-revise-override" defaultValue={props.dateOverrideReason} />
+      <FormField
+        label={t('reviseReason')}
+        htmlFor="act-revise-reason"
+        error={error?.fieldErrors?.reason}
+      >
+        <Input id="act-revise-reason" name="reason" required />
+      </FormField>
+      <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending}>
+          {t('revise')}
+        </Button>
       </div>
     </form>
   );

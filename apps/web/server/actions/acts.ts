@@ -13,6 +13,7 @@ import {
   saveActDraft,
   setSignedUrl,
   restoreAct,
+  reviseAct,
   voidAct,
 } from '../services/acts';
 import { deleteDraftAct } from '../services/acts/delete';
@@ -60,7 +61,27 @@ export async function issueActAction(
   formData: FormData,
 ): Promise<ActFormState> {
   const ctx = await requireUserContext();
-  const result = await issueAct.run(ctx, formDataToObject(formData));
+  const input = formDataToObject(formData);
+  // Issued from the draft form: what was typed there is saved first, so the act gets those dates.
+  if (typeof input.actDate === 'string') {
+    const saved = await saveActDraft.run(ctx, {
+      ...input,
+      amountUah: decimalField(input.amountUah),
+    });
+    if (saved.isErr()) return { ok: false, error: await localizeForUser(saved.error) };
+  }
+  const result = await issueAct.run(ctx, { id: input.id });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  runJobsAfterResponse();
+  return done(result.value.id);
+}
+
+export async function reviseActAction(
+  _prev: ActFormState,
+  formData: FormData,
+): Promise<ActFormState> {
+  const ctx = await requireUserContext();
+  const result = await reviseAct.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   runJobsAfterResponse();
   return done(result.value.id);
