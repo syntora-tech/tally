@@ -194,6 +194,39 @@ export function payoutRest(
   return { usd: Decimal.max(usd, 0), uah: Decimal.max(uah, 0) };
 }
 
+export type PaidLineInput = PayLineInput & { id: string; status: string };
+
+/**
+ * How much of each line the paid parts cover (A-110). A part split off by amount names no line,
+ * so per currency its money settles the adjustments first and then the lines in order, released
+ * ones first: 803.73 $ paid of 804 $ + 4 000 $ − 0.27 $ covers the 804 $ line in full.
+ */
+export function linePaidAmounts(
+  lines: readonly PaidLineInput[],
+  adjustments: readonly AdjustmentInput[],
+  parts: readonly PayoutPart[],
+): Map<string, Decimal> {
+  const paid = new Map<string, Decimal>();
+  const before = payoutRest(lines, adjustments, []);
+  const after = payoutRest(lines, adjustments, parts);
+  const released = (l: PaidLineInput) => l.status === 'payable' || l.status === 'paid';
+  const ordered = [...lines.filter(released), ...lines.filter((l) => !released(l))];
+  for (const usd of [true, false]) {
+    const own = ordered.filter((l) => USD_LIKE.has(l.currency) === usd);
+    const left = usd ? after.usd : after.uah;
+    const anyPaid = (usd ? before.usd : before.uah).gt(left);
+    let covered = anyPaid
+      ? Decimal.max(sum(own.map((l) => l.amount)).minus(left), 0)
+      : new Decimal(0);
+    for (const l of own) {
+      const share = Decimal.min(covered, toDecimal(l.amount));
+      paid.set(l.id, share);
+      covered = covered.minus(share);
+    }
+  }
+  return paid;
+}
+
 /** The rest in UAH at a rate: round2(USD × rate) + UAH, as total_uah (5.2). */
 export function payoutRestUah(rest: PayoutRest, rate: DecimalInput | null): Decimal | null {
   if (rest.usd.isZero()) return rest.uah;

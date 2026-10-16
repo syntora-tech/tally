@@ -469,6 +469,9 @@ export async function PayrollV2(p: PayrollV2Props) {
                     {[
                       l.invoiceNumber &&
                         t('invoice', { number: l.invoiceNumber }).replace(/^ · /, ''),
+                      l.status !== 'paid' &&
+                        toDecimal(l.paidAmount).gt(0) &&
+                        t('v2.linePaid', { amount: fmt.amount(l.paidAmount, l.currency) }),
                       l.status === 'awaiting_client' &&
                         l.deadline &&
                         t('until', { date: fmt.date(l.deadline) }).trim(),

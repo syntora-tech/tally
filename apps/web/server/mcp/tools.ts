@@ -779,7 +779,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'get_payroll_queue',
     title: 'Payroll queue',
     description:
-      'Payouts by month (periodId optional): person or agency, payee, method fiat|crypto|bank_usd, status, totals (USD, UAH at the payout rate), what is left to pay, lines with funding and the deadline of those waiting for a client, and the FOP acts. A month paid in parts has an act per part (A-083): periodFrom/periodTo never overlap, amountUsd/fxRate are set on paid parts and null on the act that follows the rest. Payee requisites are not returned; paying is done in the UI.',
+      'Payouts by month (periodId optional): person or agency, payee, method fiat|crypto|bank_usd, status, totals (USD, UAH at the payout rate), what is left to pay, lines with funding and the deadline of those waiting for a client (a line reads status paid once its own act is paid or the parts split off by amount cover it; paidAmount is what of it is paid so far, A-110), and the FOP acts. A month paid in parts has an act per part (A-083): periodFrom/periodTo never overlap, amountUsd/fxRate are set on paid parts and null on the act that follows the rest. Payee requisites are not returned; paying is done in the UI.',
     kind: 'read',
     service: listPayroll,
     present: (rows) =>
@@ -807,6 +807,7 @@ export const TOOLS: readonly ToolDef[] = [
           amount: l.amount,
           currency: l.currency,
           status: l.status,
+          paidAmount: l.paidAmount,
           fundingSource: l.fundingSource,
           invoiceNumber: l.invoiceNumber,
           deadline: l.deadline,

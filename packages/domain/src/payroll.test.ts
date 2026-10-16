@@ -3,6 +3,7 @@ import { WorkCalendar } from './calendar';
 import { parseLocalDate, type LocalDate } from './local-date';
 import { roundHalfUp, sum, toDecimal } from './money';
 import {
+  linePaidAmounts,
   nextPartPeriod,
   payoutPartOf,
   payoutRest,
@@ -244,5 +245,51 @@ describe('rateForUah', () => {
   it('gives up on nonsense', () => {
     expect(rateForUah('0', '100')).toBeNull();
     expect(rateForUah('100', '0')).toBeNull();
+  });
+});
+
+describe('linePaidAmounts (A-110)', () => {
+  const lines = [
+    { id: 'cto', amount: '804', currency: 'USD', status: 'payable' },
+    { id: 'client', amount: '4000', currency: 'USD', status: 'payable' },
+    { id: 'other', amount: '2644', currency: 'UAH', status: 'payable' },
+  ];
+  const adjustments = [
+    { amount: '-0.27', currency: 'USD' },
+    { amount: '-0.14', currency: 'UAH' },
+  ];
+  const paidOf = (parts: Parameters<typeof linePaidAmounts>[2]) =>
+    Object.fromEntries(
+      [...linePaidAmounts(lines, adjustments, parts)].map(([id, v]) => [id, v.toFixed(2)]),
+    );
+
+  it('pays nothing without a paid part, corrections included', () => {
+    expect(paidOf([])).toEqual({ cto: '0.00', client: '0.00', other: '0.00' });
+  });
+
+  it('a part split off by amount covers the corrections, then the lines in order', () => {
+    // 803.73 $ × 44.73 = 35 950.84 + 2 643.86 of the UAH part = 38 594.70.
+    expect(paidOf([{ usd: '803.73', uah: '38594.70', rate: '44.73' }])).toEqual({
+      cto: '804.00',
+      client: '0.00',
+      other: '2644.00',
+    });
+  });
+
+  it('leaves the line the money ran out on partly paid', () => {
+    expect(paidOf([{ usd: '1803.73', uah: '83324.70', rate: '44.73' }])).toMatchObject({
+      cto: '804.00',
+      client: '1000.00',
+    });
+  });
+
+  it('released lines take the money before the held ones', () => {
+    const held = [
+      { id: 'held', amount: '500', currency: 'USD', status: 'awaiting_client' },
+      { id: 'ready', amount: '500', currency: 'USD', status: 'payable' },
+    ];
+    const paid = linePaidAmounts(held, [], [{ usd: '500', uah: '0', rate: null }]);
+    expect(paid.get('ready')?.toFixed(2)).toBe('500.00');
+    expect(paid.get('held')?.toFixed(2)).toBe('0.00');
   });
 });

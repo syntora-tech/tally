@@ -49,6 +49,7 @@ import { loadCalendar } from '../periods';
 import { chargePayout } from '../planned/payout-charges';
 import { refreshPayability } from './payability';
 import { heldValue, payrollGroup } from './held';
+import { withLinePayments } from './paid-lines';
 
 const USD_LIKE = ['USD', 'USDT', 'USDC'];
 
@@ -142,7 +143,7 @@ export const listPayroll = defineService({
     });
 
     const rows = data.items.map(({ item, ...rest }) => {
-      const lines = data.lines
+      const ownLines = data.lines
         .filter((l) => l.line.payrollItemId === item.id)
         .map((l) => {
           const version = effectiveVersion(
@@ -169,6 +170,7 @@ export const listPayroll = defineService({
           a.payoutMethod === item.payoutMethod,
       );
       const acts = data.acts.filter((a) => a.payrollItemId === item.id);
+      const lines = withLinePayments(item, ownLines, adjustments, acts);
       // The act that follows the rest of the payout; an issued one freezes the rate (A-076).
       const restAct = acts.find((a) => a.amountUsd === null) ?? acts.at(-1);
       const currency = item.payoutMethod === 'fiat' ? 'UAH' : 'USD';

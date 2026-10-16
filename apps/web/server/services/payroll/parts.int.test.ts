@@ -145,6 +145,12 @@ describe('a month paid in parts, an act per part (A-083)', () => {
       { periodFrom: '2047-09-17', periodTo: '2047-09-30', amountUsd: null, amountUah: '41500.00' },
     ]);
 
+    // A part split off by amount names no line: the line shows what of it is paid (A-110).
+    const [partly] = (
+      await listPayroll.run(h.ctxFor(finance), { periodId: ids.period })
+    )._unsafeUnwrap();
+    expect(partly?.lines).toMatchObject([{ status: 'payable', paidAmount: '4000.00' }]);
+
     // The paid part keeps 41.5; the rest takes the new rate.
     const rated = await setPayoutRate.run(h.ctxFor(finance), { itemId: ids.item, rate: '42' });
     expect(rated._unsafeUnwrap().totalUah).toBe('208000.00');
@@ -164,7 +170,11 @@ describe('a month paid in parts, an act per part (A-083)', () => {
     const [row] = (
       await listPayroll.run(h.ctxFor(finance), { periodId: ids.period })
     )._unsafeUnwrap();
-    expect(row).toMatchObject({ item: { status: 'paid' }, acts: [{}, {}] });
+    expect(row).toMatchObject({
+      item: { status: 'paid' },
+      acts: [{}, {}],
+      lines: [{ status: 'paid', paidAmount: '5000.00' }],
+    });
   });
 
   it('merges neighbouring draft acts into one act and one period', async () => {

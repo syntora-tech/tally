@@ -1878,6 +1878,7 @@
         "paid": "paid"
       },
       "fundedBy": "Funded by",
+      "linePaid": "paid {amount}",
       "salaryHelp": "A salary paid in parts during the month (planned payments): link a bank payment to each part, no period close needed."
     }
   },
