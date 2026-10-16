@@ -10,6 +10,7 @@ import { createRestAct, mergeActs, splitActByActivity } from '../services/acts';
 import { payItem, setPayoutRate } from '../services/payroll';
 import { adjustClosedPayout, removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
+import { setPayoutPayee } from '../services/payroll/payee';
 import type { ActionResult } from './to-action-result';
 
 export type PayrollFormState = ActionResult<{ id: string; rate?: string }> | null;
@@ -166,6 +167,19 @@ export async function createRestActAction(
 ): Promise<PayrollFormState> {
   const ctx = await requireUserContext();
   const result = await createRestAct.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/payroll');
+  revalidatePath('/acts');
+  return { ok: true, data: { id: result.value.id } };
+}
+
+/** The recipient of a payout chosen after the close (A-113). */
+export async function setPayoutPayeeAction(
+  _prev: PayrollFormState,
+  formData: FormData,
+): Promise<PayrollFormState> {
+  const ctx = await requireUserContext();
+  const result = await setPayoutPayee.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/payroll');
   revalidatePath('/acts');

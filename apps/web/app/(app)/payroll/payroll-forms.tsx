@@ -23,6 +23,7 @@ import { useLabels } from '@/lib/labels';
 import {
   changePayoutMethodAction,
   createRestActAction,
+  setPayoutPayeeAction,
   removePayoutLineAction,
   adjustClosedPayoutAction,
   mergeActsAction,
@@ -705,6 +706,48 @@ export function RateForm({
         {t('approveRate')}
       </Button>
       {error && <span className="text-sm text-destructive">{error.message}</span>}
+    </form>
+  );
+}
+
+/** Who gets a payout whose person had no default recipient at the close (A-113). */
+export function SetPayeeForm({
+  itemId,
+  payees,
+}: {
+  itemId: string;
+  payees: { id: string; label: string }[];
+}) {
+  const t = useTranslations('payDialog');
+  const [state, action, pending] = useToastAction(setPayoutPayeeAction, t('payeeSet'));
+  const error = state && !state.ok ? state.error : null;
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <input type="hidden" name="itemId" value={itemId} />
+      <p className="text-sm text-muted-foreground">{t('payeeHint')}</p>
+      <FormField label={t('payee')} htmlFor="payout-payee" error={error?.fieldErrors?.payeeId}>
+        <NativeSelect
+          id="payout-payee"
+          name="payeeId"
+          required
+          placeholder={t('choosePayee')}
+          options={payees.map((p) => ({ value: p.id, label: p.label }))}
+        />
+      </FormField>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="remember" defaultChecked className="accent-foreground" />
+        {t('rememberPayee')}
+      </label>
+      {error && !error.fieldErrors && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{error.message}</AlertDescription>
+        </Alert>
+      )}
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending}>
+          {t('setPayee')}
+        </Button>
+      </div>
     </form>
   );
 }

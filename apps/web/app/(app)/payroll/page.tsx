@@ -37,6 +37,7 @@ import {
 import { getFormat, getLabels, pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
 import { PayrollV2 } from './payroll-v2';
+import { listPayees } from '@/server/services/payees';
 
 export const generateMetadata = pageTitle('payroll');
 
@@ -263,6 +264,14 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
             .filter((a) => (fiat ? a.currency === 'UAH' : USD_LIKE.includes(a.currency)))
             .map(({ id, label }) => ({ id, label }))
         }
+        payees={(await listPayees.run(ctx, {}))
+          .unwrapOr([])
+          .filter((x) => x.kind !== 'crypto')
+          .sort((a, b) => Number(b.kind === 'fop') - Number(a.kind === 'fop'))
+          .map((x) => ({
+            id: x.id,
+            label: x.personName ? `${x.name} · ${x.personName}` : x.name,
+          }))}
         salaryGroups={salaryGroups}
         chargesOf={chargesOf}
         salaryCandidates={(currency) =>

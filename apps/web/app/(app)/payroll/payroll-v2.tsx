@@ -25,6 +25,7 @@ import {
   PayDialog,
   RateForm,
   RemoveLineForm,
+  SetPayeeForm,
   SplitActForm,
   type PayDialogProps,
 } from './payroll-forms';
@@ -67,6 +68,8 @@ export type PayrollV2Props = {
   salaryGroups: { key: string; personName: string | null; month: string; rows: Planned[] }[];
   chargesOf: (id: string) => Planned[];
   salaryCandidates: (currency: string) => { id: string; label: string }[];
+  /** Recipients for a payout without one (A-113), FOPs first. */
+  payees: { id: string; label: string }[];
 };
 
 const GROUPS: PayrollGroup[] = ['ready', 'waiting', 'paid'];
@@ -252,6 +255,16 @@ export async function PayrollV2(p: PayrollV2Props) {
       .filter((a) => a.status === 'draft' && !a.rateLocked)
       .sort((a, b) => Number(b.isRest) - Number(a.isRest));
     return [
+      i.group !== 'paid' &&
+        i.item.kind === 'person' &&
+        unpaid &&
+        i.acts.length === 0 && {
+          label: t('v2.setPayee'),
+          dialog: {
+            title: `${tp('payee')}: ${nameOf(i)}`,
+            content: <SetPayeeForm itemId={i.item.id} payees={p.payees} />,
+          },
+        },
       step !== null &&
         step !== 'pay' &&
         p.documentOf(i) !== null && {
