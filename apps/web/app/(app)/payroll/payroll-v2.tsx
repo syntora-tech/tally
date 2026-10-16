@@ -215,19 +215,20 @@ export async function PayrollV2(p: PayrollV2Props) {
       );
     }
     const open = i.acts.filter((a) => !a.rateLocked);
-    const target =
-      step === 'issue'
-        ? (open.find((a) => a.status === 'draft') ?? i.acts.at(-1))
-        : open.find((a) => a.status === 'issued' && !a.signed);
-    // Every act left is paid and the act of the rest was voided: a new one is made here (A-111).
+    // Every act left is paid and there is no act of the rest (it was voided): a new one is made
+    // here (A-111) rather than linking to an act that is already issued.
     if (
-      !target &&
       step === 'issue' &&
-      i.item.payoutMethod === 'fiat' &&
+      open.length === 0 &&
+      i.acts.length > 0 &&
       !i.acts.some((a) => a.isRest)
     ) {
       return <CreateRestActButton itemId={i.item.id} />;
     }
+    const target =
+      step === 'issue'
+        ? (open.find((a) => a.status === 'draft') ?? i.acts.at(-1))
+        : open.find((a) => a.status === 'issued' && !a.signed);
     if (!target) return null;
     return (
       <Button
