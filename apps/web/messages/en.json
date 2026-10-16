@@ -448,6 +448,7 @@
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
+      "chooseInvoice": "Tick at least one invoice",
       "notFound": "Allocation not found"
     },
     "documents": {
@@ -2457,6 +2458,7 @@
     "nothingRevenue": "No open invoices to link this receipt to.",
     "nothingExpense": "Nothing fits this expense: no planned payments due in its currency around its date, no unpaid trip reimbursements in UAH, and no open payouts (those take Contractors and Payroll expenses).",
     "amountFor": "Amount for {name}",
+    "rateFor": "Rate for {name}",
     "splitTotal": "Linking {total} of {free} free"
   }
 }

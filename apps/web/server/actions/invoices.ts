@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
 import { runJobsAfterResponse } from '../jobs';
 import { requireUserContext } from '../request-context';
-import { allocateToInvoice, removeAllocation } from '../services/allocations';
+import { allocateToInvoice, allocateToInvoices, removeAllocation } from '../services/allocations';
 import { attachSignedInvoice } from '../services/documents/live';
 import {
   issueInvoice,
@@ -148,6 +148,39 @@ export async function allocatePaymentAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   return done(typeof input.invoiceId === 'string' ? input.invoiceId : '');
+}
+
+const decimal = (v: unknown) =>
+  typeof v === 'string' ? v.replace(/\s/g, '').replace(',', '.') : v;
+
+/** "Link…" on a Ledger row (A-106): one receipt, several invoices; `items` is JSON. */
+export async function allocatePaymentsAction(
+  _prev: InvoiceFormState,
+  formData: FormData,
+): Promise<InvoiceFormState> {
+  const ctx = await requireUserContext();
+  const raw = formData.get('items');
+  let items: unknown;
+  try {
+    items = typeof raw === 'string' ? JSON.parse(raw) : [];
+  } catch {
+    items = [];
+  }
+  const result = await allocateToInvoices.run(ctx, {
+    transactionId: formData.get('transactionId'),
+    items: Array.isArray(items)
+      ? items.map((i: { invoiceId?: unknown; amount?: unknown; fxRate?: unknown }) => ({
+          invoiceId: i.invoiceId,
+          amount: decimal(i.amount),
+          fxRate: decimal(i.fxRate ?? ''),
+        }))
+      : [],
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  for (const id of result.value.invoiceIds) revalidatePath(`/invoices/${id}`);
+  revalidatePath('/invoices');
+  revalidatePath('/ledger');
+  return { ok: true, data: { id: result.value.id } };
 }
 
 export async function removeAllocationAction(

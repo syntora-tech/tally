@@ -1,8 +1,10 @@
+import type { DbTransaction } from '@tally/db';
 import { account, allocation, invoice, posting, transaction } from '@tally/db/schema';
 import { toDecimal } from '@tally/domain';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
+import { inActorScopeAtomic } from '../atomic';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
@@ -52,37 +54,60 @@ export const paymentCandidates = defineService({
     }),
 });
 
+const allocationInput = z.object({
+  invoiceId: z.uuid(),
+  transactionId: z.uuid({ error: 'allocations.chooseTransaction' }),
+  amount: decimalString,
+  fxRate: z.preprocess((v) => (v === '' ? undefined : v), decimalString.optional()),
+});
+
+async function allocateInvoiceIn(tx: DbTransaction, input: z.output<typeof allocationInput>) {
+  const [inv] = await tx.select().from(invoice).where(eq(invoice.id, input.invoiceId));
+  if (!inv) return err(serviceError('not_found', 'invoices.notFound'));
+  if (!toDecimal(input.amount).gt(0)) {
+    return err(
+      serviceError('validation_error', 'field.positive', {
+        amount: ['field.positive'],
+      }),
+    );
+  }
+  const [row] = await tx
+    .insert(allocation)
+    .values({
+      transactionId: input.transactionId,
+      invoiceId: input.invoiceId,
+      amount: input.amount,
+      currency: inv.currency,
+      fxRate: input.fxRate ?? null,
+      fxSource: input.fxRate ? 'manual' : null,
+    })
+    .returning({ id: allocation.id });
+  return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
+}
+
 export const allocateToInvoice = defineService({
   name: 'allocations.toInvoice',
+  input: allocationInput,
+  handler: async (ctx, input) => inActorScope(ctx, (tx) => allocateInvoiceIn(tx, input)),
+});
+
+/** One receipt pays several invoices from its Ledger row: all of them or none. */
+export const allocateToInvoices = defineService({
+  name: 'allocations.toInvoices',
   input: z.object({
-    invoiceId: z.uuid(),
-    transactionId: z.uuid({ error: 'allocations.chooseTransaction' }),
-    amount: decimalString,
-    fxRate: z.preprocess((v) => (v === '' ? undefined : v), decimalString.optional()),
+    transactionId: z.uuid(),
+    items: z
+      .array(allocationInput.omit({ transactionId: true }))
+      .min(1, 'allocations.chooseInvoice')
+      .max(20),
   }),
-  handler: async (ctx, input) =>
-    inActorScope(ctx, async (tx) => {
-      const [inv] = await tx.select().from(invoice).where(eq(invoice.id, input.invoiceId));
-      if (!inv) return err(serviceError('not_found', 'invoices.notFound'));
-      if (!toDecimal(input.amount).gt(0)) {
-        return err(
-          serviceError('validation_error', 'field.positive', {
-            amount: ['field.positive'],
-          }),
-        );
+  handler: async (ctx, { transactionId, items }) =>
+    inActorScopeAtomic(ctx, { dryRun: false }, async (tx) => {
+      for (const item of items) {
+        const done = await allocateInvoiceIn(tx, { ...item, transactionId });
+        if (done.isErr()) return err(done.error);
       }
-      const [row] = await tx
-        .insert(allocation)
-        .values({
-          transactionId: input.transactionId,
-          invoiceId: input.invoiceId,
-          amount: input.amount,
-          currency: inv.currency,
-          fxRate: input.fxRate ?? null,
-          fxSource: input.fxRate ? 'manual' : null,
-        })
-        .returning({ id: allocation.id });
-      return row ? ok(row) : err(serviceError('forbidden', 'general.forbidden'));
+      return ok({ id: transactionId, invoiceIds: items.map((i) => i.invoiceId) });
     }),
 });
 

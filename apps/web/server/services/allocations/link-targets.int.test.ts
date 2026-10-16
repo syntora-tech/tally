@@ -17,7 +17,7 @@ import { intHarness, purgeProtected } from '../../../test/int-helpers';
 import { createTransaction } from '../ledger';
 import { savePlannedExpense } from '../planned';
 import { markPlannedPaid } from '../planned/payments';
-import { allocateToInvoice } from '.';
+import { allocateToInvoice, allocateToInvoices } from '.';
 import { linkTargets } from './link-targets';
 
 const h = intHarness('2036-04-10');
@@ -25,6 +25,34 @@ let finance: Awaited<ReturnType<typeof h.user>>;
 const tag = `LT ${String(Date.now())}`;
 const ids = { company: '', client: '', contract: '', invoice: '', usd: '', uah: '', rule: '' };
 const txIds: string[] = [];
+const extraInvoices: string[] = [];
+
+async function issuedInvoice(total: string, number: string) {
+  const [inv] = await h.db
+    .insert(invoice)
+    .values({
+      clientId: ids.client,
+      contractId: ids.contract,
+      issueDate: '2036-04-02',
+      dueDate: '2036-04-25',
+      total,
+      isLegacy: true,
+    })
+    .returning();
+  const id = inv?.id ?? '';
+  await h.db.insert(invoiceLine).values({
+    invoiceId: id,
+    position: 1,
+    descriptionEn: 'Dev',
+    descriptionUa: 'Розробка',
+    quantity: '1',
+    unitPrice: total,
+    amount: total,
+  });
+  await h.db.update(invoice).set({ status: 'issued', number }).where(eq(invoice.id, id));
+  extraInvoices.push(id);
+  return id;
+}
 
 async function book(type: 'revenue' | 'expense', accountId: string, amount: string, name: string) {
   const [cat] = await h.db
@@ -118,7 +146,7 @@ afterAll(() =>
     await db.delete(transaction).where(inArray(transaction.id, txIds));
     await db.delete(plannedExpense).where(eq(plannedExpense.id, ids.rule));
     await db.delete(account).where(inArray(account.id, [ids.usd, ids.uah]));
-    await purgeProtected(db, { invoiceIds: [ids.invoice] });
+    await purgeProtected(db, { invoiceIds: [ids.invoice, ...extraInvoices] });
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(client).where(eq(client.id, ids.client));
     await db.delete(company).where(eq(company.id, ids.company));
@@ -171,6 +199,45 @@ describe('linkTargets (A-106)', () => {
     expect((await linkTargets.run(ctx, { transactionId: tools }))._unsafeUnwrap().payouts).toEqual(
       [],
     );
+  });
+
+  it('pays several invoices from one receipt, all of them or none', async () => {
+    const ctx = h.ctxFor(finance);
+    const a = await issuedInvoice('400', `${tag}-A`);
+    const b = await issuedInvoice('200', `${tag}-B`);
+    const txId = await book('revenue', ids.usd, '600', 'Client Revenue');
+    const linked = async () =>
+      (await h.db.select().from(allocation).where(eq(allocation.transactionId, txId))).length;
+
+    // B is only 200: the whole batch is refused, A is not left half-done.
+    const over = await allocateToInvoices.run(ctx, {
+      transactionId: txId,
+      items: [
+        { invoiceId: a, amount: '400' },
+        { invoiceId: b, amount: '250' },
+      ],
+    });
+    expect(over.isErr()).toBe(true);
+    expect(await linked()).toBe(0);
+
+    const res = await allocateToInvoices.run(ctx, {
+      transactionId: txId,
+      items: [
+        { invoiceId: a, amount: '400' },
+        { invoiceId: b, amount: '200' },
+      ],
+    });
+    expect(res.isOk()).toBe(true);
+    expect(await linked()).toBe(2);
+    const statuses = await h.db
+      .select({ status: invoice.status })
+      .from(invoice)
+      .where(inArray(invoice.id, [a, b]));
+    expect(statuses.map((r) => r.status)).toEqual(['paid', 'paid']);
+    expect((await linkTargets.run(ctx, { transactionId: txId }))._unsafeUnwrap().free).toBe('0.00');
+
+    const none = await allocateToInvoices.run(ctx, { transactionId: txId, items: [] });
+    expect(none.isErr()).toBe(true);
   });
 
   it('reports an unknown transaction', async () => {

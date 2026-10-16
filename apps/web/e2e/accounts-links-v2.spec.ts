@@ -134,7 +134,15 @@ test('a Ledger expense is linked to its planned payment from the row', async ({ 
 
 test.describe('linking to an invoice and a payout', () => {
   const party = unique('E2E LINK party');
-  const ids = { company: '', client: '', contract: '', invoice: '', person: '', period: '' };
+  const ids = {
+    company: '',
+    client: '',
+    contract: '',
+    invoice: '',
+    invoice2: '',
+    person: '',
+    period: '',
+  };
 
   test.beforeAll(async () => {
     const { db: d, sql: client } = db();
@@ -164,6 +172,17 @@ test.describe('linking to an invoice and a payout', () => {
       await d.execute(
         sql`update public.invoice set status = 'issued', number = ${party} where id = ${ids.invoice}`,
       );
+      const [second] = (await d.execute(sql`
+        insert into public.invoice (client_id, contract_id, issue_date, due_date, total, is_legacy)
+        values (${ids.client}, ${ids.contract}, '2031-05-02', '2031-05-21', 100, true)
+        returning id`)) as unknown as { id: string }[];
+      ids.invoice2 = second?.id ?? '';
+      await d.execute(sql`
+        insert into public.invoice_line (invoice_id, position, description_en, description_ua, quantity, unit_price, amount)
+        values (${ids.invoice2}, 1, 'Dev', 'Розробка', 1, 100, 100)`);
+      await d.execute(
+        sql`update public.invoice set status = 'issued', number = ${`${party}-2`} where id = ${ids.invoice2}`,
+      );
       await d.execute(sql`
         with a as (insert into public.assignment (person_id, is_internal, starts_on)
           values (${ids.person}, true, '2031-01-01') returning id),
@@ -174,7 +193,7 @@ test.describe('linking to an invoice and a payout', () => {
       await d.execute(sql`
         select public.refresh_payroll_item(id) from public.payroll_item where period_id = ${ids.period}`);
       for (const [type, cat, amount, desc] of [
-        ['revenue', 'Client Revenue', 300, `${party} receipt`],
+        ['revenue', 'Client Revenue', 400, `${party} receipt`],
         ['expense', 'Contractors', -250, `${party} payout`],
       ] as const) {
         await d.execute(sql`
@@ -202,8 +221,12 @@ test.describe('linking to an invoice and a payout', () => {
         await tx.execute(sql`delete from public.payroll_line where payroll_item_id in
           (select id from public.payroll_item where period_id = ${ids.period})`);
         await tx.execute(sql`delete from public.payroll_item where period_id = ${ids.period}`);
-        await tx.execute(sql`delete from public.invoice_line where invoice_id = ${ids.invoice}`);
-        await tx.execute(sql`delete from public.invoice where id = ${ids.invoice}`);
+        await tx.execute(
+          sql`delete from public.invoice_line where invoice_id in (${ids.invoice}, ${ids.invoice2})`,
+        );
+        await tx.execute(
+          sql`delete from public.invoice where id in (${ids.invoice}, ${ids.invoice2})`,
+        );
       });
       await d.execute(sql`delete from public.transaction where description like ${`${party}%`}`);
       await d.execute(sql`delete from public.period where id = ${ids.period}`);
@@ -217,21 +240,27 @@ test.describe('linking to an invoice and a payout', () => {
     }
   });
 
-  test('a receipt pays its client invoice from the Ledger row', async ({ page }) => {
+  test('one receipt pays two client invoices from the Ledger row', async ({ page }) => {
     await v2(page);
     await page.goto('/ledger');
     const row = page.getByTestId('ledger-row').filter({ hasText: `${party} receipt` });
     await row.getByTestId('link-transaction').click();
     const link = page.getByRole('dialog');
-    const option = link.getByRole('radio', { name: new RegExp(party) });
-    await expect(link.getByText('Same party')).toBeVisible();
-    await option.check();
-    await expect(link.getByLabel('Amount, USD')).toHaveValue('300.00');
+    await expect(link.getByText('Same party').first()).toBeVisible();
+    await link.getByRole('checkbox', { name: new RegExp(`· ${party}\\s*\\d`) }).check();
+    await link.getByRole('checkbox', { name: new RegExp(`· ${party}-2\\s*\\d`) }).check();
+    await expect(link.getByLabel(`Amount for ${party} · ${party}`, { exact: true })).toHaveValue(
+      '300.00',
+    );
+    await expect(link.getByLabel(`Amount for ${party} · ${party}-2`)).toHaveValue('100.00');
+    await expect(link.getByTestId('split-total')).toContainText('400.00');
     await link.getByRole('button', { name: 'Link', exact: true }).click();
     await expect(link).toHaveCount(0);
     await expect(row.getByTestId('allocation')).toContainText('Allocated');
-    await page.goto(`/invoices/${ids.invoice}`);
-    await expect(page.getByText('Paid', { exact: true }).first()).toBeVisible();
+    for (const id of [ids.invoice, ids.invoice2]) {
+      await page.goto(`/invoices/${id}`);
+      await expect(page.getByText('Paid', { exact: true }).first()).toBeVisible();
+    }
   });
 
   test('a payout expense opens its pay dialog with the transaction chosen', async ({ page }) => {
