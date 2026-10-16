@@ -36,12 +36,15 @@ test.beforeAll(async () => {
     ids.payee = await one(
       sql`insert into public.payee (kind, legal_name_ua, person_id) values ('fop', ${`ФОП ${tag}`}, ${ids.person}) returning id`,
     );
+    await d.execute(
+      sql`insert into public.number_sequence (key, template, next_value) values (${tag}, 'TA-{seq}', 1)`,
+    );
     ids.contract = await one(
-      sql`insert into public.contract (kind, number, company_id, payee_id) values ('fop', ${tag}, ${ids.company}, ${ids.payee}) returning id`,
+      sql`insert into public.contract (kind, number, company_id, payee_id, number_sequence_key) values ('fop', ${tag}, ${ids.company}, ${ids.payee}, ${tag}) returning id`,
     );
     for (const [key, actKey, title, from, to, amount, actDate] of [
       ['tripA', 'actA', `${tag} Sep`, '2055-09-28', '2055-09-30', '6771.72', '2055-10-13'],
-      ['tripB', 'actB', `${tag} Nov`, '2055-11-09', '2055-11-12', '32179.72', '2055-11-13'],
+      ['tripB', 'actB', `${tag} Nov`, '2055-11-09', '2055-11-12', '32179.72', '2055-11-15'],
     ] as const) {
       ids[key] = await one(
         sql`insert into public.trip (title, starts_on, ends_on) values (${title}, ${from}, ${to}) returning id`,
@@ -65,11 +68,22 @@ test.afterAll(async () => {
   const { db: d, sql: client } = db();
   try {
     await d.execute(sql`delete from public.trip where id in (${ids.tripA}, ${ids.tripB})`);
-    await d.execute(sql`delete from public.supplier_act where payee_id = ${ids.payee}`);
+    await d.transaction(async (tx) => {
+      await tx.execute(sql`set local session_replication_role = replica`);
+      await tx.execute(sql`delete from public.job where payload ->> 'actId' = ${ids.actA}`);
+      await tx.execute(sql`create temp table own_docs on commit drop as
+        select document_id as id from public.document_link where entity_id in (${ids.actA}, ${ids.payee})`);
+      await tx.execute(
+        sql`delete from public.document_link where document_id in (select id from own_docs)`,
+      );
+      await tx.execute(sql`delete from public.document where id in (select id from own_docs)`);
+      await tx.execute(sql`delete from public.supplier_act where payee_id = ${ids.payee}`);
+    });
     await d.execute(sql`delete from public.contract where id = ${ids.contract}`);
     await d.execute(sql`delete from public.payee where id = ${ids.payee}`);
     await d.execute(sql`delete from public.person where id = ${ids.person}`);
     await d.execute(sql`delete from public.company where id = ${ids.company}`);
+    await d.execute(sql`delete from public.number_sequence where key = ${tag}`);
   } finally {
     await client.end();
   }
@@ -94,9 +108,15 @@ test('two trip act drafts become one act for both trips', async ({ page }) => {
   await expect(page.getByRole('link', { name: `${tag} Sep` })).toBeVisible();
   await expect(page.getByRole('link', { name: `${tag} Nov` })).toBeVisible();
 
+  // The menu entry that did the merge is gone; issuing must not pop up another one (Void…).
+  await page.getByRole('button', { name: 'Issue the act and assign a number' }).click();
+  await expect(page.getByTestId('act-status')).toHaveText('Active');
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
   await page.getByRole('link', { name: `${tag} Nov` }).click();
   await expect(
-    page.getByTestId('reimbursement').getByRole('link', { name: 'draft act' }),
+    page.getByTestId('reimbursement').getByRole('link', { name: /TA-1/ }),
   ).toHaveAttribute('href', `/acts/${ids.actA}`);
   await page.goto(`/acts/${ids.actB}`);
   await expect(page.getByText(/not found|404/i).first()).toBeVisible();

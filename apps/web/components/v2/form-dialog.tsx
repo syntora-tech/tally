@@ -144,7 +144,9 @@ export type MenuEntry = MenuItem | false | '' | 0 | null | undefined;
 
 /** The ⋯ menu of a row or a page: rare actions, each opening its form in a dialog. */
 export function RowMenu({ label, entries }: { label: string; entries: MenuEntry[] }) {
-  const [opened, setOpened] = useState<number | null>(null);
+  // By label, not position: after a form succeeds the page re-renders with other entries, and an
+  // index would then point at a different action (e.g. "Void…" right after issuing).
+  const [opened, setOpened] = useState<string | null>(null);
   const visible: MenuItem[] = [];
   for (const e of entries) {
     if (!e || (e === 'separator' && (visible.length === 0 || visible.at(-1) === 'separator'))) {
@@ -154,7 +156,12 @@ export function RowMenu({ label, entries }: { label: string; entries: MenuEntry[
   }
   while (visible.at(-1) === 'separator') visible.pop();
   if (!visible.some((e) => e !== 'separator')) return null;
-  const current = opened === null ? undefined : visible[opened];
+  const current = visible.find(
+    (e): e is Extract<MenuItem, { dialog: DialogSpec }> =>
+      e !== 'separator' && 'dialog' in e && e.label === opened,
+  );
+  // The entry went away (its action is done), so nothing stays open to pop up later.
+  if (opened !== null && !current) setOpened(null);
   return (
     <>
       <DropdownMenu>
@@ -179,7 +186,7 @@ export function RowMenu({ label, entries }: { label: string; entries: MenuEntry[
                 key={e.label}
                 variant={e.destructive ? 'destructive' : 'default'}
                 onClick={() => {
-                  setOpened(i);
+                  setOpened(e.label);
                 }}
               >
                 {e.label}
@@ -188,7 +195,7 @@ export function RowMenu({ label, entries }: { label: string; entries: MenuEntry[
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {current && current !== 'separator' && 'dialog' in current && (
+      {current && (
         <FormDialog
           spec={current.dialog}
           open
