@@ -1,6 +1,8 @@
 import {
   company,
   contract,
+  document,
+  documentLink,
   numberSequence,
   payee,
   payrollItem,
@@ -115,15 +117,30 @@ export const setPayoutPayee = defineService({
           await tx
             .insert(numberSequence)
             .values({ key, template, nextValue: input.actNextValue, yearScoped: false });
-          await tx.insert(contract).values({
-            kind: 'fop',
-            number: input.contractNumber,
-            signedOn: input.contractSignedOn ?? null,
-            companyId: co.id,
-            payeeId: chosen.id,
-            currency: 'UAH',
-            numberSequenceKey: key,
-          });
+          const [made] = await tx
+            .insert(contract)
+            .values({
+              kind: 'fop',
+              number: input.contractNumber,
+              signedOn: input.contractSignedOn ?? null,
+              companyId: co.id,
+              payeeId: chosen.id,
+              currency: 'UAH',
+              numberSequenceKey: key,
+            })
+            .returning({ id: contract.id });
+          // The signed contract already filed under the FOP becomes the contract's document.
+          if (made) {
+            await tx.execute(sql`
+              insert into public.document_link (document_id, entity_type, entity_id)
+              select d.id, 'contract', ${made.id}::uuid
+                from public.document d
+                join public.document_link l
+                  on l.document_id = d.id and l.entity_type = 'payee' and l.entity_id = ${chosen.id}
+               where d.type = 'contract' and d.status <> 'void'
+                 and d.number_key = translate(upper(regexp_replace(${input.contractNumber}, '[[:space:]-]', '', 'g')), 'A', 'А')
+              on conflict do nothing`);
+          }
         }
       }
       await tx.update(payrollItem).set({ payeeId: chosen.id }).where(eq(payrollItem.id, item.id));
@@ -181,6 +198,15 @@ export const payoutPayees = defineService({
           name: sql<string>`coalesce(${payee.legalNameUa}, ${payee.legalNameEn})`,
           personName: person.fullName,
           hasContract: sql<boolean>`exists (select 1 from ${contract} c where c.payee_id = ${payee.id} and c.kind = 'fop')`,
+          // A contract filed only as a document (A-114): its number and date start the new contract.
+          contractDoc: sql<{ number: string; date: string | null } | null>`(
+            select json_build_object('number', d.number, 'date', d.doc_date)
+              from ${document} d
+              join ${documentLink} l on l.document_id = d.id
+             where l.entity_type = 'payee' and l.entity_id = ${payee.id}
+               and d.type = 'contract' and d.status <> 'void' and d.number is not null
+             order by d.doc_date desc nulls last, d.created_at desc
+             limit 1)`,
         })
         .from(payee)
         .leftJoin(person, eq(person.id, payee.personId))
@@ -192,6 +218,7 @@ export const payoutPayees = defineService({
           id: r.id,
           fop: r.kind === 'fop',
           hasContract: r.hasContract,
+          contractDoc: r.hasContract ? null : r.contractDoc,
           label: r.personName ? `${r.name} · ${r.personName}` : r.name,
         }))
         .sort((a, b) => Number(b.fop) - Number(a.fop) || a.label.localeCompare(b.label)),

@@ -711,13 +711,21 @@ export function RateForm({
 }
 
 /** Who gets a payout whose person had no default recipient at the close (A-113). */
+export type PayoutPayee = {
+  id: string;
+  label: string;
+  fop: boolean;
+  hasContract: boolean;
+  contractDoc: { number: string; date: string | null } | null;
+};
+
 export function SetPayeeForm({
   itemId,
   payees,
   current = null,
 }: {
   itemId: string;
-  payees: { id: string; label: string; fop: boolean; hasContract: boolean }[];
+  payees: PayoutPayee[];
   current?: string | null;
 }) {
   const t = useTranslations('payDialog');
@@ -725,11 +733,14 @@ export function SetPayeeForm({
   const error = state && !state.ok ? state.error : null;
   // Controlled, so a refused save keeps what was chosen and typed.
   const [payeeId, setPayeeId] = useState(current ?? '');
-  const [number, setNumber] = useState('');
+  // null until typed: the FOP's filed contract document fills them in (A-114).
+  const [typedNumber, setNumber] = useState<string | null>(null);
   const [template, setTemplate] = useState<string | null>(null);
-  const [signedOn, setSignedOn] = useState('');
+  const [typedSignedOn, setSignedOn] = useState<string | null>(null);
   const [nextValue, setNextValue] = useState('1');
   const chosen = payees.find((p) => p.id === payeeId);
+  const number = typedNumber ?? chosen?.contractDoc?.number ?? '';
+  const signedOn = typedSignedOn ?? chosen?.contractDoc?.date ?? '';
   const needsContract = !!chosen && chosen.fop && !chosen.hasContract;
   return (
     <form
@@ -818,7 +829,11 @@ export function SetPayeeForm({
               />
             </FormField>
           </div>
-          <p className="text-xs text-muted-foreground">{t('newContractHint')}</p>
+          <p className="text-xs text-muted-foreground">
+            {chosen.contractDoc
+              ? t('newContractFromDoc', { number: chosen.contractDoc.number })
+              : t('newContractHint')}
+          </p>
         </fieldset>
       )}
       <label className="flex items-center gap-2 text-sm">

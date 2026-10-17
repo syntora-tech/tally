@@ -3,6 +3,8 @@ import {
   assignment,
   company,
   contract,
+  document,
+  documentLink,
   numberSequence,
   payee,
   payrollItem,
@@ -11,7 +13,7 @@ import {
   person,
   supplierAct,
 } from '@tally/db/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { setDefaultPayee } from '../payees';
@@ -33,6 +35,7 @@ const ids = {
   assignment: '',
   period2: '',
   item2: '',
+  doc: '',
 };
 
 beforeAll(async () => {
@@ -84,7 +87,15 @@ beforeAll(async () => {
     status: 'payable',
     fundingSource: 'company',
   });
+  const [doc] = await h.db
+    .insert(document)
+    .values({ type: 'contract', number: NUMBER, docDate: '2093-01-10', title: `Договір ${NUMBER}` })
+    .returning();
+  await h.db
+    .insert(documentLink)
+    .values({ documentId: doc?.id ?? '', entityType: 'payee', entityId: bare?.id ?? '' });
   Object.assign(ids, {
+    doc: doc?.id,
     company: co?.id,
     person: p?.id,
     fop: fop?.id,
@@ -110,6 +121,8 @@ afterAll(() =>
     await db.update(person).set({ defaultPayeeId: null }).where(eq(person.id, ids.person));
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(contract).where(eq(contract.payeeId, ids.bare));
+    await db.delete(documentLink).where(eq(documentLink.documentId, ids.doc));
+    await db.delete(document).where(eq(document.id, ids.doc));
     await db.delete(numberSequence).where(eq(numberSequence.key, `act:${NUMBER}`));
     await db.delete(payee).where(inArray(payee.id, [ids.fop, ids.bare]));
     await db.delete(person).where(eq(person.id, ids.person));
@@ -135,7 +148,11 @@ describe('recipient of a payout chosen after the close (A-113)', () => {
 
   it('creates the contract and act numbering of a FOP without one, then its draft act', async () => {
     const before = (await payoutPayees.run(h.ctxFor(finance), {}))._unsafeUnwrap();
-    expect(before.find((p) => p.id === ids.bare)).toMatchObject({ fop: true, hasContract: false });
+    expect(before.find((p) => p.id === ids.bare)).toMatchObject({
+      fop: true,
+      hasContract: false,
+      contractDoc: { number: NUMBER, date: '2093-01-10' },
+    });
     expect(before.find((p) => p.id === ids.fop)).toMatchObject({ hasContract: true });
 
     const byFinance = await setPayoutPayee.run(h.ctxFor(finance), {
@@ -165,6 +182,11 @@ describe('recipient of a payout chosen after the close (A-113)', () => {
       currency: 'UAH',
       numberSequenceKey: `act:${NUMBER}`,
     });
+    const filed = await h.db
+      .select()
+      .from(documentLink)
+      .where(and(eq(documentLink.documentId, ids.doc), eq(documentLink.entityType, 'contract')));
+    expect(filed.map((l) => l.entityId)).toEqual([made?.id]);
     const [seq] = await h.db
       .select()
       .from(numberSequence)

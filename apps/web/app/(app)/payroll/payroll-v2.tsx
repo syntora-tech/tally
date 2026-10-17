@@ -28,6 +28,7 @@ import {
   SetPayeeForm,
   SplitActForm,
   type PayDialogProps,
+  type PayoutPayee,
 } from './payroll-forms';
 
 type OkOf<T> = T extends Result<infer V, unknown> ? V : never;
@@ -69,7 +70,7 @@ export type PayrollV2Props = {
   chargesOf: (id: string) => Planned[];
   salaryCandidates: (currency: string) => { id: string; label: string }[];
   /** Recipients for a payout without one (A-113), FOPs first. */
-  payees: { id: string; label: string; fop: boolean; hasContract: boolean }[];
+  payees: PayoutPayee[];
 };
 
 const GROUPS: PayrollGroup[] = ['ready', 'waiting', 'paid'];

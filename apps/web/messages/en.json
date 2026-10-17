@@ -1922,6 +1922,7 @@
     "actTemplate": "Act number",
     "actNextValue": "Next act №",
     "newContractHint": "This FOP has no contract in Tally yet: it is created with its act numbering. '{seq}' is the act counter.",
+    "newContractFromDoc": "Number and date come from the contract document {number}: the contract is created from it with its act numbering. '{seq}' is the act counter.",
     "approveRate": "Approve rate",
     "actIssuedRate": "Act {number} issued at this rate",
     "draftAct": "Draft act",

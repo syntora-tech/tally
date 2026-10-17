@@ -7,7 +7,7 @@ import { localEnv, signIn, unique } from './helpers';
 // A-113: a fiat payout of a person without a recipient gets a FOP from its row, and its act;
 // a FOP without a contract gets one with its act numbering in the same dialog.
 const tag = unique('E2E PAYEE');
-const ids = { company: '', period: '', person: '', payee: '', item: '' };
+const ids = { company: '', period: '', person: '', payee: '', item: '', doc: '' };
 
 function db() {
   return createDb(
@@ -47,6 +47,13 @@ test.beforeAll(async () => {
     await d.execute(
       sql`update public.payroll_item set payout_fx_rate = 40, fx_source = 'manual', total_uah = 4000 where id = ${ids.item}`,
     );
+    // The FOP's contract filed only as a document (A-114) fills in the new contract.
+    ids.doc = await one(
+      sql`insert into public.document (type, number, doc_date, title) values ('contract', ${tag}, '2058-01-15', ${`Договір ${tag}`}) returning id`,
+    );
+    await d.execute(
+      sql`insert into public.document_link (document_id, entity_type, entity_id) values (${ids.doc}, 'payee', ${ids.payee})`,
+    );
     // The person got a default after the close (A-114): the dialog starts from it.
     await d.execute(
       sql`update public.person set default_payee_id = ${ids.payee} where id = ${ids.person}`,
@@ -68,6 +75,8 @@ test.afterAll(async () => {
       await tx.execute(
         sql`update public.person set default_payee_id = null where id = ${ids.person}`,
       );
+      await tx.execute(sql`delete from public.document_link where document_id = ${ids.doc}`);
+      await tx.execute(sql`delete from public.document where id = ${ids.doc}`);
       await tx.execute(sql`delete from public.contract where payee_id = ${ids.payee}`);
       await tx.execute(
         sql`delete from public.number_sequence where key in (${`act:${tag} TAKEN`}, ${`act:${tag}`})`,
@@ -93,6 +102,8 @@ test('a payout without a recipient gets a FOP and its act from the row', async (
   await row.getByRole('button', { name: 'Create act' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('Recipient')).toHaveValue(ids.payee);
+  await expect(dialog.getByLabel('Contract number')).toHaveValue(tag);
+  await expect(dialog.getByLabel('Signed on')).toHaveValue('2058-01-15');
   // A refused save keeps the choice and what was typed.
   await dialog.getByLabel('Contract number').fill(`${tag} TAKEN`);
   await dialog.getByRole('button', { name: 'Save recipient' }).click();
