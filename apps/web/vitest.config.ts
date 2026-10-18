@@ -19,6 +19,7 @@ export default defineConfig({
       'e2e/**',
       ...(integration ? [] : ['**/*.int.test.ts']),
     ],
+    globalSetup: integration ? ['./test/int-global-setup.ts'] : [],
     passWithNoTests: true,
     fileParallelism: !integration,
   },

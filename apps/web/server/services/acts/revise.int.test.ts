@@ -66,6 +66,22 @@ const actRow = async () =>
   (await h.db.select().from(supplierAct).where(eq(supplierAct.id, ids.act)))[0];
 
 describe('revise an issued act (A-112)', () => {
+  it('refuses to issue while the company has no requisites for the act', async () => {
+    const [first] = await h.db.execute<{ id: string; legal_code: string }>(
+      sql`select id, legal_code from public.company order by created_at limit 1`,
+    );
+    await h.db.execute(sql`update public.company set legal_code = null where id = ${first?.id}`);
+    try {
+      const res = await issueAct.run(h.ctxFor(finance), { id: ids.act });
+      expect(res._unsafeUnwrapErr().message).toBe('company.actIncomplete');
+      expect((await actRow())?.status).toBe('draft');
+    } finally {
+      await h.db.execute(
+        sql`update public.company set legal_code = ${first?.legal_code ?? null} where id = ${first?.id}`,
+      );
+    }
+  });
+
   it('issues with the dates typed in the draft form', async () => {
     await saveActDraft.run(h.ctxFor(finance), {
       id: ids.act,

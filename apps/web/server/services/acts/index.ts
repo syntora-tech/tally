@@ -959,6 +959,10 @@ export const issueAct = defineService({
       }
       const [co] = await tx.select().from(company).orderBy(asc(company.createdAt)).limit(1);
       if (!co) return err(serviceError('conflict', 'company.missingShort'));
+      // A legal act without the customer's requisites is unusable (spec 7.2 act_fop).
+      if (!co.legalCode || !co.addressUa || !co.directorUa || !co.bankDetailsUa) {
+        return err(serviceError('validation_error', 'company.actIncomplete'));
+      }
       const [numbered] = await tx.execute<{ n: string }>(
         sql`select public.issue_number(${row.contract.numberSequenceKey}, ${row.act.actDate}::date, ${row.contract.number}) as n`,
       );
@@ -1042,6 +1046,10 @@ export const reviseAct = defineService({
       }
       const [co] = await tx.select().from(company).orderBy(asc(company.createdAt)).limit(1);
       if (!co) return err(serviceError('conflict', 'company.missingShort'));
+      // A legal act without the customer's requisites is unusable (spec 7.2 act_fop).
+      if (!co.legalCode || !co.addressUa || !co.directorUa || !co.bankDetailsUa) {
+        return err(serviceError('validation_error', 'company.actIncomplete'));
+      }
       const periodFrom = input.periodFrom ?? null;
       const periodTo = input.periodTo ?? null;
       const previous = act.snapshot as { version?: number } | null;

@@ -1,6 +1,7 @@
 import { createDb } from '@tally/db';
 import { sql } from 'drizzle-orm';
 import { E2E_VIEWER_EMAIL, localEnv } from './helpers';
+import { ensureHouseCompany } from '../test/house-company';
 import { clearMailbox } from './mailpit';
 
 /**
@@ -15,6 +16,7 @@ export default async function globalSetup() {
   );
   try {
     await db.execute(sql`delete from auth.users where email like '%@tally.test'`);
+    await ensureHouseCompany(db);
 
     const url = env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
     const key = env.SUPABASE_SERVICE_ROLE_KEY;

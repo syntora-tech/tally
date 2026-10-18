@@ -291,6 +291,7 @@
     "company": {
       "missing": "Fill in the company details in Settings first",
       "missingShort": "Fill in the company details first",
+      "actIncomplete": "The act is not issued: fill in the company details in Settings — legal code, address (UA), director (UA) and bank details (UA)",
       "nameEn": "Enter the name in English",
       "nameUa": "Enter the name in Ukrainian"
     },
