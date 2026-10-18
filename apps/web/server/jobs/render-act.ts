@@ -1,7 +1,7 @@
 import type { Db } from '@tally/db';
-import { contract, document, payee, supplierAct } from '@tally/db/schema';
+import { contract, document, documentLink, payee, supplierAct } from '@tally/db/schema';
 import { localDateInZone, type LocalDate } from '@tally/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withSystem } from '../db/with-user';
 import type { DocumentRenderer } from '../render/renderers';
@@ -64,7 +64,25 @@ export function renderActHandler(deps: ActRenderDeps): JobHandler {
       db,
       config: { allowedEmails: [] },
     };
+    // A revision (A-112) files the new PDF as the next version of the act's document (A-117).
+    const [previous] = await withSystem(db, 'system:jobs', (tx) =>
+      tx
+        .select({ id: document.id, version: document.version })
+        .from(document)
+        .innerJoin(
+          documentLink,
+          and(
+            eq(documentLink.documentId, document.id),
+            eq(documentLink.entityType, 'supplier_act'),
+            eq(documentLink.entityId, act.id),
+          ),
+        )
+        .where(and(eq(document.type, 'act'), ne(document.status, 'void')))
+        .orderBy(desc(document.version), desc(document.createdAt))
+        .limit(1),
+    );
     const created = await insertDocument(ctx, deps.storage, {
+      ...(previous ? { supersedes: previous } : {}),
       type: 'act',
       title: fileName,
       number: act.number,
@@ -75,6 +93,7 @@ export function renderActHandler(deps: ActRenderDeps): JobHandler {
       links: [
         { entityType: 'payee', entityId: act.payeeId },
         { entityType: 'supplier_act', entityId: act.id },
+        { entityType: 'contract', entityId: act.contractId },
       ],
     });
     await withSystem(db, 'system:jobs', async (tx) => {
@@ -82,6 +101,9 @@ export function renderActHandler(deps: ActRenderDeps): JobHandler {
         .select({ key: document.driveFileId })
         .from(document)
         .where(eq(document.id, created.id));
+      if (previous) {
+        await tx.update(document).set({ status: 'void' }).where(eq(document.id, previous.id));
+      }
       await tx
         .update(supplierAct)
         .set({ pdfFileId: doc?.key ?? null, gdocFileId: out.sourceFileId })

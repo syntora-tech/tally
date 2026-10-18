@@ -1,8 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import { auditLog, company, contract, numberSequence, payee, supplierAct } from '@tally/db/schema';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  auditLog,
+  company,
+  contract,
+  document,
+  documentLink,
+  numberSequence,
+  payee,
+  supplierAct,
+} from '@tally/db/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { renderActHandler } from '../../jobs/render-act';
+import { HtmlRenderer } from '../../render/renderers';
+import { LocalStorage } from '../../storage/local-storage';
 import { issueAct, reviseAct, saveActDraft } from '.';
 
 const h = intHarness();
@@ -10,6 +25,7 @@ let finance: Awaited<ReturnType<typeof h.user>>;
 let viewer: Awaited<ReturnType<typeof h.user>>;
 const SEQUENCE = `act:REV-${randomUUID().slice(0, 8)}`;
 const ids = { company: '', payee: '', contract: '', act: '' };
+let root = '';
 const reason = 'Dates agreed with the FOP';
 
 beforeAll(async () => {
@@ -55,6 +71,10 @@ afterAll(() =>
       await tx.execute(sql`delete from public.job where payload ->> 'actId' = ${ids.act}`);
       await tx.delete(supplierAct).where(eq(supplierAct.id, ids.act));
     });
+    await db.execute(
+      sql`delete from public.document where id in (select document_id from public.document_link where entity_type = 'supplier_act' and entity_id = ${ids.act})`,
+    );
+    if (root) await rm(root, { recursive: true, force: true });
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(payee).where(eq(payee.id, ids.payee));
     await db.delete(company).where(eq(company.id, ids.company));
@@ -147,6 +167,40 @@ describe('revise an issued act (A-112)', () => {
       sql`select count(*)::int as n from public.job where payload ->> 'actId' = ${ids.act}`,
     );
     expect(job?.n).toBeGreaterThanOrEqual(2);
+  });
+
+  it('files the regenerated PDF as the next version of the act document (A-117)', async () => {
+    root = await mkdtemp(join(tmpdir(), 'tally-revise-'));
+    const render = renderActHandler({
+      renderer: new HtmlRenderer(),
+      storage: new LocalStorage(root),
+      templateId: undefined,
+    });
+    await render({ actId: ids.act }, h.db);
+    await reviseAct.run(h.ctxFor(finance), {
+      id: ids.act,
+      actDate: '2091-04-27',
+      periodFrom: '2091-04-01',
+      periodTo: '2091-04-27',
+      reason: 'Company requisites filled in',
+    });
+    await render({ actId: ids.act }, h.db);
+    const docs = await h.db
+      .select({ doc: document, links: sql<string[]>`array_agg(${documentLink.entityType})` })
+      .from(document)
+      .innerJoin(documentLink, eq(documentLink.documentId, document.id))
+      .where(
+        sql`${document.id} in (select document_id from public.document_link where entity_type = 'supplier_act' and entity_id = ${ids.act})`,
+      )
+      .groupBy(document.id)
+      .orderBy(document.version);
+    expect(docs.map((d) => [d.doc.version, d.doc.status])).toEqual([
+      [1, 'void'],
+      [2, 'issued'],
+    ]);
+    expect(docs[1]?.doc.supersedesId).toBe(docs[0]?.doc.id);
+    expect(docs[1]?.links).toContain('contract');
+    expect((await actRow())?.pdfFileId).toBe(docs[1]?.doc.driveFileId);
   });
 
   it('keeps the year of the number, a working day and an unsigned act', async () => {
