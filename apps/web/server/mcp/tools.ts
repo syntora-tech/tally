@@ -675,7 +675,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'delete_documents',
     title: 'Delete documents',
     description:
-      'Permanently deletes up to 200 documents uploaded by mistake, by id, with all their links; a newer version of a deleted document moves to the nearest surviving predecessor. The file goes to the Drive trash (restorable there for 30 days) unless another document uses it (file kept_shared); file trash_failed means the row is gone but the file must be trashed by hand. Files Tally generated and signed copies of invoices/acts are refused. All-or-nothing; errors keyed "ids.<index>". Only on the owner\'s explicit request; always run dryRun first and show the owner what will be deleted.',
+      'Permanently deletes up to 200 documents uploaded by mistake, by id, with all their links; a newer version of a deleted document moves to the nearest surviving predecessor. The file goes to the Drive trash (restorable there for 30 days) unless another document uses it (file kept_shared); file trash_failed means the row is gone but the file must be trashed by hand. Signed copies and the current generated file of an invoice/act are refused; a generated file a newer one of the same act or invoice replaced may be deleted. All-or-nothing; errors keyed "ids.<index>". Only on the owner\'s explicit request; always run dryRun first and show the owner what will be deleted.',
     kind: 'write',
     destructive: true,
     service: (deps: ToolDeps) => documentAgentServices(deps.storage).deleteDocuments,

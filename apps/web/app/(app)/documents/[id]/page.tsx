@@ -10,7 +10,8 @@ import { ALL_ROLES, FINANCE_ROLES } from '@/lib/navigation';
 import { unlinkDocumentAction } from '@/server/actions/documents';
 import { requireRole } from '@/server/request-context';
 import { getDocument, linkTargets } from '@/server/services/documents/registry';
-import { EditDocumentForm, LinkForm } from './document-actions';
+import { documentReplaced } from '@/server/services/documents/agent';
+import { DeleteReplacedForm, EditDocumentForm, LinkForm } from './document-actions';
 import { getTranslations } from 'next-intl/server';
 import { getFormat, getLabels, getLocalizeText, pageTitle } from '@/server/i18n';
 import { getUiPrefs } from '@/server/ui-prefs';
@@ -29,6 +30,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const { document: d, links, supersededById, package: pkg, parts } = result.value;
   const isFinance = FINANCE_ROLES.includes(ctx.actor.role);
   const targets = isFinance ? (await linkTargets.run(ctx, {}))._unsafeUnwrap() : null;
+  const replaced = isFinance && (await documentReplaced.run(ctx, { id })).unwrapOr(false);
   const [t, tc, fmt, { DOC_STATUS_LABELS, DOCUMENT_TYPE_LABELS }, localize] = await Promise.all([
     getTranslations('documentCard'),
     getTranslations('common'),
@@ -74,6 +76,15 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             .filter(Boolean)
             .join(' · ')}
         >
+          {replaced && (
+            <DialogButton
+              variant="outline"
+              title={t('deleteReplacedTitle')}
+              content={<DeleteReplacedForm id={d.id} />}
+            >
+              {t('deleteReplaced')}
+            </DialogButton>
+          )}
           {isFinance && (
             <DialogButton variant="outline" title={t('edit')} wide content={editForm}>
               {tc('edit')}

@@ -128,6 +128,46 @@ async function systemOwned(tx: DbTransaction, ids: string[]): Promise<Set<string
   return new Set(rows.map((r) => r.id));
 }
 
+/**
+ * Generated files a newer one of the same act or invoice replaced (A-118): no longer the file of
+ * record, so they may be deleted. Never a signed copy, the current file of its act or invoice, or
+ * the PDF of an earlier client invoice revision (that is the invoice's history).
+ */
+export async function replacedGenerated(tx: DbTransaction, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await tx.execute<{ id: string }>(sql`
+    select d.id from public.document d
+     where d.id in (${sql.join(
+       ids.map((id) => sql`${id}::uuid`),
+       sql`, `,
+     )})
+       and d.signed_at is null
+       and not exists (select 1 from public.supplier_act a
+                        where a.signed_document_id = d.id or a.pdf_file_id = d.drive_file_id)
+       and not exists (select 1 from public.invoice i where i.pdf_file_id = d.drive_file_id)
+       and not exists (select 1 from public.invoice_revision r where r.pdf_file_id = d.drive_file_id)
+       and not exists (select 1 from public.contractor_invoice c
+                        where c.document_id = d.id or c.signed_document_id = d.id
+                           or c.pdf_file_id = d.drive_file_id)
+       and (exists (select 1 from public.document n where n.supersedes_id = d.id)
+            or exists (select 1 from public.document_link l
+                         join public.document_link l2
+                           on l2.entity_type = l.entity_type and l2.entity_id = l.entity_id
+                          and l2.document_id <> l.document_id
+                         join public.document n
+                           on n.id = l2.document_id and n.type = d.type and n.created_at > d.created_at
+                        where l.document_id = d.id and l.entity_type in ('supplier_act', 'invoice')))`);
+  return new Set([...rows].map((r) => r.id));
+}
+
+/** Whether one document is a replaced generated file the UI may offer to delete (A-118). */
+export const documentReplaced = defineService({
+  name: 'documents.replaced',
+  input: z.object({ id: z.uuid() }),
+  handler: async (ctx, { id }) =>
+    ok(await inActorScope(ctx, async (tx) => (await replacedGenerated(tx, [id])).has(id))),
+});
+
 type DeletedDocument = {
   id: string;
   type: string;
@@ -390,13 +430,14 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
           })
           .from(document)
           .where(inArray(document.id, ids));
+        const replaced = await replacedGenerated(tx, ids);
         const locked = await systemOwned(tx, ids);
         const byId = new Map(rows.map((r) => [r.id, r]));
         const errors: Problems = {};
         for (const [index, id] of input.ids.entries()) {
           const key = `ids.${String(index)}`;
           if (!byId.has(id)) errors[key] = ['documents.notFound'];
-          else if (locked.has(id)) errors[key] = ['documents.systemOwned'];
+          else if (locked.has(id) && !replaced.has(id)) errors[key] = ['documents.systemOwned'];
         }
         if (Object.keys(errors).length) return failed(errors);
 
@@ -623,7 +664,24 @@ export function documentAgentServices(getStorage: () => DocumentStorage) {
     },
   });
 
-  return { addDocuments, getDocumentForAgent, deleteDocuments, splitDocument };
+  /** The UI's delete (A-118): only a generated file a newer one replaced. */
+  const deleteReplacedDocument = defineService({
+    name: 'documents.deleteReplaced',
+    input: z.object({ id: z.uuid() }),
+    handler: async (ctx, { id }) => {
+      const replaced = await inActorScope(ctx, (tx) => replacedGenerated(tx, [id]));
+      if (!replaced.has(id)) return err(serviceError('conflict', 'documents.notReplaced'));
+      return deleteDocuments.run(ctx, { ids: [id], dryRun: false });
+    },
+  });
+
+  return {
+    addDocuments,
+    getDocumentForAgent,
+    deleteDocuments,
+    deleteReplacedDocument,
+    splitDocument,
+  };
 }
 
 const documentChange = z.object({

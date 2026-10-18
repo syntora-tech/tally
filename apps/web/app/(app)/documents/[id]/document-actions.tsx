@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toOptions, useLabels } from '@/lib/labels';
 import {
+  deleteReplacedDocumentAction,
   linkDocumentAction,
   updateDocumentAction,
   type UploadState,
@@ -93,6 +94,26 @@ export function EditDocumentForm({ doc }: { doc: DocumentMeta }) {
       <Button type="submit" size="sm" disabled={pending} className="self-start">
         {tc('save')}
       </Button>
+    </form>
+  );
+}
+
+export function DeleteReplacedForm({ id }: { id: string }) {
+  const [state, action, pending] = useActionState<UploadState, FormData>(
+    deleteReplacedDocumentAction,
+    null,
+  );
+  const t = useTranslations('documentCard');
+  useToast(state, t('deleted'));
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-sm text-muted-foreground">{t('deleteReplacedHint')}</p>
+      <div className="flex justify-end border-t pt-4">
+        <Button type="submit" variant="destructive" disabled={pending}>
+          {t('deleteReplacedSubmit')}
+        </Button>
+      </div>
     </form>
   );
 }

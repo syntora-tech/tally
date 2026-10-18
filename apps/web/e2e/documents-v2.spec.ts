@@ -179,3 +179,37 @@ test('v2 act: generate or my own PDF, then the signing step', async ({ page }) =
   await page.getByRole('menuitem', { name: 'Change dates…' }).click();
   await expect(page.getByRole('dialog').getByLabel('Period from')).toHaveValue('2054-01-12');
 });
+
+test('v2 document: a generated file a newer one replaced can be deleted (A-118)', async ({
+  page,
+}) => {
+  const [old, current] = await run(async (db) => {
+    const one = async (q: ReturnType<typeof sql>) =>
+      ((await db.execute(q)) as unknown as { id: string }[])[0]?.id ?? '';
+    const first = await one(
+      sql`insert into public.document (type, title, number) values ('act', ${`${tag} old PDF`}, ${tag}) returning id`,
+    );
+    const next = await one(
+      sql`insert into public.document (type, title, number, version, supersedes_id) values ('act', ${`${tag} new PDF`}, ${tag}, 2, ${first}) returning id`,
+    );
+    return [first, next];
+  });
+  try {
+    await v2(page);
+    await page.goto(`/documents/${current}`);
+    await expect(page.getByRole('heading', { name: `${tag} new PDF` })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete…' })).toHaveCount(0);
+    await page.goto(`/documents/${old}`);
+    await page.getByRole('button', { name: 'Delete…' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete document' }).click();
+    await expect(page).toHaveURL(/\/documents$/);
+    const left = await run((db) =>
+      db.execute(sql`select id from public.document where id in (${old}, ${current})`),
+    );
+    expect([...left].map((r) => r.id)).toEqual([current]);
+  } finally {
+    await run((db) =>
+      db.execute(sql`delete from public.document where id in (${old}, ${current})`),
+    );
+  }
+});

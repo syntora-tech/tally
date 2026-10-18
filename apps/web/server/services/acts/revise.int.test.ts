@@ -12,10 +12,11 @@ import {
   payee,
   supplierAct,
 } from '@tally/db/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { renderActHandler } from '../../jobs/render-act';
+import { documentAgentServices } from '../documents/agent';
 import { HtmlRenderer } from '../../render/renderers';
 import { LocalStorage } from '../../storage/local-storage';
 import { issueAct, reviseAct, saveActDraft } from '.';
@@ -211,6 +212,26 @@ describe('revise an issued act (A-112)', () => {
     expect([docs[0]?.doc.id, docs[1]?.doc.id]).toContain(current?.doc.supersedesId);
     expect(current?.links).toContain('contract');
     expect((await actRow())?.pdfFileId).toBe(current?.doc.driveFileId);
+
+    // A-118: the replaced files may be deleted, the act's current file may not.
+    const { deleteReplacedDocument } = documentAgentServices(() => new LocalStorage(root));
+    const refused = await deleteReplacedDocument.run(h.ctxFor(finance), {
+      id: current?.doc.id ?? '',
+    });
+    expect(refused._unsafeUnwrapErr().message).toBe('documents.notReplaced');
+    for (const old of docs.slice(0, 2)) {
+      (await deleteReplacedDocument.run(h.ctxFor(finance), { id: old.doc.id }))._unsafeUnwrap();
+    }
+    const left = await h.db
+      .select({ id: document.id })
+      .from(document)
+      .where(
+        inArray(
+          document.id,
+          docs.map((d) => d.doc.id),
+        ),
+      );
+    expect(left.map((d) => d.id)).toEqual([current?.doc.id]);
   });
 
   it('keeps the year of the number, a working day and an unsigned act', async () => {

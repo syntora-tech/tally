@@ -475,6 +475,7 @@
       "targetMissing": "{type} {id} not found",
       "alreadySuperseded": "This document already has a newer version",
       "versionType": "A new version must have the same document type",
+      "notReplaced": "Only a generated file a newer one of the same act or invoice replaced can be deleted",
       "systemOwned": "Tally generated this document or it is a signed copy; it cannot be changed here",
       "systemLink": "The link of a generated or signed invoice/act file cannot be removed",
       "nothingToChange": "Nothing to change: send at least one field",
@@ -1326,6 +1327,11 @@
     "historical": "Historical document (before Tally): not shown in the inbox or checks"
   },
   "documentCard": {
+    "deleteReplaced": "Delete…",
+    "deleteReplacedTitle": "Delete the outdated file",
+    "deleteReplacedHint": "Tally generated this file, but a newer file of the same act or invoice replaced it. The document leaves the registry and the file goes to the Google Drive trash (restorable there for 30 days).",
+    "deleteReplacedSubmit": "Delete document",
+    "deleted": "Document deleted",
     "of": "of {date}",
     "version": "version {version}",
     "file": "File",

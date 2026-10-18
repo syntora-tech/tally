@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formDataToObject } from '@/lib/form-data';
 import { requireUserContext } from '../request-context';
-import { createDocument, uploadCv } from '../services/documents/live';
+import { createDocument, deleteReplacedDocument, uploadCv } from '../services/documents/live';
 import { linkDocument, unlinkDocument, updateDocument } from '../services/documents/registry';
 import type { ActionResult } from './to-action-result';
 
@@ -69,4 +69,16 @@ export async function unlinkDocumentAction(formData: FormData): Promise<void> {
   const ctx = await requireUserContext();
   const result = await unlinkDocument.run(ctx, formDataToObject(formData));
   if (result.isOk()) revalidatePath(`/documents/${result.value.id}`);
+}
+
+export async function deleteReplacedDocumentAction(
+  _prev: UploadState,
+  formData: FormData,
+): Promise<UploadState> {
+  const ctx = await requireUserContext();
+  const id = formData.get('id');
+  const result = await deleteReplacedDocument.run(ctx, { id });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/documents');
+  redirect('/documents');
 }
