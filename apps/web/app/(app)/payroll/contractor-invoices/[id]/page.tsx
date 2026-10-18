@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { AuditHistory } from '@/components/audit-history';
 import { AutoRefresh } from '@/components/auto-refresh';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
@@ -41,7 +42,7 @@ export default async function ContractorInvoicePage({
   const { id } = await params;
   const result = await getContractorInvoice.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { invoice: inv, payeeName, contractNumber, personName, month } = result.value;
+  const { invoice: inv, payeeName, contractNumber, personName, month, payout } = result.value;
   const draft = inv.status === 'draft';
   const rendering =
     inv.status === 'issued' &&
@@ -61,6 +62,8 @@ export default async function ContractorInvoicePage({
   if (v2) {
     const tc = await getTranslations('common');
     const signed = Boolean(inv.signedAt);
+    const paid = payout?.status === 'paid';
+    const payHref = payout ? `/payroll?period=${payout.periodId}&pay=${payout.itemId}` : null;
     return (
       <div className="flex flex-col gap-5">
         <PageHeader
@@ -116,7 +119,7 @@ export default async function ContractorInvoicePage({
         {inv.status !== 'void' && (
           <Steps
             label={t('v2.flowLabel')}
-            current={draft ? 0 : signed ? 2 : 1}
+            current={draft ? 0 : !signed ? 1 : paid ? 3 : 2}
             steps={[t('v2.steps.document'), t('v2.steps.signature'), t('v2.steps.payment')]}
           />
         )}
@@ -191,6 +194,39 @@ export default async function ContractorInvoicePage({
                       <SignContractorInvoiceForm id={inv.id} />
                     </>
                   )}
+                </Panel>
+              )}
+              {inv.status === 'issued' && signed && payout && (
+                <Panel
+                  title={t('v2.paymentTitle')}
+                  emphasis={!paid}
+                  action={
+                    <Button
+                      size="sm"
+                      variant={paid ? 'outline' : 'default'}
+                      render={<Link href={payHref ?? '/payroll'} />}
+                    >
+                      {paid ? t('v2.openPayout') : t('v2.pay')}
+                    </Button>
+                  }
+                >
+                  <div data-testid="contractor-invoice-payment" className="flex flex-col gap-2">
+                    {payout.payments.length > 0 && (
+                      <Status tone={paid ? 'success' : 'warning'}>
+                        {paid ? t('v2.paid') : t('v2.partlyPaid')}
+                      </Status>
+                    )}
+                    {payout.payments.map((pm) => (
+                      <Link
+                        key={`${pm.transactionId}-${pm.amount}`}
+                        className="text-link hover:underline"
+                        href={`/ledger/${pm.transactionId}/edit`}
+                      >
+                        {fmt.date(pm.occurredOn)} · {fmt.amount(pm.amount, pm.currency)}
+                      </Link>
+                    ))}
+                    {!paid && <p className="text-muted-foreground">{t('v2.unpaidHint')}</p>}
+                  </div>
                 </Panel>
               )}
               <AuditHistory ctx={ctx} tableName="contractor_invoice" rowId={inv.id} />

@@ -1,5 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import {
+  allocation,
   company,
   contract,
   contractAnnex,
@@ -10,6 +11,7 @@ import {
   period,
   person,
   timesheet,
+  transaction,
 } from '@tally/db/schema';
 import { endOfMonth, roundHalfUp, sum, type LocalDate } from '@tally/domain';
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
@@ -318,14 +320,16 @@ export const getContractorInvoice = defineService({
   name: 'contractorInvoices.get',
   input: z.object({ id: z.uuid() }),
   handler: async (ctx, { id }) => {
-    const [row] = await inActorScope(ctx, (tx) =>
-      tx
+    const found = await inActorScope(ctx, async (tx) => {
+      const [row] = await tx
         .select({
           invoice: contractorInvoice,
           payeeName,
           contractNumber: contract.number,
           personName: person.fullName,
           month: period.month,
+          payoutStatus: payrollItem.status,
+          periodId: payrollItem.periodId,
         })
         .from(contractorInvoice)
         .innerJoin(payee, eq(payee.id, contractorInvoice.payeeId))
@@ -333,9 +337,32 @@ export const getContractorInvoice = defineService({
         .leftJoin(payrollItem, eq(payrollItem.id, contractorInvoice.payrollItemId))
         .leftJoin(person, eq(person.id, payrollItem.personId))
         .leftJoin(period, eq(period.id, payrollItem.periodId))
-        .where(eq(contractorInvoice.id, id)),
-    );
-    return row ? ok(row) : err(serviceError('not_found', 'contractorInvoices.notFound'));
+        .where(eq(contractorInvoice.id, id));
+      if (!row) return null;
+      // The payment step of the invoice (A-116): what paid its payout, from the Ledger.
+      const payments = row.invoice.payrollItemId
+        ? await tx
+            .select({
+              transactionId: transaction.id,
+              occurredOn: transaction.occurredOn,
+              amount: allocation.amount,
+              currency: allocation.currency,
+            })
+            .from(allocation)
+            .innerJoin(transaction, eq(transaction.id, allocation.transactionId))
+            .where(eq(allocation.payrollItemId, row.invoice.payrollItemId))
+            .orderBy(asc(transaction.occurredOn))
+        : [];
+      const { payoutStatus, periodId, ...rest } = row;
+      return {
+        ...rest,
+        payout:
+          row.invoice.payrollItemId && periodId && payoutStatus
+            ? { itemId: row.invoice.payrollItemId, periodId, status: payoutStatus, payments }
+            : null,
+      };
+    });
+    return found ? ok(found) : err(serviceError('not_found', 'contractorInvoices.notFound'));
   },
 });
 

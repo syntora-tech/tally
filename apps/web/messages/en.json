@@ -2477,6 +2477,12 @@
     "signedLink": "signed link",
     "signedCopy": "signed copy",
     "v2": {
+      "paymentTitle": "Payment",
+      "paid": "Paid",
+      "partlyPaid": "Partly paid",
+      "unpaidHint": "The invoice is signed. Pay it on the payroll page or link a payment to the payout in the Ledger.",
+      "pay": "Pay",
+      "openPayout": "Open payout",
       "flowLabel": "Invoice state",
       "steps": {
         "document": "Document",

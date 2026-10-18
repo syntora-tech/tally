@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
+  account,
+  allocation,
+  category,
   company,
   contract,
   contractorInvoice,
@@ -8,6 +11,8 @@ import {
   payrollItem,
   period,
   person,
+  posting,
+  transaction,
 } from '@tally/db/schema';
 import type { LocalDate } from '@tally/domain';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -17,6 +22,7 @@ import { reopenPeriod } from '../periods';
 import {
   deleteContractorInvoiceDraft,
   draftContractorInvoice,
+  getContractorInvoice,
   issueContractorInvoice,
   rerenderContractorInvoice,
   listContractorInvoices,
@@ -36,6 +42,8 @@ const ids = {
   period: '',
   items: [] as string[],
   fopItem: '',
+  account: '',
+  tx: '',
 };
 
 beforeAll(async () => {
@@ -112,6 +120,8 @@ afterAll(async () =>
       await tx.execute(sql`set local session_replication_role = replica`);
       await tx.delete(contractorInvoice).where(eq(contractorInvoice.payeeId, ids.payee));
     });
+    if (ids.tx) await db.delete(transaction).where(eq(transaction.id, ids.tx));
+    if (ids.account) await db.delete(account).where(eq(account.id, ids.account));
     await db.delete(job).where(sql`${job.kind} = 'render_contractor_invoice'`);
     await db.delete(payrollItem).where(eq(payrollItem.periodId, ids.period));
     await db.delete(period).where(eq(period.id, ids.period));
@@ -203,6 +213,61 @@ describe('contractor invoices (A-090)', () => {
     expect((await deleteContractorInvoiceDraft.run(ctx, { id }))._unsafeUnwrapErr().message).toBe(
       'contractorInvoices.draftOnly',
     );
+  });
+
+  it('shows the payout of the invoice and the payments that paid it (A-116)', async () => {
+    const ctx = h.ctxFor(finance);
+    const [issued] = (
+      await listContractorInvoices.run(ctx, { payeeId: ids.payee, status: 'issued' })
+    )._unsafeUnwrap().items;
+    const before = (await getContractorInvoice.run(ctx, { id: issued?.id ?? '' }))._unsafeUnwrap();
+    expect(before.payout).toMatchObject({
+      itemId: ids.items[0],
+      periodId: ids.period,
+      payments: [],
+    });
+    expect(before.payout?.status).not.toBe('paid');
+
+    const [acc] = await h.db
+      .insert(account)
+      .values({
+        name: `ci ${randomUUID()}`,
+        kind: 'bank',
+        currency: 'USD',
+        openingDate: '2026-10-01',
+      })
+      .returning();
+    ids.account = acc?.id ?? '';
+    const [cat] = await h.db.select().from(category).where(eq(category.txType, 'expense')).limit(1);
+    const [item] = await h.db
+      .select()
+      .from(payrollItem)
+      .where(eq(payrollItem.id, ids.items[0] ?? ''));
+    const total = item?.totalUsd ?? '0';
+    ids.tx = await h.db.transaction(async (tx) => {
+      const [t] = await tx
+        .insert(transaction)
+        .values({ occurredOn: '2026-10-18', type: 'expense', categoryId: cat?.id ?? '' })
+        .returning();
+      await tx.insert(posting).values({
+        transactionId: t?.id ?? '',
+        accountId: ids.account,
+        amount: '-3000',
+        currency: 'USD',
+      });
+      await tx.insert(allocation).values({
+        transactionId: t?.id ?? '',
+        amount: total,
+        currency: 'USD',
+        payrollItemId: ids.items[0] ?? '',
+      });
+      return t?.id ?? '';
+    });
+    const after = (await getContractorInvoice.run(ctx, { id: issued?.id ?? '' }))._unsafeUnwrap();
+    expect(after.payout).toMatchObject({
+      status: 'paid',
+      payments: [{ transactionId: ids.tx, occurredOn: '2026-10-18', amount: total }],
+    });
   });
 
   it('numbers a second invoice of the same day with /1 and refuses a taken number', async () => {

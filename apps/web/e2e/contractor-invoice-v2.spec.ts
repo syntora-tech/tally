@@ -107,4 +107,19 @@ test('v2 contractor invoice: issued from its panel, the PDF regenerated from ⋯
   await page.getByRole('dialog').getByRole('button', { name: 'Regenerate PDF' }).click();
   await expect(page.getByText('PDF queued for regeneration')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Signed (A-116): the payment step says what to do and leads to the payout's pay dialog.
+  const { db: d, sql: client } = db();
+  try {
+    await d.execute(
+      sql`update public.contractor_invoice set signed_at = now(), signed_url = 'https://example.com/s' where payroll_item_id = ${ids.item}`,
+    );
+  } finally {
+    await client.end();
+  }
+  await page.reload();
+  const payment = page.getByRole('region', { name: 'Payment' });
+  await expect(payment).toContainText('The invoice is signed');
+  await payment.getByRole('link', { name: 'Pay' }).click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: /^Pay: / })).toBeVisible();
 });

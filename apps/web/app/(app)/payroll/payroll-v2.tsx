@@ -53,7 +53,7 @@ export type PayrollV2Props = {
   periodId: string;
   tab: string | undefined;
   /** `?pay=<item>&tx=<transaction>` from a Ledger row: that payout's dialog opens on load. */
-  linkPay: { itemId: string; transactionId: string } | null;
+  linkPay: { itemId: string; transactionId?: string } | null;
   isOwner: boolean;
   today: string;
   contractorInvoices: ContractorInvoice[];

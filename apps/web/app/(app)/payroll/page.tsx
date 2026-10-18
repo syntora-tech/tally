@@ -244,8 +244,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
         periodId={periodId}
         tab={typeof params.tab === 'string' ? params.tab : undefined}
         linkPay={
-          typeof params.pay === 'string' && typeof params.tx === 'string'
-            ? { itemId: params.pay, transactionId: params.tx }
+          typeof params.pay === 'string'
+            ? {
+                itemId: params.pay,
+                transactionId: typeof params.tx === 'string' ? params.tx : undefined,
+              }
             : null
         }
         isOwner={isOwner}
