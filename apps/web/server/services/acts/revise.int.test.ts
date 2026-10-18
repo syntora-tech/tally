@@ -177,6 +177,14 @@ describe('revise an issued act (A-112)', () => {
       templateId: undefined,
     });
     await render({ actId: ids.act }, h.db);
+    // A duplicate filed before versioning existed is voided too.
+    const [dup] = await h.db
+      .insert(document)
+      .values({ type: 'act', title: 'Duplicate act PDF', number: 'dup' })
+      .returning();
+    await h.db
+      .insert(documentLink)
+      .values({ documentId: dup?.id ?? '', entityType: 'supplier_act', entityId: ids.act });
     await reviseAct.run(h.ctxFor(finance), {
       id: ids.act,
       actDate: '2091-04-27',
@@ -196,11 +204,13 @@ describe('revise an issued act (A-112)', () => {
       .orderBy(document.version);
     expect(docs.map((d) => [d.doc.version, d.doc.status])).toEqual([
       [1, 'void'],
+      [1, 'void'],
       [2, 'issued'],
     ]);
-    expect(docs[1]?.doc.supersedesId).toBe(docs[0]?.doc.id);
-    expect(docs[1]?.links).toContain('contract');
-    expect((await actRow())?.pdfFileId).toBe(docs[1]?.doc.driveFileId);
+    const current = docs[2];
+    expect([docs[0]?.doc.id, docs[1]?.doc.id]).toContain(current?.doc.supersedesId);
+    expect(current?.links).toContain('contract');
+    expect((await actRow())?.pdfFileId).toBe(current?.doc.driveFileId);
   });
 
   it('keeps the year of the number, a working day and an unsigned act', async () => {
