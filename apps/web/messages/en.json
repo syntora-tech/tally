@@ -2584,7 +2584,7 @@
     "none": "No key yet — AI features are hidden.",
     "replace": "Replace with a new key",
     "label": "Anthropic API key",
-    "hint": "console.anthropic.com → API keys. A Claude Code subscription token (sk-ant-oat…) does not work here.",
+    "hint": "console.anthropic.com → API keys. On a Max plan, claim the monthly API credits into your Console organization and create the key there — requests are then covered by the plan’s credits. A Claude Code subscription token (sk-ant-oat…) does not work here.",
     "save": "Check and save",
     "checking": "Checking…",
     "saved": "Key checked and saved"

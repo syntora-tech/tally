@@ -2584,7 +2584,7 @@
     "none": "Ключа ще немає — AI-функції приховані.",
     "replace": "Замінити новим ключем",
     "label": "Ключ Anthropic API",
-    "hint": "console.anthropic.com → API keys. Токен підписки Claude Code (sk-ant-oat…) тут не підходить.",
+    "hint": "console.anthropic.com → API keys. На плані Max заберіть щомісячні API-кредити у свою організацію в Console і створіть ключ там — тоді запити покриваються кредитами підписки. Токен підписки Claude Code (sk-ant-oat…) тут не підходить.",
     "save": "Перевірити й зберегти",
     "checking": "Перевіряю…",
     "saved": "Ключ перевірено й збережено"
