@@ -21,6 +21,7 @@ import {
   Decimal,
   endOfMonth,
   formatSequenceNumber,
+  renumberedInFormat,
   nextPartPeriod,
   payoutPartOf,
   payoutRest,
@@ -808,7 +809,7 @@ export const getAct = defineService({
       if (!row) return null;
       const key = row.contract.numberSequenceKey;
       const [seq] =
-        row.act.status === 'draft' && key
+        (row.act.status === 'draft' || row.act.status === 'issued') && key
           ? await tx.select().from(numberSequence).where(eq(numberSequence.key, key))
           : [];
       const trips = await tx
@@ -847,7 +848,19 @@ export const getAct = defineService({
         ...row,
         trips,
         mergeable,
-        nextNumber: seq ? previewActNumber(seq, row.act.actDate, row.contract.number) : null,
+        nextNumber:
+          seq && row.act.status === 'draft'
+            ? previewActNumber(seq, row.act.actDate, row.contract.number)
+            : null,
+        renumberTo:
+          seq && row.act.status === 'issued' && row.act.number && !row.act.isLegacy
+            ? renumberedInFormat(
+                row.act.number,
+                seq.template,
+                Number(row.act.actDate.slice(0, 4)),
+                row.contract.number,
+              )
+            : null,
       };
     });
     return found ? ok(found) : err(serviceError('not_found', 'acts.notFound'));
@@ -990,7 +1003,8 @@ export const issueAct = defineService({
 });
 
 /**
- * New dates for an issued act not signed and not paid yet (A-112): same number, a new snapshot and
+ * New dates for an issued act not signed and not paid yet (A-112): same number (or the same counter in
+ * the sequence's current format, A-119), a new snapshot and
  * a new PDF; the old file and values stay in the documents registry and the audit log with the
  * reason. The amount and parties never change here, and the date stays in the number's year.
  */
@@ -1004,6 +1018,7 @@ export const reviseAct = defineService({
       periodTo: z.preprocess((v) => (v === '' ? undefined : v), localDateString.optional()),
       dateOverrideReason: optionalText,
       reason: requiredText('acts.reviseReason'),
+      renumber: z.preprocess((v) => v === 'on' || v === true, z.boolean()).default(false),
     })
     .superRefine((v, issues) => {
       if (!v.periodFrom !== !v.periodTo) {
@@ -1050,12 +1065,29 @@ export const reviseAct = defineService({
       if (!co.legalCode || !co.addressUa || !co.directorUa || !co.bankDetailsUa) {
         return err(serviceError('validation_error', 'company.actIncomplete'));
       }
+      let number = act.number;
+      if (input.renumber) {
+        const key = row.contract.numberSequenceKey;
+        const [seq] = key
+          ? await tx.select().from(numberSequence).where(eq(numberSequence.key, key))
+          : [];
+        const next = seq
+          ? renumberedInFormat(
+              act.number,
+              seq.template,
+              Number(act.actDate.slice(0, 4)),
+              row.contract.number,
+            )
+          : null;
+        if (!next) return err(serviceError('conflict', 'acts.renumberUnavailable'));
+        number = next;
+      }
       const periodFrom = input.periodFrom ?? null;
       const periodTo = input.periodTo ?? null;
       const previous = act.snapshot as { version?: number } | null;
       const snapshot = {
         ...buildActSnapshot({
-          number: act.number,
+          number,
           actDate: input.actDate,
           periodFrom,
           periodTo,
@@ -1074,6 +1106,7 @@ export const reviseAct = defineService({
       await tx
         .update(supplierAct)
         .set({
+          number,
           actDate: input.actDate,
           periodFrom,
           periodTo,
@@ -1085,7 +1118,7 @@ export const reviseAct = defineService({
         .where(eq(supplierAct.id, act.id));
       await tx.execute(sql`select set_config('app.act_revision', '', true)`);
       await enqueueJob(tx, renderActJob(act.id, snapshot.version));
-      return ok({ id: act.id, number: act.number });
+      return ok({ id: act.id, number });
     }),
 });
 

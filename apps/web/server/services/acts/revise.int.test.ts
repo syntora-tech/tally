@@ -15,11 +15,12 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { withUser } from '../../db/with-user';
 import { renderActHandler } from '../../jobs/render-act';
 import { documentAgentServices } from '../documents/agent';
 import { HtmlRenderer } from '../../render/renderers';
 import { LocalStorage } from '../../storage/local-storage';
-import { issueAct, reviseAct, saveActDraft } from '.';
+import { getAct, issueAct, reviseAct, saveActDraft } from '.';
 
 const h = intHarness();
 let finance: Awaited<ReturnType<typeof h.user>>;
@@ -232,6 +233,68 @@ describe('revise an issued act (A-112)', () => {
         ),
       );
     expect(left.map((d) => d.id)).toEqual([current?.doc.id]);
+  });
+
+  it('writes the number in the current format under the same counter (A-119)', async () => {
+    const before = await actRow();
+    expect(before?.number).toBe('9098 - А3');
+    const viaGetAct = async () =>
+      (await getAct.run(h.ctxFor(finance), { id: ids.act }))._unsafeUnwrap().renumberTo;
+    expect(await viaGetAct()).toBeNull();
+    await h.db
+      .update(numberSequence)
+      .set({ template: 'OD-9098 - А{seq}', nextValue: 7 })
+      .where(eq(numberSequence.key, SEQUENCE));
+    expect(await viaGetAct()).toBe('OD-9098 - А3');
+
+    const kept = await reviseAct.run(h.ctxFor(finance), {
+      id: ids.act,
+      actDate: '2091-04-27',
+      periodFrom: '2091-04-01',
+      periodTo: '2091-04-27',
+      reason,
+    });
+    expect(kept._unsafeUnwrap().number).toBe('9098 - А3');
+    const res = await reviseAct.run(h.ctxFor(finance), {
+      id: ids.act,
+      actDate: '2091-04-27',
+      periodFrom: '2091-04-01',
+      periodTo: '2091-04-27',
+      reason: 'New number format',
+      renumber: 'on',
+    });
+    expect(res._unsafeUnwrap().number).toBe('OD-9098 - А3');
+    const after = await actRow();
+    expect(after).toMatchObject({ number: 'OD-9098 - А3', status: 'issued', pdfFileId: null });
+    expect(after?.snapshot).toMatchObject({ doc: { number: 'OD-9098 - А3' } });
+    expect(await viaGetAct()).toBeNull();
+    const [seq] = await h.db.select().from(numberSequence).where(eq(numberSequence.key, SEQUENCE));
+    expect(seq?.nextValue).toBe(7);
+
+    const again = await reviseAct.run(h.ctxFor(finance), {
+      id: ids.act,
+      actDate: '2091-04-27',
+      periodFrom: '2091-04-01',
+      periodTo: '2091-04-27',
+      reason,
+      renumber: 'on',
+    });
+    expect(again._unsafeUnwrapErr().message).toBe('acts.renumberUnavailable');
+  });
+
+  it('is refused by the DB when a revision changes the counter', async () => {
+    await expect(
+      withUser(
+        h.db,
+        { claims: { sub: finance.id, role: 'authenticated', email: finance.email }, via: 'ui' },
+        async (tx) => {
+          await tx.execute(sql`select set_config('app.act_revision', 'on', true)`);
+          await tx.execute(
+            sql`update public.supplier_act set number = 'OD-9098 - А4' where id = ${ids.act}`,
+          );
+        },
+      ),
+    ).rejects.toThrow();
   });
 
   it('keeps the year of the number, a working day and an unsigned act', async () => {

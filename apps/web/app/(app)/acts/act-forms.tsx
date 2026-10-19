@@ -254,6 +254,8 @@ export function ReviseActForm(props: {
   periodFrom: string | null;
   periodTo: string | null;
   dateOverrideReason: string | null;
+  number?: string | null;
+  renumberTo?: string | null;
 }) {
   const [state, action, pending] = useActionState<ActFormState, FormData>(reviseActAction, null);
   const t = useTranslations('actForms');
@@ -292,6 +294,17 @@ export function ReviseActForm(props: {
         </FormField>
       </div>
       <OverrideReason id="act-revise-override" defaultValue={props.dateOverrideReason} />
+      {props.renumberTo && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="renumber"
+            defaultChecked
+            className="mt-1 accent-foreground"
+          />
+          <span>{t('renumber', { from: props.number ?? '', to: props.renumberTo })}</span>
+        </label>
+      )}
       <FormField
         label={t('reviseReason')}
         htmlFor="act-revise-reason"

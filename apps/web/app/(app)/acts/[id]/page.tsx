@@ -44,7 +44,7 @@ export default async function ActPage({
   const { id } = await params;
   const result = await getAct.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { act: a, payeeName, contract, nextNumber, trips, mergeable } = result.value;
+  const { act: a, payeeName, contract, nextNumber, renumberTo, trips, mergeable } = result.value;
   const draft = a.status === 'draft';
   const uploaded =
     typeof a.snapshot === 'object' && a.snapshot !== null && 'uploaded' in a.snapshot;
@@ -142,6 +142,8 @@ export default async function ActPage({
                         periodFrom={a.periodFrom}
                         periodTo={a.periodTo}
                         dateOverrideReason={a.dateOverrideReason}
+                        number={a.number}
+                        renumberTo={renumberTo}
                       />
                     ),
                   },

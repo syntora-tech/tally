@@ -453,7 +453,8 @@
       "periodBoth": "Give both ends of the period",
       "periodOrder": "The period ends before it starts",
       "mergeTripDrafts": "Only two draft trip acts of the same contract can be merged",
-      "chooseActToMerge": "Choose the act to merge in"
+      "chooseActToMerge": "Choose the act to merge in",
+      "renumberUnavailable": "The number format of this sequence cannot be applied to the act"
     },
     "allocations": {
       "chooseTransaction": "Choose a transaction",
@@ -2114,7 +2115,8 @@
       "mergeTripsHint": "One act for several trips of this contract: the amounts add up, the period runs from the earlier start to the later end, the date is the later one. Both trips then show this act. You can still change the date and period before issuing.",
       "tripsMerged": "Acts merged",
       "trips": "Trips"
-    }
+    },
+    "renumber": "Write the number in the current format: {from} → {to}"
   },
   "settings": {
     "title": "Settings",

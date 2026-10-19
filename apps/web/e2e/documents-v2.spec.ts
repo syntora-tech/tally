@@ -178,6 +178,26 @@ test('v2 act: generate or my own PDF, then the signing step', async ({ page }) =
   await page.getByRole('button', { name: 'Actions' }).click();
   await page.getByRole('menuitem', { name: 'Change dates…' }).click();
   await expect(page.getByRole('dialog').getByLabel('Period from')).toHaveValue('2054-01-12');
+  await expect(page.getByRole('dialog').getByRole('checkbox')).toHaveCount(0);
+
+  // A-119: a new number format applies to the issued act under the same counter.
+  await run((db) =>
+    db.execute(
+      sql`update public.number_sequence set template = 'OD-DV - А{seq}' where key = ${ACT_SEQ}`,
+    ),
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('menuitem', { name: 'Change dates…' }).click();
+  const renumber = page.getByRole('dialog');
+  await expect(
+    renumber.getByRole('checkbox', {
+      name: 'Write the number in the current format: DV - А1 → OD-DV - А1',
+    }),
+  ).toBeChecked();
+  await renumber.getByLabel('Why change').fill('New number format');
+  await renumber.getByRole('button', { name: 'Change dates' }).click();
+  await expect(page.getByRole('heading', { name: /Act No\. OD-DV - А1/ })).toBeVisible();
 });
 
 test('v2 document: a generated file a newer one replaced can be deleted (A-118)', async ({
