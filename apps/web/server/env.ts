@@ -45,6 +45,15 @@ export const serverEnvSchema = z.object({
   GOOGLE_TEMPLATE_ACT_FOP_ID: z.string().optional(),
   GOOGLE_TEMPLATE_INVOICE_CONTRACTOR_ID: z.string().optional(),
   CRON_SECRET: z.string().min(16).optional(),
+  /** 32 random bytes, base64: encrypts personal secrets such as users' AI keys (A-120). */
+  APP_ENCRYPTION_KEY: z
+    .string()
+    .optional()
+    .refine((v) => !v || Buffer.from(v, 'base64').length === 32, {
+      message: 'APP_ENCRYPTION_KEY must be 32 bytes in base64 (openssl rand -base64 32)',
+    }),
+  /** Optional TronGrid key; without it the public rate limit applies (A-122). */
+  TRONGRID_API_KEY: z.string().optional(),
   APP_TODAY: optionalLocalDate,
   /** E2E only: lets a `tally_today` cookie move the business date per request (never in production). */
   ALLOW_TODAY_OVERRIDE: z.enum(['0', '1']).optional(),

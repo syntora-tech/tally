@@ -1,6 +1,8 @@
 import type { Db, DbTransaction } from '@tally/db';
 import type { AppRole } from '@tally/db/schema';
 import type { LocalDate } from '@tally/domain';
+import type { ClaudeClient } from '../ai/claude';
+import type { ChainReader } from '../chain';
 import { withSystem, withUser, type JwtClaims, type SystemActor } from '../db/with-user';
 
 export type Actor =
@@ -17,8 +19,17 @@ export type Actor =
   | { kind: 'system'; label: SystemActor }
   | { kind: 'anonymous' };
 
+/** Outside services the import talks to; tests pass fakes, the app the real clients. */
+export type Integrations = {
+  claude: (apiKey: string) => ClaudeClient;
+  chain: ChainReader;
+};
+
 export type ServiceConfig = {
   allowedEmails: readonly string[];
+  /** APP_ENCRYPTION_KEY; without it personal AI keys cannot be stored and AI stays off (A-120). */
+  encryptionKey?: string;
+  integrations?: Integrations;
 };
 
 export type ServiceContext = {

@@ -40,6 +40,7 @@ const SECTIONS = [
   { key: 'rates', href: '/ledger/rates' },
   { key: 'planned', href: '/ledger/planned' },
   { key: 'reconcile', href: '/ledger/reconcile' },
+  { key: 'import', href: '/ledger/import' },
 ] as const;
 
 /** v2 header of every Ledger page: one title, the sections as tabs, the main action. */

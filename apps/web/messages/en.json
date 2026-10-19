@@ -568,7 +568,8 @@
       "actPeriodsOverlap": "The act periods of one payout cannot overlap",
       "actActivity": "An activity can move only between draft acts of its own payout",
       "monthActs": "Acts of one month cannot overlap, and a piece of work goes into one act only",
-      "contractorInvoiceContract": "The contract must belong to the same payee"
+      "contractorInvoiceContract": "The contract must belong to the same payee",
+      "importFrozen": "A booked import cannot change"
     },
     "wallets": {
       "owner": "A wallet belongs to exactly one person or client",
@@ -631,6 +632,51 @@
       "rerenderIssuedOnly": "Only an issued contractor invoice can be rendered again",
       "signedWhat": "Add the signed link or the signed file",
       "signIssuedOnly": "Only an issued contractor invoice can be signed"
+    },
+    "ai": {
+      "subscriptionToken": "This is a Claude Code subscription token; it works only inside Claude Code. Create an API key at console.anthropic.com",
+      "keyFormat": "An Anthropic API key starts with sk-ant-",
+      "keyRejected": "Anthropic did not accept this key",
+      "rateLimited": "Anthropic rate limit reached — try again in a minute",
+      "refused": "Claude declined this request",
+      "badOutput": "Claude returned an answer that could not be read",
+      "unavailable": "Anthropic API is not reachable right now",
+      "notConfigured": "AI is not set up on the server (APP_ENCRYPTION_KEY)",
+      "keyMissing": "Add your Anthropic API key in Settings → AI assistant",
+      "keyUnreadable": "Your saved key can no longer be read (the server key changed) — save it again"
+    },
+    "import": {
+      "chooseFile": "Choose statement files",
+      "tooManyFiles": "Up to 6 files at once",
+      "unreadable": "{file}: the file could not be read",
+      "legacyXls": "{file}: old .xls is not supported — export CSV or XLSX",
+      "emptyStatement": "{file}: the file is empty",
+      "mixedAccounts": "{file}: rows of several accounts ({accounts}) — export one account per file",
+      "unknownFormat": "{file}: no date and amount columns found. Columns: {headers}",
+      "sameFile": "{file} is uploaded twice",
+      "chooseAccount": "{file}: choose the account — it cannot be detected from the file",
+      "currencyMismatch": "{file} is in {currency}, the account {account} is not",
+      "noRows": "No operations found in {file}",
+      "tooManyRows": "More than {max} rows — import a shorter period",
+      "noWalletAddress": "{account} has no wallet address — skipped",
+      "chainTruncated": "{account}: too many transfers, the oldest are not read — choose a later start date",
+      "chainFailed": "Could not read {account} from the blockchain explorer — try again",
+      "chainUnavailable": "Blockchain explorers are not available",
+      "noCryptoAccounts": "No active USDT/USDC account on Ethereum or TRON with a wallet address",
+      "notFound": "Import not found",
+      "notDraft": "This import is already booked or discarded",
+      "changed": "The import changed meanwhile — reload the page",
+      "unknownRow": "Unknown row",
+      "attachTarget": "This row can only be part of a booked row that is not part of another",
+      "oneCounter": "A transaction has only one other leg",
+      "oneFee": "A transaction has only one fee",
+      "needsTwoLegType": "With another leg attached the type is exchange or transfer",
+      "needsCounter": "Exchange and transfer need the other leg — attach it or choose income/expense",
+      "revenueIsIn": "Money going out cannot be income",
+      "expenseIsOut": "Money coming in cannot be an expense",
+      "linkTaken": "The Ledger row already got a reference meanwhile",
+      "rowsFailed": "{count, plural, one {# row needs fixing} other {# rows need fixing}} — nothing was booked",
+      "nothingChosen": "Nothing to book — tick at least one new row"
     }
   },
   "audit": {
@@ -691,7 +737,8 @@
     "trip": "Trip",
     "documentsInbox": "Documents to sort out",
     "documentChecks": "Document checks",
-    "contractorInvoice": "Contractor invoice"
+    "contractorInvoice": "Contractor invoice",
+    "ledgerImport": "Statement import"
   },
   "login": {
     "subtitle": "Sign in to the Syntora.Tech back-office",
@@ -1421,7 +1468,8 @@
       "deleteTitle": "Delete the transaction?",
       "hidden": "Hidden",
       "accountsHelp": "Bank, wallets, cash. The currency of an account with postings cannot change. Arrows set the order of accounts everywhere; a hidden account leaves the overview and the pickers, but its balance still counts in the treasury."
-    }
+    },
+    "import": "Import"
   },
   "ledgerForms": {
     "txDeleted": "Transaction deleted",
@@ -2172,7 +2220,9 @@
       "nextNumber": "Next number",
       "usedBy": "Used by",
       "defaultInvoices": "invoices by default"
-    }
+    },
+    "ai": "AI assistant",
+    "aiDescription": "Your personal Anthropic API key turns on AI features: entering crypto payments and suggesting categories for statement rows. The key is yours — requests are billed to your Anthropic account, it is stored encrypted and is never shown again. Without a key these features are hidden."
   },
   "settingsForms": {
     "companySaved": "Details saved",
@@ -2524,5 +2574,121 @@
     "amountFor": "Amount for {name}",
     "rateFor": "Rate for {name}",
     "splitTotal": "Linking {total} of {free} free"
+  },
+  "aiKey": {
+    "notConfigured": "AI is not set up on this server: the administrator has to set APP_ENCRYPTION_KEY.",
+    "current": "Key …{hint} is saved",
+    "verified": "checked {date}",
+    "delete": "Delete key",
+    "deleted": "Key deleted — AI features are off",
+    "none": "No key yet — AI features are hidden.",
+    "replace": "Replace with a new key",
+    "label": "Anthropic API key",
+    "hint": "console.anthropic.com → API keys. A Claude Code subscription token (sk-ant-oat…) does not work here.",
+    "save": "Check and save",
+    "checking": "Checking…",
+    "saved": "Key checked and saved"
+  },
+  "ledgerImport": {
+    "title": "Import",
+    "subtitle": "Bank statements and crypto payments into the Ledger: read, review, book. Nothing is written before you confirm.",
+    "bankTitle": "Bank statement",
+    "bankHelp": "Privat24 for business export, CSV or XLSX, one file per account; several files at once let an exchange be joined across accounts. Rows already in the Ledger are recognised by the bank reference, or by account, date and amount.",
+    "files": "Statement files",
+    "filesHint": "Up to 6 files, 4 MB in total",
+    "account": "Account",
+    "detectAccount": "Detect from the file",
+    "read": "Read statement",
+    "reading": "Reading…",
+    "cryptoTitle": "Crypto payments (AI)",
+    "cryptoHelp": "Reads USDT/USDC transfers of our wallets from the blockchain (Ethereum, TRON) with their network fee, then Claude proposes type, category and who it was. Amounts, dates and hashes come from the chain only.",
+    "since": "Since",
+    "sinceHint": "Empty = from the account opening date",
+    "fetchCrypto": "Fetch crypto payments",
+    "fetching": "Reading the chain and asking Claude…",
+    "recent": "Recent imports",
+    "recentHelp": "Drafts can be reviewed again; booked imports keep what was written.",
+    "noImports": "No imports yet",
+    "cryptoSources": "Crypto: {networks}",
+    "status": {
+      "draft": "draft",
+      "committed": "booked",
+      "discarded": "discarded"
+    },
+    "bookedSummary": "{created} booked, {linked} linked",
+    "reviewBank": "Statement review",
+    "reviewCrypto": "Crypto payments review",
+    "reviewHelp": "Check every row: new ones are booked, ones already in the Ledger are skipped, a row matching a hand-entered one gets its reference. Attach the other leg of an exchange or a bank fee to its payment.",
+    "fromDate": "from {date}",
+    "rowsRead": "{count} rows",
+    "rowsSkipped": "{count} lines without an operation",
+    "rowsOverlapping": "{count} repeated in another file",
+    "unreadRow": "{file}, line {line}: date “{value}” not understood — the row is left out",
+    "aiFailed": "Claude did not answer: {reason}. The rows are here, fill them in or try again.",
+    "aiDone": "Claude suggested {count} rows",
+    "committed": "Booked {created} transactions, linked {linked}.",
+    "reconcileHint": "Compare the closing balance of each statement with Tally:",
+    "reconcileLink": "Reconcile {account} on {date}",
+    "openJournal": "Open the journal",
+    "filter": "Rows",
+    "filters": {
+      "all": "All",
+      "book": "To book",
+      "attention": "Need a category",
+      "skipped": "Skipped"
+    },
+    "aiRunning": "Claude is thinking…",
+    "aiMissing": "Suggest with AI ({count})",
+    "aiAll": "Ask AI again",
+    "discard": "Discard",
+    "booking": "Booking…",
+    "book": "Book {count}",
+    "col": {
+      "date": "Date",
+      "amount": "Amount",
+      "what": "Counterparty and purpose",
+      "status": "In Ledger",
+      "booking": "How to book"
+    },
+    "include": "Book this row",
+    "gas": "gas {amount}",
+    "flag": {
+      "dust": "dust — likely spam",
+      "no_gas_account": "no gas account — fee not booked"
+    },
+    "rowStatus": {
+      "new": "new",
+      "duplicate": "already booked",
+      "match": "found, no reference",
+      "possible_duplicate": "possible duplicate",
+      "before_opening": "before opening date"
+    },
+    "openExisting": "Open the Ledger row",
+    "attachTo": "Part of",
+    "separate": "Separate transaction",
+    "legOf": "Other leg of {what}",
+    "feeOf": "Fee of {what}",
+    "willLink": "The reference will be written to the existing row",
+    "type": "Type",
+    "category": "Category",
+    "chooseCategory": "Choose a category",
+    "party": "Person or client",
+    "noParty": "No person or client",
+    "people": "People",
+    "clients": "Clients",
+    "description": "Description",
+    "source": {
+      "payee": "by tax ID / IBAN",
+      "wallet": "known wallet",
+      "history": "as before",
+      "rule": "by rule",
+      "pair": "paired",
+      "ai": "AI"
+    },
+    "confidence": {
+      "high": "sure",
+      "medium": "likely",
+      "low": "check"
+    }
   }
 }

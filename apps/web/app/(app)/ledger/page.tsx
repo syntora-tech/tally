@@ -109,6 +109,9 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
           <Button variant="outline" render={<Link href="/ledger/reconcile" />}>
             {t('reconcile')}
           </Button>
+          <Button variant="outline" render={<Link href="/ledger/import" />}>
+            {t('import')}
+          </Button>
           <Button render={<Link href="/ledger/new" />}>{t('newTransaction')}</Button>
         </div>
       </div>

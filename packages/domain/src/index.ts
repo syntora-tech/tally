@@ -17,3 +17,5 @@ export * from './planned-expense';
 export * from './usd';
 export * from './forecast';
 export * from './trips';
+export * from './statement';
+export * from './chain';
