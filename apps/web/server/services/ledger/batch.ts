@@ -222,104 +222,111 @@ export const addTransactions = defineService({
   name: 'ledger.transactions.addBatch',
   input: z.object({ transactions: z.array(transactionItem).min(1).max(500), dryRun }),
   handler: (ctx, input) =>
-    inActorScopeAtomic(ctx, input, async (tx) => {
-      const errors: ItemErrors = {};
-      const refs = input.transactions.map((t) => t.externalRef);
-      refs.forEach((r, i) => {
-        if (refs.indexOf(r) !== i)
-          errors[`transactions.${String(i)}`] = [msg('batch.duplicateRef', { ref: r })];
-      });
-      const known = await existingRefs(tx, refs);
-      const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
-      const categories = await tx
-        .select({ id: category.id, name: category.name, txType: category.txType })
-        .from(category);
-      const accountId = (ref: string) =>
-        accounts.find((a) => (uuidLike.test(ref) ? a.id === ref.toLowerCase() : a.name === ref))
-          ?.id;
-
-      const results: TransactionOutcome[] = [];
-      for (const [index, item] of input.transactions.entries()) {
-        const key = `transactions.${String(index)}`;
-        if (errors[key]) continue;
-        const duplicateOf = known.get(item.externalRef);
-        if (duplicateOf) {
-          results.push({
-            index,
-            externalRef: item.externalRef,
-            id: duplicateOf,
-            status: 'duplicate',
-          });
-          continue;
-        }
-        const problems: string[] = [];
-        const leg = (l: z.output<typeof legRef> | undefined, name: string) => {
-          if (!l) return undefined;
-          const id = accountId(l.account);
-          if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
-          return { accountId: id ?? '', amount: l.amount };
-        };
-        const categoryId = categories.find((c) =>
-          uuidLike.test(item.category)
-            ? c.id === item.category.toLowerCase()
-            : c.txType === item.type && c.name === item.category,
-        )?.id;
-        if (!categoryId)
-          problems.push(
-            msg('batch.categoryNotFound', { category: item.category, type: item.type }),
-          );
-        const resolved = {
-          type: item.type,
-          occurredOn: item.occurredOn,
-          categoryId: categoryId ?? '',
-          description: item.description,
-          counterparty: item.counterparty,
-          externalRef: item.externalRef,
-          personId: item.personId,
-          clientId: item.clientId,
-          counterpartyAddress: item.counterpartyAddress,
-          from: leg(item.from, 'from'),
-          to: leg(item.to, 'to'),
-          fee: leg(item.fee, 'fee'),
-        };
-        if (problems.length) {
-          errors[key] = problems;
-          continue;
-        }
-        const parsed = transactionInput.safeParse(resolved);
-        if (!parsed.success) {
-          errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
-          continue;
-        }
-        const party = await resolveParty(tx, parsed.data);
-        if (party.isErr()) {
-          errors[key] = [party.error.message];
-          continue;
-        }
-        try {
-          const row = await tx.transaction(async (sp) => {
-            const booked = await bookTransaction(sp, parsed.data, party.value);
-            // Checks this item's deferred I5 shape now, so a failure names the item.
-            await sp.execute(sql`set constraints all immediate`);
-            return booked;
-          });
-          results.push({ index, externalRef: item.externalRef, id: row.id, status: 'created' });
-        } catch (error) {
-          const mapped = mapDbError(error);
-          if (!mapped) throw error;
-          errors[key] = [mapped.message];
-        } finally {
-          await tx.execute(sql`set constraints all deferred`);
-        }
-      }
-      if (Object.keys(errors).length) return err(batchFailure(errors));
-      return ok({
-        created: results.filter((r) => r.status === 'created').length,
-        duplicates: results.filter((r) => r.status === 'duplicate').length,
-        transactions: results,
-      });
-    }),
+    inActorScopeAtomic(ctx, input, (tx) => addTransactionItems(tx, input.transactions)),
 });
+
+/**
+ * The body of `addTransactions` inside a caller's DB transaction, so other writes (the statement
+ * import marking itself committed) share its all-or-nothing outcome. Errors are keyed
+ * `transactions.<index>`.
+ */
+export async function addTransactionItems(
+  tx: DbTransaction,
+  items: readonly z.output<typeof transactionItem>[],
+) {
+  const errors: ItemErrors = {};
+  const refs = items.map((t) => t.externalRef);
+  refs.forEach((r, i) => {
+    if (refs.indexOf(r) !== i)
+      errors[`transactions.${String(i)}`] = [msg('batch.duplicateRef', { ref: r })];
+  });
+  const known = await existingRefs(tx, refs);
+  const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
+  const categories = await tx
+    .select({ id: category.id, name: category.name, txType: category.txType })
+    .from(category);
+  const accountId = (ref: string) =>
+    accounts.find((a) => (uuidLike.test(ref) ? a.id === ref.toLowerCase() : a.name === ref))?.id;
+
+  const results: TransactionOutcome[] = [];
+  for (const [index, item] of items.entries()) {
+    const key = `transactions.${String(index)}`;
+    if (errors[key]) continue;
+    const duplicateOf = known.get(item.externalRef);
+    if (duplicateOf) {
+      results.push({
+        index,
+        externalRef: item.externalRef,
+        id: duplicateOf,
+        status: 'duplicate',
+      });
+      continue;
+    }
+    const problems: string[] = [];
+    const leg = (l: z.output<typeof legRef> | undefined, name: string) => {
+      if (!l) return undefined;
+      const id = accountId(l.account);
+      if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
+      return { accountId: id ?? '', amount: l.amount };
+    };
+    const categoryId = categories.find((c) =>
+      uuidLike.test(item.category)
+        ? c.id === item.category.toLowerCase()
+        : c.txType === item.type && c.name === item.category,
+    )?.id;
+    if (!categoryId)
+      problems.push(msg('batch.categoryNotFound', { category: item.category, type: item.type }));
+    const resolved = {
+      type: item.type,
+      occurredOn: item.occurredOn,
+      categoryId: categoryId ?? '',
+      description: item.description,
+      counterparty: item.counterparty,
+      externalRef: item.externalRef,
+      personId: item.personId,
+      clientId: item.clientId,
+      counterpartyAddress: item.counterpartyAddress,
+      from: leg(item.from, 'from'),
+      to: leg(item.to, 'to'),
+      fee: leg(item.fee, 'fee'),
+    };
+    if (problems.length) {
+      errors[key] = problems;
+      continue;
+    }
+    const parsed = transactionInput.safeParse(resolved);
+    if (!parsed.success) {
+      errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      continue;
+    }
+    const party = await resolveParty(tx, parsed.data);
+    if (party.isErr()) {
+      errors[key] = [party.error.message];
+      continue;
+    }
+    try {
+      const row = await tx.transaction(async (sp) => {
+        const booked = await bookTransaction(sp, parsed.data, party.value);
+        // Checks this item's deferred I5 shape now, so a failure names the item.
+        await sp.execute(sql`set constraints all immediate`);
+        return booked;
+      });
+      results.push({ index, externalRef: item.externalRef, id: row.id, status: 'created' });
+    } catch (error) {
+      const mapped = mapDbError(error);
+      if (!mapped) throw error;
+      errors[key] = [mapped.message];
+    } finally {
+      await tx.execute(sql`set constraints all deferred`);
+    }
+  }
+  if (Object.keys(errors).length) return err(batchFailure(errors));
+  return ok({
+    created: results.filter((r) => r.status === 'created').length,
+    duplicates: results.filter((r) => r.status === 'duplicate').length,
+    transactions: results,
+  });
+}
 
 async function existingRefs(tx: DbTransaction, refs: string[]) {
   const rows = await tx
