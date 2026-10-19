@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { getDb } from './db/client';
 import { withUser, type JwtClaims } from './db/with-user';
+import { claudeClient } from './ai/claude';
+import { chainReader } from './chain';
 import { getServerEnv } from './env';
 import type { Actor, ServiceContext } from './services/context';
 import { createSupabaseServerClient } from './supabase/server-client';
@@ -13,11 +15,19 @@ import { getRequestToday, getToday } from './today';
 export type UserActor = Extract<Actor, { kind: 'user' }>;
 
 function baseContext(actor: Actor): ServiceContext {
+  const env = getServerEnv();
   return {
     actor,
     today: getToday(),
     db: getDb(),
-    config: { allowedEmails: getServerEnv().ALLOWED_EMAILS },
+    config: {
+      allowedEmails: env.ALLOWED_EMAILS,
+      ...(env.APP_ENCRYPTION_KEY ? { encryptionKey: env.APP_ENCRYPTION_KEY } : {}),
+      integrations: {
+        claude: claudeClient,
+        chain: chainReader(env.TRONGRID_API_KEY ? { trongridApiKey: env.TRONGRID_API_KEY } : {}),
+      },
+    },
   };
 }
 

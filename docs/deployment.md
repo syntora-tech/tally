@@ -55,6 +55,10 @@
 | `NEXT_PUBLIC_AUTH_GOOGLE_ENABLED` | `false` до появи ключів                                                                       |
 | `STORAGE_DRIVER`                  | `drive` (файлова система Vercel недовговічна; документи — з Етапу 1 після налаштування Drive) |
 | `GOOGLE_TEMPLATE_*_ID`            | ID шаблонів Google Docs: `INVOICE_HOURLY`, `INVOICE_FIXED`, `ACT_FOP` (7.2)                   |
+| `APP_ENCRYPTION_KEY`              | `openssl rand -base64 32` — шифрує персональні AI-ключі (A-120); без неї AI-функцій немає     |
+| `TRONGRID_API_KEY`                | необовʼязково: ключ TronGrid для імпорту крипти (A-122), інакше публічний ліміт               |
+
+`APP_ENCRYPTION_KEY` не змінювати без потреби: збережені ключі користувачів після цього не розшифровуються, їх треба ввести знову. Для preview і production — різні значення.
 
 `SUPABASE_SERVICE_ROLE_KEY` поки не потрібен і ніколи не має префікса `NEXT_PUBLIC_`. `APP_TODAY` у Vercel не задається.
 

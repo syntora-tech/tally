@@ -211,7 +211,7 @@ Do not fix a mismatch yourself with adjusting transactions — describe it to th
 
 ## 7. PrivatBank statements
 
-The owner hands you PrivatBank (Privat24 for business) statements, one per account (UAH, USD, EUR), and you book them into the Ledger. There is no importer in the UI: you are it. A statement is real financial data — the same handling as the xlsx in section 6.
+The owner hands you PrivatBank (Privat24 for business) statements, one per account (UAH, USD, EUR), and you book them into the Ledger. People can also do it themselves in the UI (Ledger → Import, A-121); both paths use the same `externalRef` keys below, so a statement booked one way is recognised by the other. A statement is real financial data — the same handling as the xlsx in section 6.
 
 ### 7.1 Before starting
 

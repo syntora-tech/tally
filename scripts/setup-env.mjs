@@ -1,5 +1,6 @@
 // Creates apps/web/.env.local from .env.example with keys of the running local Supabase stack.
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,7 @@ const values = {
   NEXT_PUBLIC_SUPABASE_URL: stack.API_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: stack.ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY: stack.SERVICE_ROLE_KEY,
+  APP_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
 };
 
 const env = readFileSync(join(root, '.env.example'), 'utf8').replace(

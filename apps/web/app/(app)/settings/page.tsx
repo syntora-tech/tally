@@ -9,6 +9,8 @@ import { getTranslations } from 'next-intl/server';
 import { getCompany } from '@/server/services/company';
 import { listMcpCalls, listMcpClients } from '@/server/services/mcp';
 import { listCalendarExceptions, listJobs, listSequences } from '@/server/services/settings';
+import { aiKeyStatus } from '@/server/services/ai';
+import { AiKeyForm } from './ai-key-form';
 import { CompanyForm } from './company-form';
 import { CreateMcpClientForm, RevokeMcpClientButton } from './mcp-forms';
 import { CalendarExceptionForm, DeleteExceptionButton, SequenceForm } from './settings-forms';
@@ -47,6 +49,12 @@ export default async function SettingsPage({
   const mcpClients = (await listMcpClients.run(ctx, {})).unwrapOr([]);
   const mcpCalls = (await listMcpCalls.run(ctx, { limit: 20 })).unwrapOr([]);
   const clientNames = new Map(mcpClients.map((c) => [c.clientId, c.clientName]));
+  const ai = (await aiKeyStatus.run(ctx, {})).unwrapOr({
+    available: false,
+    hint: null,
+    verifiedAt: null,
+  });
+  const aiStatus = { ...ai, verifiedAt: ai.verifiedAt ? DATE_TIME.format(ai.verifiedAt) : null };
   const h = await headers();
   const mcpUrl = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host') ?? 'localhost:3000'}/api/mcp`;
   const t = await getTranslations('settings');
@@ -57,7 +65,7 @@ export default async function SettingsPage({
       : s;
 
   const v2 = (await getUiPrefs()).version === 'v2';
-  const SECTIONS = ['company', 'calendar', 'numbering', 'jobs', 'agents'] as const;
+  const SECTIONS = ['company', 'calendar', 'numbering', 'jobs', 'agents', 'ai'] as const;
   const requested = (await searchParams).tab;
   const tab = SECTIONS.find((k) => k === requested) ?? 'company';
   if (v2) {
@@ -303,6 +311,11 @@ export default async function SettingsPage({
           )}
         </div>
       ),
+      ai: (
+        <Panel title={t('ai')} help={t('aiDescription')} helpLabel={tc('help')}>
+          <AiKeyForm status={aiStatus} />
+        </Panel>
+      ),
     }[tab];
     return (
       <div className="flex flex-col gap-5">
@@ -490,6 +503,15 @@ export default async function SettingsPage({
               </ul>
             </div>
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('ai')}</CardTitle>
+          <CardDescription>{t('aiDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AiKeyForm status={aiStatus} />
         </CardContent>
       </Card>
       <p className="text-sm text-muted-foreground">{t('footer')}</p>
