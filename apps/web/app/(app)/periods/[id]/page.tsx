@@ -26,6 +26,7 @@ import {
   HoursCsvForm,
   HoursForm,
   ParamsForm,
+  EditAdjustmentForm,
   RemoveAdjustmentButton,
   DeletePeriodForm,
   ReopenForm,
@@ -92,12 +93,14 @@ export default async function PeriodPage({
     t,
     tp,
     tc,
+    tf,
     fmt,
     { ADJUSTMENT_KIND_LABELS, BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS, PAYOUT_METHOD_LABELS },
   ] = await Promise.all([
     getTranslations('period'),
     getTranslations('periods'),
     getTranslations('common'),
+    getTranslations('periodForms'),
     getFormat(),
     getLabels(),
   ]);
@@ -135,6 +138,19 @@ export default async function PeriodPage({
     </div>
   );
   const v2 = (await getUiPrefs()).version === 'v2';
+  // Until paid: in an open month always (the service refuses once its act is issued), in a closed
+  // one for the owner while the payout has no payments (A-124).
+  const editable = (a: (typeof preview.adjustments)[number]) =>
+    a.kind !== 'trip_reimbursement' &&
+    (!closed ||
+      (ctx.actor.role === 'owner' &&
+        payroll.some(
+          ({ item }) =>
+            item.kind === 'person' &&
+            item.personId === a.personId &&
+            item.payoutMethod === a.payoutMethod &&
+            toDecimal(item.paidAmount).isZero(),
+        )));
   const people = [...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries()]
     .filter(([pid]) => pid)
     .map(([pid, name]) => ({ id: pid, name }));
@@ -228,6 +244,26 @@ export default async function PeriodPage({
                   <TableCell>
                     <div className="flex items-center gap-1">
                       {fmt.amount(a.amount, a.currency)}
+                      {editable(a) && (
+                        <DialogButton
+                          variant="ghost"
+                          title={tf('editAdjustmentTitle')}
+                          content={
+                            <EditAdjustmentForm
+                              periodId={p.id}
+                              adjustment={{
+                                id: a.id,
+                                kind: a.kind,
+                                amount: a.amount,
+                                currency: a.currency,
+                                reason: a.reason,
+                              }}
+                            />
+                          }
+                        >
+                          {tf('editAdjustment')}
+                        </DialogButton>
+                      )}
                       {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
                     </div>
                   </TableCell>

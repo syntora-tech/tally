@@ -15,6 +15,7 @@ import {
   importHours,
   openPeriod,
   removeAdjustment,
+  updateAdjustment,
   reopenPeriod,
   updatePeriod,
 } from '../services/periods';
@@ -216,5 +217,21 @@ export async function removeAdjustmentAction(
   const result = await removeAdjustment.run(ctx, formDataToObject(formData));
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  return { ok: true, data: result.value };
+}
+
+export async function updateAdjustmentAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await updateAdjustment.run(ctx, {
+    ...input,
+    amount: typeof input.amount === 'string' ? input.amount.replace(',', '.') : input.amount,
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  revalidatePath('/payroll');
   return { ok: true, data: result.value };
 }

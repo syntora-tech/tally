@@ -28,6 +28,7 @@ import {
   draftEarlyActAction,
   draftEarlyInvoiceAction,
   removeAdjustmentAction,
+  updateAdjustmentAction,
   reopenPeriodAction,
   saveHoursAction,
   updatePeriodAction,
@@ -565,6 +566,74 @@ export function AdjustmentForm(props: {
       </Button>
       <div className="col-span-full">
         <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+    </form>
+  );
+}
+
+/** Changes an adjustment until its payout is paid (A-124); person, month and method stay. */
+export function EditAdjustmentForm(props: {
+  periodId: string;
+  adjustment: { id: string; kind: string; amount: string; currency: string; reason: string };
+}) {
+  const [state, action, pending] = useActionState<PeriodFormState, FormData>(
+    updateAdjustmentAction,
+    null,
+  );
+  const t = useTranslations('periodForms');
+  const { ADJUSTMENT_KIND_LABELS } = useLabels();
+  const error = useResult(state, t('adjustmentUpdated'));
+  const a = props.adjustment;
+  const { trip_reimbursement: _trip, ...kinds } = ADJUSTMENT_KIND_LABELS;
+  const currencies = [...new Set(['UAH', 'USD', a.currency])];
+  return (
+    <form action={action} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <input type="hidden" name="periodId" value={props.periodId} />
+      <input type="hidden" name="id" value={a.id} />
+      <FormField label={t('kind')} htmlFor={`adj-kind-${a.id}`}>
+        <NativeSelect
+          id={`adj-kind-${a.id}`}
+          name="kind"
+          defaultValue={a.kind}
+          options={toOptions(kinds)}
+        />
+      </FormField>
+      <FormField
+        label={t('amount')}
+        htmlFor={`adj-amount-${a.id}`}
+        error={error?.fieldErrors?.amount}
+      >
+        <div className="flex gap-2">
+          <Input
+            id={`adj-amount-${a.id}`}
+            name="amount"
+            inputMode="decimal"
+            defaultValue={a.kind === 'deduction' ? a.amount.replace(/^-/, '') : a.amount}
+          />
+          <NativeSelect
+            aria-label={t('currency')}
+            name="currency"
+            defaultValue={a.currency}
+            className="w-24"
+            options={currencies.map((c) => ({ value: c, label: c }))}
+          />
+        </div>
+      </FormField>
+      <FormField
+        label={t('reason')}
+        htmlFor={`adj-reason-${a.id}`}
+        error={error?.fieldErrors?.reason}
+        className="sm:col-span-2"
+      >
+        <Input id={`adj-reason-${a.id}`} name="reason" defaultValue={a.reason} required />
+      </FormField>
+      <div className="sm:col-span-2">
+        <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
+      </div>
+      <div className="flex gap-2 sm:col-span-2">
+        <Button type="submit" disabled={pending}>
+          {t('save')}
+        </Button>
       </div>
     </form>
   );
