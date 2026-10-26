@@ -9,6 +9,7 @@ import type { ServiceContext } from '../services/context';
 import type { Service, ServiceResult } from '../services/define-service';
 import { listRates } from '../services/fx';
 import { listAccounts, listCategories, listTransactions } from '../services/ledger';
+import { getImport, listImports } from '../services/ledger/import';
 import {
   addTransactions,
   deleteTransactions,
@@ -346,6 +347,32 @@ export const TOOLS: readonly ToolDef[] = [
           isFee: p.isFee,
         })),
       })),
+  }),
+  tool({
+    name: 'list_imports',
+    title: 'Statement imports',
+    kind: 'read',
+    description:
+      'Statement and crypto imports of Ledger → Import, newest first: id, kind bank|crypto, status draft|committed|discarded, source files, summary (rows, new, duplicates, booked) and dates. Read one with get_import. Imports are made, reviewed and committed in the UI.',
+    service: listImports,
+  }),
+  tool({
+    name: 'get_import',
+    title: 'Statement import',
+    kind: 'read',
+    description:
+      'One import by id with every row as read from the statement (account, date, direction, amount, currency, ref, docNumber, purpose, counterparty, file line) and what the import decided: status (new | duplicate | match | possible_duplicate | before_opening | fee_for_existing | returned), existingId (the Ledger transaction it is), attachTo (key of the row it is the other leg or the fee of), flags and the suggested type/category/party. Use it to explain why rows were or were not paired.',
+    service: getImport,
+    present: (r) => ({
+      id: r.id,
+      kind: r.kind,
+      status: r.status,
+      sources: r.sources,
+      summary: r.summary,
+      createdAt: r.createdAt,
+      committedAt: r.committedAt,
+      rows: r.rows,
+    }),
   }),
   tool({
     name: 'list_fx_rates',

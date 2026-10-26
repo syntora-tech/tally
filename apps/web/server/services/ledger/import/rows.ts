@@ -24,6 +24,9 @@ export type Suggestion = z.infer<typeof suggestion>;
  *   links it (writes the reference) instead of booking it twice.
  * - `possible_duplicate`: same account, date and amount but another reference — off by default.
  * - `before_opening`: dated before the account's opening date, already in its opening balance.
+ * - `fee_for_existing`: the bank fee of a payment already in the Ledger (`existingId`) that does not
+ *   carry it yet — confirming puts it into that transaction's fee (replacing `replacesFee`).
+ * - `returned`: a payment the bank rejected and its return; together no movement, never written.
  */
 export const ROW_STATUSES = [
   'new',
@@ -31,6 +34,8 @@ export const ROW_STATUSES = [
   'match',
   'possible_duplicate',
   'before_opening',
+  'fee_for_existing',
+  'returned',
 ] as const;
 export type RowStatus = (typeof ROW_STATUSES)[number];
 
@@ -60,6 +65,8 @@ export const importRow = z.object({
   source: z.object({ file: z.string().nullable(), line: z.number().nullable() }),
   status: z.enum(ROW_STATUSES),
   existingId: z.uuid().nullable(),
+  /** The fee `existingId` carries now (e.g. the estimate of Pay) that the bank fee replaces. */
+  replacesFee: leg.nullable().optional(),
   /** Proposed: this row is the other leg or the fee of that row. */
   attachTo: z.string().nullable(),
   flags: z.array(z.string()),
@@ -71,11 +78,18 @@ export const importRows = z.array(importRow);
 
 /** Rows that can be written: everything not already in the Ledger or its opening balance. */
 export const isBookable = (r: Pick<ImportRow, 'status'>) =>
-  r.status === 'new' || r.status === 'possible_duplicate' || r.status === 'match';
+  r.status === 'new' ||
+  r.status === 'possible_duplicate' ||
+  r.status === 'match' ||
+  r.status === 'fee_for_existing';
+
+/** Rows that change a Ledger transaction instead of booking one. */
+export const editsExisting = (r: Pick<ImportRow, 'status'>) =>
+  r.status === 'match' || r.status === 'fee_for_existing';
 
 /** Default of the include checkbox. */
 export const includedByDefault = (r: ImportRow) =>
-  (r.status === 'new' || r.status === 'match') && !r.flags.includes('dust');
+  (r.status === 'new' || editsExisting(r)) && !r.flags.includes('dust');
 
 /** The person's choice for one row, sent with the commit. */
 export const decision = z.object({

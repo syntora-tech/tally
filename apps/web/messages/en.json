@@ -2654,14 +2654,18 @@
     "gas": "gas {amount}",
     "flag": {
       "dust": "dust — likely spam",
-      "no_gas_account": "no gas account — fee not booked"
+      "no_gas_account": "no gas account — fee not booked",
+      "returned_payment": "return of a booked payment",
+      "fee_of_returned": "fee of a returned payment"
     },
     "rowStatus": {
       "new": "new",
       "duplicate": "already booked",
       "match": "found, no reference",
       "possible_duplicate": "possible duplicate",
-      "before_opening": "before opening date"
+      "before_opening": "before opening date",
+      "fee_for_existing": "fee of a booked payment",
+      "returned": "returned by the bank"
     },
     "openExisting": "Open the Ledger row",
     "attachTo": "Part of",
@@ -2689,6 +2693,9 @@
       "high": "sure",
       "medium": "likely",
       "low": "check"
-    }
+    },
+    "willAddFee": "Will be added as the fee of the Ledger row",
+    "willReplaceFee": "Will replace its fee {amount} in the Ledger row",
+    "committedFees": "Fees added to Ledger rows: {count}."
   }
 }

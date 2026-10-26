@@ -433,6 +433,139 @@ describe('bank statement import (A-121)', () => {
   });
 });
 
+describe('bank fees of payments already in the Ledger (A-123)', () => {
+  const signedHeader =
+    'ЄДРПОУ;МФО;Рахунок;Валюта;Номер документу;Дата операції;МФО банку;Назва банку;Рахунок кореспондента;ЄДРПОУ кореспондента;Кореспондент;Сума;Призначення платежу;';
+  const line = (doc: string, date: string, amount: string, who: string, purpose: string) =>
+    `1;305299;${UAH_ACC};UAH;${doc};${date};305299;Банк;UA333;14360570;${who};${amount};${purpose};`;
+  const fee = (doc: string, date: string, amount: string, of: string) =>
+    line(
+      doc,
+      date,
+      `-${amount}`,
+      'ЗА ДЕБЕТУВАННЯ РАХУНКУ(UAH)',
+      `Комiсiя за виконання платежiв в нацiональнiй валютi у сумi ${of} грн вiд ${date}, без ПДВ.`,
+    );
+  const csv = (rows: string[]) => [signedHeader, ...rows].join('\n');
+  // Our payment orders are numbered; bank rows carry a reference in the same column.
+  const docBase = (parseInt(tag.slice(0, 6), 16) % 900_000) + 100_000;
+  const doc = (n: number) => String(docBase * 100 + n);
+  const payment = line(doc(38), '20.06.2045', '-30 159.30', `ФОП I ${tag}`, 'Оплата за актом');
+  const statement = csv([
+    line(doc(39), '21.06.2045', '-107 852.98', `ФОП I ${tag}`, 'Оплата послуг'),
+    fee(`F${doc(39)}`, '21.06.2045', '15.00', '107852.98'),
+    line(
+      doc(37),
+      '21.06.2045',
+      '107 852.98',
+      `ФОП I ${tag}`,
+      `NARR: Повернення платiжної iнструкцiї № ${doc(37)} вiд 21/06/2045 у зв\`язку з невiдповiднiстю реквiзитiв`,
+    ),
+    payment,
+    fee(`F${doc(38)}`, '20.06.2045', '5.00', '30159.30'),
+    line(doc(37), '21.06.2045', '-107 852.98', `ФОП I ${tag}`, 'Оплата послуг'),
+    fee(`F${doc(37)}`, '21.06.2045', '15.00', '107852.98'),
+    line(
+      `S${doc(1)}`,
+      '22.06.2045',
+      '-2 321.63',
+      'Комiсiя за SWIFT-переказ',
+      'Комiсiя за мiжнародний переказ вiд 22-06-2045, сума 3000.00 USD, реф. JBK1, без ПДВ.',
+    ),
+  ]);
+  let swiftId = '';
+
+  beforeAll(async () => {
+    const ctx = ctxOf(owner);
+    // The payment came in an earlier statement, without its fee.
+    const first = (
+      await prepareBankImport.run(ctx, {
+        files: [file('first.csv', csv([payment]))],
+        accountId: ids[uahName],
+      })
+    )._unsafeUnwrap().id;
+    const firstRows = await draftRows(ctx, first);
+    await commitImport.run(ctx, {
+      importId: first,
+      decisions: decisionsOf(firstRows, {
+        [firstRows[0]?.key ?? '']: { categoryId: ids.Contractors },
+      }),
+    });
+    // A SWIFT payout recorded with Pay, its fee an estimate on the UAH account.
+    swiftId = (
+      await createTransaction.run(ctx, {
+        type: 'expense',
+        occurredOn: '2045-06-22',
+        categoryId: ids.Contractors,
+        from: { accountId: ids[usdName], amount: '3000' },
+        fee: { accountId: ids[uahName], amount: '51' },
+      })
+    )._unsafeUnwrap().id;
+  });
+
+  it('puts each fee into its own payment, also one booked earlier, and keeps a returned payment out', async () => {
+    const ctx = ctxOf(owner);
+    const id = (
+      await prepareBankImport.run(ctx, {
+        files: [file('second.csv', statement)],
+        accountId: ids[uahName],
+      })
+    )._unsafeUnwrap().id;
+    const rows = await draftRows(ctx, id);
+    const by = (d: string, direction: 'in' | 'out' = 'out') =>
+      rows.find((r) => (r.docNumber ?? r.ref) === d && r.direction === direction) as ImportRow;
+    const [earlier] = await h.db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(like(transaction.externalRef, `%:${doc(38)}:%`));
+
+    expect(by(doc(38)).status).toBe('duplicate');
+    expect(by(`F${doc(38)}`)).toMatchObject({
+      status: 'fee_for_existing',
+      existingId: earlier?.id,
+      replacesFee: null,
+    });
+    expect(by(`S${doc(1)}`)).toMatchObject({
+      status: 'fee_for_existing',
+      existingId: swiftId,
+      replacesFee: { accountId: ids[uahName], amount: '51' },
+    });
+    expect(by(doc(37)).status).toBe('returned');
+    expect(by(doc(37), 'in').status).toBe('returned');
+    expect(by(`F${doc(37)}`)).toMatchObject({ status: 'new', attachTo: null });
+    expect(by(`F${doc(37)}`).flags).toContain('fee_of_returned');
+    expect(by(`F${doc(39)}`).attachTo).toBe(by(doc(39)).key);
+
+    const decisions = decisionsOf(rows, {
+      [by(doc(39)).key]: { categoryId: ids.Contractors },
+      [by(`F${doc(37)}`).key]: { categoryId: ids['Bank Fees'] },
+      [by(`F${doc(38)}`).key]: { include: true },
+      [by(`S${doc(1)}`).key]: { include: true },
+    });
+    const done = await commitImport.run(ctx, { importId: id, decisions });
+    expect(done._unsafeUnwrap()).toMatchObject({ created: 2, fees: 2 });
+
+    const feesOf = async (txId: string) =>
+      (await h.db.select().from(posting).where(eq(posting.transactionId, txId)))
+        .filter((p) => p.isFee)
+        .map((p) => p.amount);
+    expect(await feesOf(earlier?.id ?? '')).toEqual(['-5.00000000']);
+    expect(await feesOf(swiftId)).toEqual(['-2321.63000000']);
+    const balances = (await listAccounts.run(ctx, {}))._unsafeUnwrap();
+    const before = Number(balances.find((b) => b.account.name === uahName)?.balance);
+
+    const again = await prepareBankImport.run(ctx, {
+      files: [file('second.csv', statement)],
+      accountId: ids[uahName],
+    });
+    const second = await draftRows(ctx, again._unsafeUnwrap().id);
+    expect(second.filter((r) => r.status !== 'duplicate' && r.status !== 'returned')).toEqual([]);
+    await discardImport.run(ctx, { id: again._unsafeUnwrap().id });
+    // −107 852.98 − 15 sent again, −15 fee of the rejected one, −5 and −(2 321.63 − 51) fee changes.
+    expect(before).toBeCloseTo(-30_159.3 + 97_224.4 - 107_852.98 - 15 - 15 - 5 - 2_321.63, 2);
+  });
+});
+
 describe('crypto import with AI (A-122)', () => {
   const hash = (n: number, end = '00') =>
     `${tag}${String(n).padStart(4, '0')}`.padEnd(62, 'b') + end;

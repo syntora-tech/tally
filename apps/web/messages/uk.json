@@ -2654,14 +2654,18 @@
     "gas": "газ {amount}",
     "flag": {
       "dust": "пил — схоже на спам",
-      "no_gas_account": "немає рахунку газу — комісію не внесено"
+      "no_gas_account": "немає рахунку газу — комісію не внесено",
+      "returned_payment": "повернення внесеного платежу",
+      "fee_of_returned": "комісія поверненого платежу"
     },
     "rowStatus": {
       "new": "новий",
       "duplicate": "вже внесено",
       "match": "знайдено без референсу",
       "possible_duplicate": "можливий дублікат",
-      "before_opening": "до дати відкриття"
+      "before_opening": "до дати відкриття",
+      "fee_for_existing": "комісія внесеного платежу",
+      "returned": "повернуто банком"
     },
     "openExisting": "Відкрити рядок Ledger",
     "attachTo": "Частина",
@@ -2689,6 +2693,9 @@
       "high": "впевнено",
       "medium": "ймовірно",
       "low": "перевірте"
-    }
+    },
+    "willAddFee": "Додасться як комісія рядка Ledger",
+    "willReplaceFee": "Замінить його комісію {amount} у рядку Ledger",
+    "committedFees": "Комісій додано до рядків Ledger: {count}."
   }
 }

@@ -21,7 +21,7 @@ import { inActorScope, type ServiceContext } from '../../context';
 import { defineService } from '../../define-service';
 import { serviceError, type ServiceError } from '../../errors';
 import { TWO_LEG_TYPES } from '..';
-import { importRows, isBookable, type ImportRow, type Suggestion } from './rows';
+import { editsExisting, importRows, isBookable, type ImportRow, type Suggestion } from './rows';
 
 // Small parallel requests keep one call well under the function time limit.
 const CHUNK = 25;
@@ -239,6 +239,7 @@ async function inChunks<T, R>(
 
 const needsAi = (r: ImportRow, scope: 'missing' | 'all') =>
   isBookable(r) &&
+  !editsExisting(r) &&
   !r.attachTo &&
   (scope === 'all' || !r.suggestion?.categoryId || r.suggestion.confidence === 'low');
 

@@ -212,6 +212,8 @@ describe('MCP server (13.3–13.6, A-054)', () => {
       'get_balances',
       'list_categories',
       'list_transactions',
+      'list_imports',
+      'get_import',
       'list_fx_rates',
       'search_people',
       'get_person',
@@ -237,7 +239,7 @@ describe('MCP server (13.3–13.6, A-054)', () => {
   it('lists only the tools of the profile; write tools require an idempotency key', async () => {
     const mcp = await connect(assistantToken);
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(60);
+    expect(tools).toHaveLength(62);
     for (const name of [
       'delete_transactions',
       'unlink_documents',

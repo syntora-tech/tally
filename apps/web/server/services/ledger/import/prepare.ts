@@ -9,7 +9,15 @@ import {
   posting,
   transaction,
 } from '@tally/db/schema';
-import { addDays, normalizeText, ruleCategory, toDecimal, type LocalDate } from '@tally/domain';
+import {
+  addDays,
+  diffDays,
+  normalizeText,
+  paymentFeeHints,
+  ruleCategory,
+  toDecimal,
+  type LocalDate,
+} from '@tally/domain';
 import { and, desc, gte, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 import type { ImportRow, Suggestion } from './rows';
 
@@ -104,12 +112,19 @@ export async function checkAgainstLedger(tx: DbTransaction, rows: ImportRow[]): 
 
   const claimed = new Set<string>();
   for (const row of rows) {
+    const exact = known.get(lower(row.externalRef));
+    if (row.status === 'returned') {
+      if (row.direction === 'out' && exact) {
+        row.status = 'duplicate';
+        row.existingId = exact;
+      }
+      continue;
+    }
     const opening = openingOf.get(row.accountId);
     if (opening && row.occurredOn < opening) {
       row.status = 'before_opening';
       continue;
     }
-    const exact = known.get(lower(row.externalRef));
     if (exact) {
       row.status = 'duplicate';
       row.existingId = exact;
@@ -148,20 +163,153 @@ export async function checkAgainstLedger(tx: DbTransaction, rows: ImportRow[]): 
 
   // A fee or second leg of a row already in the Ledger is in it too when that row carries it.
   const byKey = new Map(rows.map((r) => [r.key, r]));
+  const missing = rows.flatMap((r) => {
+    const target = r.attachTo ? byKey.get(r.attachTo) : undefined;
+    const id = target?.existingId;
+    return id && !existing.some((e) => e.id === id) ? [id] : [];
+  });
+  existing.push(...(await loadExisting(tx, missing)));
+  const feeTargets = new Set<string>();
+  const paired = new Set(rows.filter((r) => r.attachTo).map((r) => r.key));
   for (const row of rows) {
     const target = row.attachTo ? byKey.get(row.attachTo) : undefined;
     if (!target || row.status !== 'new') continue;
-    if (target.status === 'new') continue;
+    if (target.status === 'new' || target.status === 'returned') continue;
     const booked = existing.find((e) => e.id === target.existingId);
-    const signed = row.direction === 'out' ? toDecimal(row.amount).neg() : toDecimal(row.amount);
-    const carried = booked?.postings.some(
-      (p) => p.accountId === row.accountId && toDecimal(p.amount).eq(signed),
-    );
-    if (carried && booked) {
+    row.attachTo = null;
+    if (!booked) continue;
+    if (carries(booked, row)) {
       row.status = 'duplicate';
       row.existingId = booked.id;
+    } else if (
+      (target.status === 'duplicate' || target.status === 'match') &&
+      paymentFeeHints(row) &&
+      !feeTargets.has(booked.id)
+    ) {
+      feeForExisting(row, booked);
+      feeTargets.add(booked.id);
     }
-    row.attachTo = null;
+  }
+
+  await findFeePayments(
+    tx,
+    rows.filter((r) => !paired.has(r.key)),
+    feeTargets,
+  );
+}
+
+const signedOf = (row: Pick<ImportRow, 'direction' | 'amount'>) =>
+  row.direction === 'out' ? toDecimal(row.amount).neg() : toDecimal(row.amount);
+
+const carries = (booked: Existing, row: ImportRow) =>
+  booked.postings.some(
+    (p) => p.accountId === row.accountId && toDecimal(p.amount).eq(signedOf(row)),
+  );
+
+/** The statement fee goes into the fee of `booked`, replacing a different one it carries. */
+function feeForExisting(row: ImportRow, booked: Existing) {
+  const current = booked.postings.find((p) => p.isFee);
+  row.status = 'fee_for_existing';
+  row.existingId = booked.id;
+  row.replacesFee = current
+    ? { accountId: current.accountId, amount: toDecimal(current.amount).abs().toString() }
+    : null;
+}
+
+async function loadExisting(tx: DbTransaction, ids: string[]): Promise<Existing[]> {
+  if (!ids.length) return [];
+  const found = await tx
+    .select({
+      id: transaction.id,
+      externalRef: transaction.externalRef,
+      occurredOn: transaction.occurredOn,
+      description: transaction.description,
+    })
+    .from(transaction)
+    .where(inArray(transaction.id, [...new Set(ids)]));
+  const postings = found.length
+    ? await tx
+        .select({
+          transactionId: posting.transactionId,
+          accountId: posting.accountId,
+          amount: posting.amount,
+          isFee: posting.isFee,
+        })
+        .from(posting)
+        .where(
+          inArray(
+            posting.transactionId,
+            found.map((f) => f.id),
+          ),
+        )
+    : [];
+  return found.map((f) => ({ ...f, postings: postings.filter((p) => p.transactionId === f.id) }));
+}
+
+/**
+ * A payment fee whose payment is not in the uploaded statements (a SWIFT fee on the UAH account
+ * for a USD payment, an exchange fee whose USD leg was imported earlier): the Ledger payment it
+ * names by amount and currency or by document number, within a day. Only a single candidate counts.
+ */
+async function findFeePayments(tx: DbTransaction, rows: ImportRow[], taken: Set<string>) {
+  const fees = rows.flatMap((row) => {
+    const hints = row.status === 'new' && !row.attachTo ? paymentFeeHints(row) : null;
+    return hints && (hints.amounts.length || hints.docNumbers.length) ? [{ row, hints }] : [];
+  });
+  if (!fees.length) return;
+  const dates = fees.map((f) => f.row.occurredOn).sort();
+  const nearby = await tx
+    .select({
+      id: transaction.id,
+      externalRef: transaction.externalRef,
+      occurredOn: transaction.occurredOn,
+      accountId: posting.accountId,
+      currency: account.currency,
+      amount: posting.amount,
+    })
+    .from(posting)
+    .innerJoin(transaction, sql`${transaction.id} = ${posting.transactionId}`)
+    .innerJoin(account, sql`${account.id} = ${posting.accountId}`)
+    .where(
+      and(
+        gte(transaction.occurredOn, addDays(dates[0] as LocalDate, -1)),
+        lte(transaction.occurredOn, addDays(dates.at(-1) as LocalDate, 1)),
+        sql`${posting.isFee} = false`,
+        sql`${posting.amount} < 0`,
+      ),
+    );
+  const booked = new Map(
+    (
+      await loadExisting(
+        tx,
+        nearby.map((n) => n.id),
+      )
+    ).map((e) => [e.id, e]),
+  );
+  for (const { row, hints } of fees) {
+    const near = nearby.filter(
+      (n) =>
+        Math.abs(diffDays(n.occurredOn as LocalDate, row.occurredOn as LocalDate)) <= 1 &&
+        !taken.has(n.id),
+    );
+    const byNumber = near.filter(
+      (n) =>
+        n.accountId === row.accountId &&
+        hints.docNumbers.some((d) => n.externalRef?.split(':')[3] === d),
+    );
+    const byAmount = near.filter((n) =>
+      hints.amounts.includes(`${toDecimal(n.amount).abs().toFixed(2)} ${n.currency}`),
+    );
+    const ids = [...new Set((byNumber.length ? byNumber : byAmount).map((n) => n.id))];
+    const target = ids.length === 1 && ids[0] ? booked.get(ids[0]) : undefined;
+    if (!target) continue;
+    taken.add(target.id);
+    if (carries(target, row)) {
+      row.status = 'duplicate';
+      row.existingId = target.id;
+    } else {
+      feeForExisting(row, target);
+    }
   }
 }
 

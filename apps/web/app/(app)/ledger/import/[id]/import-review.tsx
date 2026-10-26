@@ -48,7 +48,11 @@ const TYPES = [
 ] as const;
 const TWO_LEG = new Set(['transfer', 'fx_exchange', 'crypto_buy', 'crypto_sell', 'crypto_swap']);
 const bookable = (r: ImportRow) =>
-  r.status === 'new' || r.status === 'match' || r.status === 'possible_duplicate';
+  r.status === 'new' ||
+  r.status === 'match' ||
+  r.status === 'possible_duplicate' ||
+  r.status === 'fee_for_existing';
+const editsExisting = (r: ImportRow) => r.status === 'match' || r.status === 'fee_for_existing';
 const FILTERS = ['all', 'book', 'attention', 'skipped'] as const;
 
 const selectClass =
@@ -68,7 +72,7 @@ export function ImportReview(props: Props) {
     for (const r of rows) {
       out[r.key] = {
         key: r.key,
-        include: (r.status === 'new' || r.status === 'match') && !r.flags.includes('dust'),
+        include: (r.status === 'new' || editsExisting(r)) && !r.flags.includes('dust'),
         type: r.suggestion?.type ?? (r.direction === 'in' ? 'revenue' : 'expense'),
         categoryId: r.suggestion?.categoryId ?? null,
         personId: r.suggestion?.personId ?? null,
@@ -109,6 +113,7 @@ export function ImportReview(props: Props) {
     ? (commitState.data as {
         created: number;
         linked: number;
+        fees: number;
         duplicates: number;
         accounts: { accountId: string; lastDate: string }[];
       })
@@ -159,7 +164,7 @@ export function ImportReview(props: Props) {
     bookable(r) &&
     decisions[r.key]?.include &&
     isMain(r) &&
-    r.status !== 'match' &&
+    !editsExisting(r) &&
     !decisions[r.key]?.categoryId;
   const visible = rows.filter((r) => {
     if (filter === 'book') return decisions[r.key]?.include && bookable(r);
@@ -184,7 +189,7 @@ export function ImportReview(props: Props) {
       (r) =>
         r.key !== row.key &&
         bookable(r) &&
-        r.status !== 'match' &&
+        !editsExisting(r) &&
         !decisions[r.key]?.attachTo &&
         Math.abs(diffDays(r.occurredOn as LocalDate, row.occurredOn as LocalDate)) <= 3 &&
         (r.direction !== row.direction ? r.accountId !== row.accountId : row.direction === 'out'),
@@ -204,6 +209,7 @@ export function ImportReview(props: Props) {
         <p className="font-medium">
           {t('committed', { created: committed.created, linked: committed.linked })}
         </p>
+        {committed.fees > 0 && <p>{t('committedFees', { count: committed.fees })}</p>}
         <p className="text-muted-foreground">{t('reconcileHint')}</p>
         <ul className="flex flex-col gap-1">
           {committed.accounts.map((a) => (
@@ -401,7 +407,9 @@ export function ImportReview(props: Props) {
                       {sourceLabel(r) && <span>{sourceLabel(r)}</span>}
                       {r.flags.map((f) => (
                         <Badge key={f} variant="outline">
-                          {t(`flag.${f as 'dust' | 'no_gas_account'}`)}
+                          {t(
+                            `flag.${f as 'dust' | 'no_gas_account' | 'returned_payment' | 'fee_of_returned'}`,
+                          )}
                         </Badge>
                       ))}
                     </div>
@@ -430,7 +438,7 @@ export function ImportReview(props: Props) {
                   <td className="w-[20rem] min-w-[20rem] px-2 py-2">
                     {bookable(r) && (
                       <div className="flex flex-col gap-1.5">
-                        {mayAttach(r) && candidatesFor(r).length > 0 && r.status !== 'match' && (
+                        {mayAttach(r) && candidatesFor(r).length > 0 && !editsExisting(r) && (
                           <select
                             aria-label={t('attachTo')}
                             className={selectClass}
@@ -453,7 +461,19 @@ export function ImportReview(props: Props) {
                         {!attached && r.status === 'match' && (
                           <span className="text-xs">{t('willLink')}</span>
                         )}
-                        {!attached && r.status !== 'match' && (
+                        {!attached && r.status === 'fee_for_existing' && (
+                          <span className="text-xs" data-testid="import-fee-for-existing">
+                            {r.replacesFee
+                              ? t('willReplaceFee', {
+                                  amount: fmt.amount(
+                                    r.replacesFee.amount,
+                                    accountOf.get(r.replacesFee.accountId)?.currency,
+                                  ),
+                                })
+                              : t('willAddFee')}
+                          </span>
+                        )}
+                        {!attached && !editsExisting(r) && (
                           <>
                             <div className="grid grid-cols-2 gap-1.5">
                               <select
