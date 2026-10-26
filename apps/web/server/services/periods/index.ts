@@ -27,6 +27,7 @@ import {
   requiredText,
 } from '../fields';
 import { ensureNbuRate } from '../fx';
+import { openToOwner, recomputePayout } from '../payroll/lines';
 import {
   frozenAdjustments,
   frozenHours,
@@ -421,6 +422,72 @@ export const addAdjustment = defineService({
       if (!row) return err(serviceError('forbidden', 'general.forbidden'));
       if (p.status === 'open') await refreshEarlyActs(tx, p);
       return ok(row);
+    });
+  },
+});
+
+/**
+ * Changes an adjustment until its payout is paid (A-124). In an open month like adding one: refused
+ * once its act is issued. In a closed month owner only, with the payout unpaid and its act not
+ * issued; the payout's totals and draft act follow. It stays on its person, month and method;
+ * a trip reimbursement is changed in its trip.
+ */
+export const updateAdjustment = defineService({
+  name: 'periods.updateAdjustment',
+  input: z.object({
+    id: z.uuid(),
+    kind: z.enum(['bonus', 'deduction', 'correction', 'other']),
+    amount: decimalString.refine((v) => !toDecimal(v).isZero(), 'field.nonZero'),
+    currency: currencyCode.refine(
+      (c) => ['USD', 'USDT', 'USDC', 'UAH'].includes(c),
+      'periods.adjustmentCurrency',
+    ),
+    reason: requiredText('field.reason'),
+  }),
+  handler: async (ctx, input) => {
+    const amount =
+      input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
+    const change = { kind: input.kind, amount, currency: input.currency, reason: input.reason };
+    return inActorScope(ctx, async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(adjustment)
+        .where(eq(adjustment.id, input.id))
+        .for('update');
+      if (!current) return err(serviceError('not_found', 'periods.adjustmentNotFound'));
+      if (current.kind === 'trip_reimbursement') {
+        return err(serviceError('validation_error', 'periods.adjustmentTrip'));
+      }
+      const p = await periodOf(tx, current.periodId);
+      if (!p) return err(serviceError('not_found', 'periods.notFound'));
+      if (p.status === 'open') {
+        const frozen = await frozenAdjustments(tx, p, current.personId, current.supplierActId);
+        if (frozen) return err(serviceError('conflict', frozen));
+        await tx.update(adjustment).set(change).where(eq(adjustment.id, current.id));
+        await refreshEarlyActs(tx, p);
+        return ok({ id: current.id });
+      }
+      if (ctx.actor.kind !== 'user' || ctx.actor.role !== 'owner') {
+        return err(serviceError('forbidden', 'periods.adjustmentClosedOwner'));
+      }
+      const [item] = await tx
+        .select({ id: payrollItem.id })
+        .from(payrollItem)
+        .where(
+          and(
+            eq(payrollItem.periodId, current.periodId),
+            eq(payrollItem.personId, current.personId),
+            eq(payrollItem.payoutMethod, current.payoutMethod),
+            eq(payrollItem.kind, 'person'),
+          ),
+        );
+      if (!item) return err(serviceError('conflict', 'periods.adjustmentNoPayout'));
+      const open = await openToOwner(tx, item.id);
+      if (open.isErr()) return err(open.error);
+      await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
+      await tx.update(adjustment).set(change).where(eq(adjustment.id, current.id));
+      const totals = await recomputePayout(tx, open.value);
+      return ok({ id: current.id, itemId: item.id, ...totals });
     });
   },
 });

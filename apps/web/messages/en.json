@@ -329,7 +329,10 @@
       "deleteClosed": "Only an open period can be deleted",
       "deleteNotEmpty": "The period already has hours, adjustments, invoices or payouts — it cannot be deleted",
       "deleteWhich": "Give either the period id or its month",
-      "contractorInvoiceIssued": "Contractor invoice {number} of this period is issued or voided: the period cannot be reopened"
+      "contractorInvoiceIssued": "Contractor invoice {number} of this period is issued or voided: the period cannot be reopened",
+      "adjustmentTrip": "A trip reimbursement is changed in its trip",
+      "adjustmentClosedOwner": "Only the owner changes an adjustment of a closed month",
+      "adjustmentNoPayout": "The payout of this adjustment was not found"
     },
     "ledger": {
       "currencyLocked": "The currency of an account with postings cannot change",
@@ -1682,7 +1685,11 @@
     "v2": {
       "personRole": "Person · role",
       "emptyIsZero": "An empty cell is 0 hours"
-    }
+    },
+    "adjustmentUpdated": "Adjustment changed",
+    "editAdjustment": "Edit",
+    "editAdjustmentTitle": "Edit adjustment",
+    "save": "Save"
   },
   "invoices": {
     "title": "Invoices",

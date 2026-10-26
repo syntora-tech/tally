@@ -150,6 +150,14 @@ test('v2 period: opened from a dialog, hours on step 2, closed on step 5', async
   await expect(line).toContainText('Compensation: corporate services');
   await expect(page.getByTestId('total-pay')).toContainText('1,000.00');
 
+  // Until it is paid the adjustment can be changed (A-124).
+  await line.getByRole('button', { name: 'Edit' }).click();
+  const edit = page.getByRole('dialog');
+  await edit.getByLabel('Amount').fill('1250');
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Adjustment changed')).toBeVisible();
+  await expect(page.getByTestId('total-pay')).toContainText('1,250.00');
+
   await page.getByRole('link', { name: 'Next: Payouts' }).click();
   await page.getByRole('link', { name: 'Next: Close' }).click();
   await expect(page.getByRole('link', { name: /^Next/ })).toHaveCount(0);

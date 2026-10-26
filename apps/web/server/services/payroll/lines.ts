@@ -53,7 +53,7 @@ export const removePayoutLine = defineService({
 });
 
 /** Totals of a payout after its lines or adjustments changed; its draft act follows (A-097). */
-async function recomputePayout(tx: DbTransaction, item: typeof payrollItem.$inferSelect) {
+export async function recomputePayout(tx: DbTransaction, item: typeof payrollItem.$inferSelect) {
   const lines = await tx
     .select({ amount: payrollLine.amount, currency: payrollLine.currency })
     .from(payrollLine)
@@ -95,7 +95,7 @@ async function recomputePayout(tx: DbTransaction, item: typeof payrollItem.$infe
 }
 
 /** An unpaid payout of a closed month whose act is not issued: the owner's exceptions (A-097). */
-async function openToOwner(tx: DbTransaction, itemId: string) {
+export async function openToOwner(tx: DbTransaction, itemId: string) {
   const [item] = await tx
     .select()
     .from(payrollItem)
