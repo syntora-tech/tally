@@ -1578,7 +1578,7 @@
     "step2": "Hours",
     "step2Description": "Hours on the month's active assignments",
     "step3": "Calculation",
-    "step3Description": "Totals use all rows; pay in UAH is approximate at the reference rate",
+    "step3Description": "Hours and adjustments with a reason (bonus, deduction, reimbursement); totals use every row, pay in UAH is approximate at the reference rate",
     "earlyDocs": "Documents before the close",
     "earlyDocsDescription": "Invoice drafts and FOP act drafts follow the hours until issued; an issued document freezes the hours it covers",
     "earlyInvoice": "Invoice",
@@ -1599,8 +1599,8 @@
       "payUsd": "Pay",
       "payUah": "Pay, UAH ≈"
     },
-    "step4": "Adjustments",
-    "step4Description": "Bonus, deduction or reimbursement with a reason; UAH is added to the payout after conversion",
+    "step4": "Payouts",
+    "step4Description": "What each payout comes to: the calculation with its adjustments; UAH is approximate at the reference rate",
     "planCol": {
       "payout": "Payout",
       "method": "Method",
@@ -1628,7 +1628,8 @@
         "hours": "{filled} of {total} filled in",
         "rows": "{count, plural, one {# line} other {# lines}}",
         "adjustments": "{count, plural, =0 {none} one {# adjustment} other {# adjustments}}",
-        "invoices": "{count, plural, =0 {not closed} one {# invoice} other {# invoices}}"
+        "invoices": "{count, plural, =0 {not closed} one {# invoice} other {# invoices}}",
+        "payouts": "{count, plural, =0 {none} one {# payout} other {# payouts}}"
       },
       "adjustment": "Adjustment",
       "adjustmentTitle": "New adjustment"
