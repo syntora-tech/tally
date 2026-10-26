@@ -32,7 +32,7 @@ const HEADERS: Record<StatementField, readonly string[]> = {
   amount: ['сума', 'сумаоперації', 'сумаувалютірахунку', 'amount'],
   currency: ['валюта', 'валютарахунку', 'currency'],
   ref: ['референс', 'референсоперації', 'референспроводки', 'ref', 'reference'],
-  docNumber: ['номердокумента', 'документ', 'номердок', 'document'],
+  docNumber: ['номердокумента', 'номердокументу', 'документ', 'номердок', 'document'],
   purpose: ['призначенняплатежу', 'призначення', 'деталіплатежу', 'purpose', 'details'],
   counterparty: [
     'кореспондент',
@@ -262,14 +262,18 @@ export function parseStatementTable(
       continue;
     }
     const balance = parseBankAmount(cell(row, found.balance) ?? '');
+    const docCell = cell(row, found.docNumber);
+    // Without a reference column Privat24 puts the bank reference of its own rows (fees,
+    // exchanges) into «Номер документу»; our payment orders keep their number there.
+    const docIsRef = found.ref === undefined && docCell !== null && /\p{L}/u.test(docCell);
     rows.push({
       line,
       occurredOn,
       direction,
       amount: amount.toFixed(),
       currency: cell(row, found.currency)?.toUpperCase() ?? null,
-      ref: cell(row, found.ref),
-      docNumber: cell(row, found.docNumber),
+      ref: docIsRef ? docCell : cell(row, found.ref),
+      docNumber: docIsRef ? null : docCell,
       purpose: cell(row, found.purpose),
       counterparty: cell(row, found.counterparty),
       counterpartyTaxId: cell(row, found.counterpartyTaxId)?.replace(/\s/g, '') ?? null,
@@ -380,6 +384,9 @@ export type PairingRow = {
   purpose: string | null;
   counterpartyAccount: string | null;
   ourAccount: string | null;
+  /** Position in its file: a bank books a fee right next to its payment. */
+  file?: string | null;
+  line?: number | null;
 };
 
 export type Pairing = {
@@ -387,27 +394,57 @@ export type Pairing = {
   counterOf: Map<string, string>;
   /** Bank fee row → key of the payment or exchange it belongs to. */
   feeOf: Map<string, string>;
+  /** Credit returning a rejected payment → key of that payment; together they are no movement. */
+  returnOf: Map<string, string>;
 };
 
 const FX_WORDS = /(продаж|купів|купл|обмін|конверт|exchange)/;
 
-/** «… 600.00 USD …» → `600.00 USD` normalised, for matching both legs of an exchange. */
-function mentionedForeignAmounts(purpose: string | null): string[] {
+/**
+ * «… 600.00 USD …», «600.00, USD», «у сумі 275.00 грн» → `600.00 USD` / `275.00 UAH`, for
+ * matching both legs of an exchange and a fee to the payment it names.
+ */
+function mentionedAmounts(purpose: string | null): string[] {
   if (!purpose) return [];
   const out: string[] = [];
-  for (const m of purpose.matchAll(/(\d[\d\s]*(?:[.,]\d+)?)\s*(USD|EUR|GBP|PLN|CHF)\b/gi)) {
+  for (const m of purpose.matchAll(
+    /(\d[\d\s]*(?:[.,]\d+)?)\s*,?\s*(USD|EUR|GBP|PLN|CHF|UAH|грн)(?![\p{L}\p{N}])/giu,
+  )) {
     const value = parseBankAmount(m[1] ?? '');
-    if (value) out.push(`${value.toFixed(2)} ${(m[2] ?? '').toUpperCase()}`);
+    const code = (m[2] ?? '').toUpperCase();
+    if (value) out.push(`${value.toFixed(2)} ${code === 'ГРН' ? 'UAH' : code}`);
   }
   return out;
 }
 
-const isFeeRow = (r: PairingRow) =>
+/** «Повернення платіжної інструкції № 137 …» → `137`. */
+function returnedDocNumber(purpose: string | null): string | null {
+  const m = normalizeText(purpose ?? '').match(/повернення платіжн\S* інструкц\S* № ?(\S+)/);
+  return m?.[1] ?? null;
+}
+
+const isFeeRow = (r: Pick<PairingRow, 'direction' | 'purpose'>) =>
   r.direction === 'out' && /коміс|commission|\bfee\b/.test(searchable(r.purpose ?? ''));
 
-const isServiceCharge = (r: PairingRow) =>
+const isServiceCharge = (r: Pick<PairingRow, 'purpose'>) =>
   /обслуговування/.test(normalizeText(r.purpose ?? '')) &&
   !/переказ|платіж|продаж/.test(normalizeText(r.purpose ?? ''));
+
+/**
+ * What a fee row of a specific payment names to find that payment in the Ledger when the payment
+ * is not in the uploaded statements: the amounts and document numbers it mentions. Null for rows
+ * that are not such a fee (the monthly account service charge included).
+ */
+export function paymentFeeHints(
+  row: Pick<PairingRow, 'direction' | 'purpose'>,
+): { amounts: string[]; docNumbers: string[] } | null {
+  if (!isFeeRow(row) || isServiceCharge(row)) return null;
+  const text = normalizeText(row.purpose ?? '');
+  const docNumbers = [...text.matchAll(/№ ?(\d{1,10})(?!\d)/g)].flatMap((m) =>
+    m[1] ? [m[1]] : [],
+  );
+  return { amounts: mentionedAmounts(row.purpose), docNumbers };
+}
 
 const within = (a: LocalDate, b: LocalDate, days: number) => Math.abs(diffDays(a, b)) <= days;
 
@@ -420,12 +457,31 @@ const within = (a: LocalDate, b: LocalDate, days: number) => Math.abs(diffDays(a
 export function pairStatementRows(rows: readonly PairingRow[]): Pairing {
   const counterOf = new Map<string, string>();
   const feeOf = new Map<string, string>();
+  const returnOf = new Map<string, string>();
   const used = new Set<string>();
 
-  const debits = rows.filter((r) => r.direction === 'out' && !isFeeRow(r));
   for (const credit of rows.filter((r) => r.direction === 'in')) {
+    const number = returnedDocNumber(credit.purpose);
+    if (!number) continue;
+    const originals = rows.filter(
+      (r) =>
+        r.direction === 'out' &&
+        !used.has(r.key) &&
+        r.accountId === credit.accountId &&
+        r.docNumber === number &&
+        toDecimal(r.amount).eq(credit.amount) &&
+        within(r.occurredOn, credit.occurredOn, 5),
+    );
+    const [original] = originals;
+    if (originals.length !== 1 || !original) continue;
+    returnOf.set(credit.key, original.key);
+    used.add(original.key);
+  }
+
+  const debits = rows.filter((r) => r.direction === 'out' && !isFeeRow(r));
+  for (const credit of rows.filter((r) => r.direction === 'in' && !returnOf.has(r.key))) {
     const creditText = searchable(credit.purpose ?? '');
-    const creditMentions = mentionedForeignAmounts(credit.purpose);
+    const creditMentions = mentionedAmounts(credit.purpose);
     const candidates = debits.filter((d) => {
       if (used.has(d.key) || d.accountId === credit.accountId) return false;
       if (!within(d.occurredOn, credit.occurredOn, 1)) return false;
@@ -435,9 +491,7 @@ export function pairStatementRows(rows: readonly PairingRow[]): Pairing {
         }
         const foreign = [d, credit].find((r) => r.currency !== 'UAH') ?? d;
         const amount = `${toDecimal(foreign.amount).toFixed(2)} ${foreign.currency}`;
-        return (
-          creditMentions.includes(amount) || mentionedForeignAmounts(d.purpose).includes(amount)
-        );
+        return creditMentions.includes(amount) || mentionedAmounts(d.purpose).includes(amount);
       }
       // Same currency: only when the debit went to the account that received the credit.
       return (
@@ -453,22 +507,36 @@ export function pairStatementRows(rows: readonly PairingRow[]): Pairing {
     used.add(debit.key);
   }
 
-  const mains = rows.filter((r) => !isFeeRow(r) && !counterOf.has(r.key));
+  const mains = rows.filter((r) => !isFeeRow(r) && !counterOf.has(r.key) && !returnOf.has(r.key));
+  const legsOf = (main: PairingRow) => [
+    main,
+    ...rows.filter((r) => counterOf.get(r.key) === main.key),
+  ];
+  const nextTo = (fee: PairingRow, main: PairingRow) =>
+    legsOf(main).some(
+      (r) =>
+        fee.file != null &&
+        fee.line != null &&
+        r.file === fee.file &&
+        r.line != null &&
+        Math.abs(r.line - fee.line) === 1,
+    );
   const feeTaken = new Set<string>();
   for (const fee of rows.filter(isFeeRow)) {
     if (isServiceCharge(fee)) continue;
     const text = normalizeText(fee.purpose ?? '');
-    const mentions = mentionedForeignAmounts(fee.purpose);
+    const mentions = mentionedAmounts(fee.purpose);
     const sameDay = mains.filter(
       (m) => !feeTaken.has(m.key) && m.key !== fee.key && within(m.occurredOn, fee.occurredOn, 1),
     );
+    // A bare number would also match a date or an amount of the text: only «№ 126» counts.
     const byReference = sameDay.filter((m) =>
       [m.ref, m.docNumber].some(
         (id) =>
           id &&
           id.length >= 2 &&
           new RegExp(
-            `(^|[^\\p{L}\\p{N}])${escapeRegExp(normalizeText(id))}([^\\p{L}\\p{N}]|$)`,
+            `${/^\d+$/.test(id) ? '№ ?' : '(^|[^\\p{L}\\p{N}])'}${escapeRegExp(normalizeText(id))}([^\\p{L}\\p{N}]|$)`,
             'u',
           ).test(text),
       ),
@@ -476,12 +544,14 @@ export function pairStatementRows(rows: readonly PairingRow[]): Pairing {
     const byAmount = byReference.length
       ? byReference
       : sameDay.filter((m) => mentions.includes(`${toDecimal(m.amount).toFixed(2)} ${m.currency}`));
-    const [target] = byAmount;
-    if (byAmount.length !== 1 || !target) continue;
+    // Two payments of one amount on one day (a rejected payment sent again): the adjacent one.
+    const chosen = byAmount.length > 1 ? byAmount.filter((m) => nextTo(fee, m)) : byAmount;
+    const [target] = chosen;
+    if (chosen.length !== 1 || !target) continue;
     feeOf.set(fee.key, target.key);
     feeTaken.add(target.key);
   }
-  return { counterOf, feeOf };
+  return { counterOf, feeOf, returnOf };
 }
 
 function escapeRegExp(s: string): string {

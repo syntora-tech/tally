@@ -1,6 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import { ledgerImport, transaction } from '@tally/db/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import type { ServiceContext } from '../../context';
@@ -8,9 +8,16 @@ import { inActorScopeAtomic } from '../../atomic';
 import { defineService } from '../../define-service';
 import { msg, serviceError, type ServiceError } from '../../errors';
 import { TWO_LEG_TYPES } from '..';
-import { addTransactionItems, type transactionItem } from '../batch';
+import { addTransactionItems, applyTransactionPatches, type transactionItem } from '../batch';
 import { accountsOf } from './prepare';
-import { decision, importRows, isBookable, type Decision, type ImportRow } from './rows';
+import {
+  decision,
+  editsExisting,
+  importRows,
+  isBookable,
+  type Decision,
+  type ImportRow,
+} from './rows';
 
 type Item = z.output<typeof transactionItem>;
 
@@ -27,6 +34,8 @@ type Plan = {
   items: Item[];
   itemKeys: string[];
   links: { key: string; id: string; externalRef: string }[];
+  /** Bank fees put into transactions already in the Ledger. */
+  fees: { key: string; id: string; accountId: string; amount: string; ref: string }[];
   /** Every row booked or linked, legs and fees included. */
   touched: string[];
 };
@@ -60,8 +69,8 @@ export function planCommit(
     // A matched row already exists in the Ledger: as a leg of another row it would count twice.
     if (
       !main ||
-      r.status === 'match' ||
-      main.status === 'match' ||
+      editsExisting(r) ||
+      editsExisting(main) ||
       !isBookable(main) ||
       !decisionOf.get(target)?.include ||
       decisionOf.get(target)?.attachTo
@@ -72,13 +81,27 @@ export function planCommit(
     attached.set(target, [...(attached.get(target) ?? []), r]);
   }
 
-  const plan: Plan = { items: [], itemKeys: [], links: [], touched: [] };
+  const plan: Plan = { items: [], itemKeys: [], links: [], fees: [], touched: [] };
   for (const row of included) {
     const d = decisionOf.get(row.key);
     if (!d || d.attachTo) continue;
     if (row.status === 'match') {
       if (row.existingId)
         plan.links.push({ key: row.key, id: row.existingId, externalRef: row.externalRef });
+      continue;
+    }
+    if (row.status === 'fee_for_existing') {
+      if (!row.existingId) continue;
+      if (plan.fees.some((f) => f.id === row.existingId))
+        rowError(errors, row.key, 'import.oneFee');
+      else
+        plan.fees.push({
+          key: row.key,
+          id: row.existingId,
+          accountId: row.accountId,
+          amount: row.amount,
+          ref: row.ref ?? row.externalRef,
+        });
       continue;
     }
     const extra = attached.get(row.key) ?? [];
@@ -136,6 +159,40 @@ export function planCommit(
   return Object.keys(errors).length ? err(errors) : ok(plan);
 }
 
+/** The bank fee goes into the fee leg; the description keeps its reference for the next import. */
+async function addFeesToExisting(
+  tx: DbTransaction,
+  fees: Plan['fees'],
+  errors: Record<string, string[]>,
+) {
+  if (!fees.length) return;
+  const current = await tx
+    .select({ id: transaction.id, description: transaction.description })
+    .from(transaction)
+    .where(
+      inArray(
+        transaction.id,
+        fees.map((f) => f.id),
+      ),
+    );
+  const { errors: failed } = await applyTransactionPatches(
+    tx,
+    fees.map((f) => {
+      const description = current.find((c) => c.id === f.id)?.description ?? null;
+      return {
+        id: f.id,
+        fee: { account: f.accountId, amount: f.amount },
+        description: [description, `fee ref ${f.ref}`].filter(Boolean).join(' · '),
+        reason: `Bank fee from the statement (${f.ref})`,
+      };
+    }),
+  );
+  for (const [field, messages] of Object.entries(failed)) {
+    const fee = fees[Number(field.split('.')[1])];
+    if (fee) for (const m of messages) rowError(errors, fee.key, m);
+  }
+}
+
 async function linkExisting(
   tx: DbTransaction,
   links: Plan['links'],
@@ -180,12 +237,13 @@ export const commitImport = defineService({
       const rows = importRows.parse(draft.rows);
       const planned = planCommit(rows, input.decisions);
       if (planned.isErr()) return err(failure(planned.error));
-      const { items, itemKeys, links } = planned.value;
-      if (!items.length && !links.length)
+      const { items, itemKeys, links, fees } = planned.value;
+      if (!items.length && !links.length && !fees.length)
         return err(serviceError('validation_error', 'import.nothingChosen'));
 
       const errors: Record<string, string[]> = {};
       await linkExisting(tx, links, errors);
+      await addFeesToExisting(tx, fees, errors);
       let created = 0;
       let duplicates = 0;
       const ids: string[] = [];
@@ -211,6 +269,7 @@ export const commitImport = defineService({
         created,
         duplicates,
         linked: links.length,
+        fees: fees.length,
         transactionIds: ids,
         decisions: input.decisions.filter((d) => d.include).length,
       };
@@ -228,6 +287,7 @@ export const commitImport = defineService({
         created,
         duplicates,
         linked: links.length,
+        fees: fees.length,
         accounts: accountsOf(rows.filter((r) => touched.has(r.key))),
       });
     }),

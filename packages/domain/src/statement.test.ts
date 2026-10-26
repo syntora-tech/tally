@@ -5,11 +5,13 @@ import {
   accountTail,
   pairStatementRows,
   parseBankAmount,
+  paymentFeeHints,
   parseBankDate,
   parseStatementTable,
   ruleCategory,
   statementExternalRef,
   type PairingRow,
+  type StatementRow,
 } from './statement';
 
 // Synthetic statement in the Privat24 business layout: a title line, then the header.
@@ -257,5 +259,105 @@ describe('pairStatementRows', () => {
       leg('c1', 'uah', 'UAH', 'in', '4400', 'Гривні від продажу 100.00 USD'),
     ]);
     expect(pair.counterOf.size).toBe(0);
+  });
+});
+
+// Synthetic statement in the Privat24 layout with one signed «Сума» column: newest first, each
+// fee right below its payment, and a payment rejected by the receiving bank and sent again.
+const SIGNED_CSV = [
+  'ЄДРПОУ;МФО;Рахунок;Валюта;Номер документу;Дата операції;МФО банку;Назва банку;Рахунок кореспондента;ЄДРПОУ кореспондента;Кореспондент;Сума;Призначення платежу;',
+  '10000000;305299;UA000000000000000000000005293;UAH;139;19.10.2026;305299;Банк;UA333;1111111111;ФОП ТЕСТ;-107 852.98;ОПЛАТА ЗА ПОСЛУГИ ЗГIДНО ДОГОВОРУ № OD-9;',
+  '10000000;305299;UA000000000000000000000005293;UAH;FEE139Y;19.10.2026;305299;Банк;UA999;14360570;ЗА ДЕБЕТУВАННЯ РАХУНКУ(UAH);-15.00;Комiсiя за виконання платежiв в нацiональнiй валютi у сумi 107852.98 грн вiд 19.10.2026, без ПДВ.;',
+  '10000000;305299;UA000000000000000000000005293;UAH;137;19.10.2026;305299;Банк;UA333;1111111111;ФОП ТЕСТ;107 852.98;NARR: Повернення платiжної iнструкцiї № 137 вiд 19/10/2026 у зв`язку з невiдповiднiстю реквiзитiв;',
+  '10000000;305299;UA000000000000000000000005293;UAH;138;19.10.2026;305299;Банк;UA444;2222222222;ТЕСТ ЛЮБОВ;-30 159.30;НАДАННЯ ПОСЛУГ ЗГIДНО АКТУ № 12;',
+  '10000000;305299;UA000000000000000000000005293;UAH;FEE138Y;19.10.2026;305299;Банк;UA999;14360570;ЗА ДЕБЕТУВАННЯ РАХУНКУ(UAH);-5.00;Комiсiя за виконання платежiв в нацiональнiй валютi у сумi 30159.30 грн вiд 19.10.2026, без ПДВ.;',
+  '10000000;305299;UA000000000000000000000005293;UAH;137;19.10.2026;305299;Банк;UA333;1111111111;ФОП ТЕСТ;-107 852.98;ОПЛАТА ЗА ПОСЛУГИ ЗГIДНО ДОГОВОРУ № OD-9;',
+  '10000000;305299;UA000000000000000000000005293;UAH;FEE137Y;19.10.2026;305299;Банк;UA999;14360570;ЗА ДЕБЕТУВАННЯ РАХУНКУ(UAH);-15.00;Комiсiя за виконання платежiв в нацiональнiй валютi у сумi 107852.98 грн вiд 19.10.2026, без ПДВ.;',
+  '10000000;305299;UA000000000000000000000005293;UAH;QSALE1;19.10.2026;305299;Банк;UA888;14360570;Продаж UAH клiєнтiв;26 940.00;Гривнi вiд продажу 600.00 USD по курсу 44.9;',
+  '10000000;305299;UA000000000000000000000005293;UAH;QSALE2;19.10.2026;305299;Банк;UA777;14360570;Ком.за в/о;-53.84;Списання комiсiї на здiйснення валютно-обмiнної операцiї вiд 19.10.2026, 600.00, USD, RIDSQ1, згiдно з тарифами банку, без ПДВ;',
+  '10000000;305299;UA000000000000000000000005293;UAH;AS1;02.10.2026;305299;Банк;UA666;14360570;ОБСЛУГ. ПОТ. РАХУНКIВ(UAH);-225.00;Комiсiя за обслуговування рахунку за вересень 2026 р.;',
+].join('\n');
+
+const SIGNED_USD_CSV = [
+  'ЄДРПОУ;МФО;Рахунок;Валюта;Номер документу;Дата операції;МФО банку;Назва банку;Рахунок кореспондента;ЄДРПОУ кореспондента;Кореспондент;Сума;Призначення платежу;',
+  '10000000;305299;UA000000000000000000000001648;USD;55;19.10.2026;305299;Банк;UA555;14360570;Банк;-600.00;Продаж 600.00 USD по курсу 44.9;',
+].join('\n');
+
+describe('pairStatementRows on a signed-amount statement', () => {
+  const uah = parse(SIGNED_CSV).rows;
+  const usd = parse(SIGNED_USD_CSV).rows;
+  const rows: PairingRow[] = [
+    ...uah.map((r) => ({
+      ...r,
+      key: `u${String(r.line)}`,
+      accountId: 'uah',
+      currency: 'UAH',
+      file: 'uah.csv',
+    })),
+    ...usd.map((r) => ({
+      ...r,
+      key: `d${String(r.line)}`,
+      accountId: 'usd',
+      currency: 'USD',
+      file: 'usd.csv',
+    })),
+  ];
+  const byDoc = (doc: string, direction: 'in' | 'out') =>
+    rows.find((r) => r.docNumber === doc && r.direction === direction)?.key;
+  const byRef = (ref: string) => rows.find((r) => r.ref === ref || r.docNumber === ref)?.key;
+  const pairing = pairStatementRows(rows);
+
+  it('attaches a hryvnia payment fee by the amount it names', () => {
+    expect(pairing.feeOf.get(byRef('FEE138Y') ?? '')).toBe(byDoc('138', 'out'));
+  });
+
+  it('attaches an exchange fee that writes «600.00, USD» to the USD leg', () => {
+    expect(pairing.counterOf.get(byRef('QSALE1') ?? '')).toBe(byDoc('55', 'out'));
+    expect(pairing.feeOf.get(byRef('QSALE2') ?? '')).toBe(byDoc('55', 'out'));
+  });
+
+  it('pairs a rejected payment with its return and each same-amount fee with its own payment', () => {
+    expect(pairing.returnOf.get(byDoc('137', 'in') ?? '')).toBe(byDoc('137', 'out'));
+    expect(pairing.feeOf.get(byRef('FEE137Y') ?? '')).toBe(byDoc('137', 'out'));
+    expect(pairing.feeOf.get(byRef('FEE139Y') ?? '')).toBe(byDoc('139', 'out'));
+    expect(pairing.counterOf.has(byDoc('137', 'in') ?? '')).toBe(false);
+  });
+
+  it('leaves the monthly account service charge alone', () => {
+    expect(pairing.feeOf.has(byRef('AS1') ?? '')).toBe(false);
+  });
+});
+
+describe('«Номер документу» without a reference column', () => {
+  it('keeps our order numbers and reads bank rows as references', () => {
+    const rows = parse(SIGNED_CSV).rows;
+    expect(rows[0]).toMatchObject({ docNumber: '139', ref: null });
+    expect(rows[1]).toMatchObject({ docNumber: null, ref: 'FEE139Y' });
+    expect(statementExternalRef(rows[0] as StatementRow, '5293')).toBe(
+      'privat:5293:2026-10-19:139:107852.98',
+    );
+    expect(statementExternalRef(rows[1] as StatementRow, '5293')).toBe('privat:FEE139Y');
+  });
+});
+
+describe('paymentFeeHints', () => {
+  it('reads the amount of a SWIFT fee and the number of a payment fee', () => {
+    expect(
+      paymentFeeHints({
+        direction: 'out',
+        purpose: 'Комiсiя за мiжнародний переказ вiд 14-10-2026, сума 3000.00 USD, реф. JBK1',
+      }),
+    ).toEqual({ amounts: ['3000.00 USD'], docNumbers: [] });
+    expect(paymentFeeHints({ direction: 'out', purpose: 'Комiсiя за платiж № 126' })).toEqual({
+      amounts: [],
+      docNumbers: ['126'],
+    });
+  });
+
+  it('is null for the account service charge and for non-fee rows', () => {
+    expect(
+      paymentFeeHints({ direction: 'out', purpose: 'Комiсiя за обслуговування рахунку' }),
+    ).toBeNull();
+    expect(paymentFeeHints({ direction: 'out', purpose: 'Оплата послуг' })).toBeNull();
   });
 });

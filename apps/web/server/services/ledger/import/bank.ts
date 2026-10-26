@@ -177,9 +177,17 @@ export const prepareBankImport = defineService({
           );
         }
         const tail = accountTail(statement.ourAccount);
+        const debitRefs = new Set(
+          statement.rows
+            .filter((r) => r.direction === 'out')
+            .map((r) => statementExternalRef(r, tail)),
+        );
         let overlapping = 0;
         for (const r of statement.rows) {
-          const externalRef = statementExternalRef(r, tail);
+          const plainRef = statementExternalRef(r, tail);
+          // A bank return keeps the number, date and amount of the rejected payment.
+          const externalRef =
+            r.direction === 'in' && debitRefs.has(plainRef) ? `${plainRef}:in` : plainRef;
           // Overlapping statements repeat the same bank rows; the first copy counts.
           if (seenRefs.has(externalRef)) {
             overlapping++;
@@ -235,11 +243,35 @@ export const prepareBankImport = defineService({
       }
 
       const pairing = pairStatementRows(
-        rows.map((r) => ({ ...r, occurredOn: r.occurredOn as LocalDate })),
+        rows.map((r) => ({
+          ...r,
+          occurredOn: r.occurredOn as LocalDate,
+          file: r.source.file,
+          line: r.source.line,
+        })),
       );
-      for (const r of rows)
+      const returned = new Set([...pairing.returnOf].flat());
+      for (const r of rows) {
+        if (returned.has(r.key)) r.status = 'returned';
         r.attachTo = pairing.counterOf.get(r.key) ?? pairing.feeOf.get(r.key) ?? null;
+      }
       await checkAgainstLedger(tx, rows);
+      for (const [credit, original] of pairing.returnOf) {
+        const back = rows.find((r) => r.key === credit);
+        const paid = rows.find((r) => r.key === original);
+        // The rejected payment is in the Ledger already: its return has to be booked against it.
+        if (back && paid && paid.status !== 'returned') {
+          back.status = 'new';
+          back.flags.push('returned_payment');
+        }
+      }
+      for (const r of rows) {
+        const target = r.attachTo ? rows.find((x) => x.key === r.attachTo) : undefined;
+        if (target?.status !== 'returned') continue;
+        // The bank keeps the fee of a rejected payment: a Bank Fees expense of its own.
+        r.attachTo = null;
+        r.flags.push('fee_of_returned');
+      }
       await suggestFromLedger(tx, rows);
       const id = await insertDraft(tx, 'bank', sources, sortRows(rows));
       return ok({ id });

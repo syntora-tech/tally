@@ -378,111 +378,116 @@ export const updateTransactions = defineService({
   input: z.object({ transactions: z.array(transactionPatch).min(1).max(100), dryRun }),
   handler: (ctx, input) =>
     inActorScopeAtomic(ctx, input, async (tx) => {
-      const errors: ItemErrors = {};
-      const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
-      const categories = await tx
-        .select({ id: category.id, name: category.name, txType: category.txType })
-        .from(category);
-      const results: { index: number; id: string; status: 'updated' | 'unchanged' }[] = [];
-      for (const [index, item] of input.transactions.entries()) {
-        const key = `transactions.${String(index)}`;
-        const [current] = await tx.select().from(transaction).where(eq(transaction.id, item.id));
-        if (!current) {
-          errors[key] = ['ledger.txNotFound'];
-          continue;
-        }
-        const stored = await tx.select().from(posting).where(eq(posting.transactionId, item.id));
-        const legs = stored.filter((p) => !p.isFee);
-        const storedLeg = (p: (typeof stored)[number] | undefined) =>
-          p && { accountId: p.accountId, amount: toDecimal(p.amount).abs().toString() };
-        const problems: string[] = [];
-        const leg = (
-          l: z.output<typeof legRef> | null | undefined,
-          name: string,
-          keep: unknown,
-        ) => {
-          if (l === undefined) return keep as { accountId: string; amount: string } | undefined;
-          if (l === null) return undefined;
-          const id = accounts.find((a) =>
-            uuidLike.test(l.account) ? a.id === l.account.toLowerCase() : a.name === l.account,
-          )?.id;
-          if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
-          return { accountId: id ?? '', amount: l.amount };
-        };
-        const type = item.type ?? current.type;
-        const categoryId = item.category
-          ? categories.find((c) =>
-              uuidLike.test(item.category ?? '')
-                ? c.id === item.category?.toLowerCase()
-                : c.txType === type && c.name === item.category,
-            )?.id
-          : current.categoryId;
-        if (!categoryId)
-          problems.push(msg('batch.categoryNotFound', { category: item.category ?? '', type }));
-        const patch = definedOnly({
-          occurredOn: item.occurredOn,
-          description: item.description,
-          counterparty: item.counterparty,
-          externalRef: item.externalRef,
-          personId: item.personId,
-          clientId: item.clientId,
-          counterpartyAddress: item.counterpartyAddress,
-        });
-        const merged = {
-          id: item.id,
-          reason: item.reason ?? null,
-          type,
-          categoryId: categoryId ?? '',
-          occurredOn: current.occurredOn,
-          description: current.description,
-          counterparty: current.counterparty,
-          externalRef: current.externalRef,
-          personId: current.personId,
-          clientId: current.clientId,
-          counterpartyAddress: current.counterpartyAddress,
-          ...patch,
-          from: leg(item.from, 'from', storedLeg(legs.find((p) => toDecimal(p.amount).isNeg()))),
-          to: leg(item.to, 'to', storedLeg(legs.find((p) => !toDecimal(p.amount).isNeg()))),
-          fee: leg(item.fee, 'fee', storedLeg(stored.find((p) => p.isFee))),
-        };
-        if (problems.length) {
-          errors[key] = problems;
-          continue;
-        }
-        const parsed = transactionInput.safeParse(merged);
-        if (!parsed.success) {
-          errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
-          continue;
-        }
-        try {
-          const outcome = await tx.transaction(async (sp) => {
-            const edited = await editTransaction(sp, {
-              ...parsed.data,
-              id: item.id,
-              reason: item.reason ?? null,
-            });
-            if (edited.isOk()) await sp.execute(sql`set constraints all immediate`);
-            return edited;
-          });
-          if (outcome.isErr()) {
-            errors[key] = [
-              ...Object.values(outcome.error.fieldErrors ?? {}).flat(),
-              ...(outcome.error.fieldErrors ? [] : [outcome.error.message]),
-            ];
-            continue;
-          }
-          results.push({ index, id: item.id, status: outcome.value.status });
-        } catch (error) {
-          const mapped = mapDbError(error);
-          if (!mapped) throw error;
-          errors[key] = [mapped.message];
-        } finally {
-          await tx.execute(sql`set constraints all deferred`);
-        }
-      }
+      const { errors, results } = await applyTransactionPatches(tx, input.transactions);
       return Object.keys(errors).length ? err(batchFailure(errors)) : ok({ transactions: results });
     }),
 });
+
+/** The edits of `updateTransactions` inside a caller's transaction; errors keyed `transactions.<index>`. */
+export async function applyTransactionPatches(
+  tx: DbTransaction,
+  patches: readonly z.output<typeof transactionPatch>[],
+) {
+  const errors: ItemErrors = {};
+  const accounts = await tx.select({ id: account.id, name: account.name }).from(account);
+  const categories = await tx
+    .select({ id: category.id, name: category.name, txType: category.txType })
+    .from(category);
+  const results: { index: number; id: string; status: 'updated' | 'unchanged' }[] = [];
+  for (const [index, item] of patches.entries()) {
+    const key = `transactions.${String(index)}`;
+    const [current] = await tx.select().from(transaction).where(eq(transaction.id, item.id));
+    if (!current) {
+      errors[key] = ['ledger.txNotFound'];
+      continue;
+    }
+    const stored = await tx.select().from(posting).where(eq(posting.transactionId, item.id));
+    const legs = stored.filter((p) => !p.isFee);
+    const storedLeg = (p: (typeof stored)[number] | undefined) =>
+      p && { accountId: p.accountId, amount: toDecimal(p.amount).abs().toString() };
+    const problems: string[] = [];
+    const leg = (l: z.output<typeof legRef> | null | undefined, name: string, keep: unknown) => {
+      if (l === undefined) return keep as { accountId: string; amount: string } | undefined;
+      if (l === null) return undefined;
+      const id = accounts.find((a) =>
+        uuidLike.test(l.account) ? a.id === l.account.toLowerCase() : a.name === l.account,
+      )?.id;
+      if (!id) problems.push(msg('batch.accountNotFound', { leg: name, account: l.account }));
+      return { accountId: id ?? '', amount: l.amount };
+    };
+    const type = item.type ?? current.type;
+    const categoryId = item.category
+      ? categories.find((c) =>
+          uuidLike.test(item.category ?? '')
+            ? c.id === item.category?.toLowerCase()
+            : c.txType === type && c.name === item.category,
+        )?.id
+      : current.categoryId;
+    if (!categoryId)
+      problems.push(msg('batch.categoryNotFound', { category: item.category ?? '', type }));
+    const patch = definedOnly({
+      occurredOn: item.occurredOn,
+      description: item.description,
+      counterparty: item.counterparty,
+      externalRef: item.externalRef,
+      personId: item.personId,
+      clientId: item.clientId,
+      counterpartyAddress: item.counterpartyAddress,
+    });
+    const merged = {
+      id: item.id,
+      reason: item.reason ?? null,
+      type,
+      categoryId: categoryId ?? '',
+      occurredOn: current.occurredOn,
+      description: current.description,
+      counterparty: current.counterparty,
+      externalRef: current.externalRef,
+      personId: current.personId,
+      clientId: current.clientId,
+      counterpartyAddress: current.counterpartyAddress,
+      ...patch,
+      from: leg(item.from, 'from', storedLeg(legs.find((p) => toDecimal(p.amount).isNeg()))),
+      to: leg(item.to, 'to', storedLeg(legs.find((p) => !toDecimal(p.amount).isNeg()))),
+      fee: leg(item.fee, 'fee', storedLeg(stored.find((p) => p.isFee))),
+    };
+    if (problems.length) {
+      errors[key] = problems;
+      continue;
+    }
+    const parsed = transactionInput.safeParse(merged);
+    if (!parsed.success) {
+      errors[key] = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      continue;
+    }
+    try {
+      const outcome = await tx.transaction(async (sp) => {
+        const edited = await editTransaction(sp, {
+          ...parsed.data,
+          id: item.id,
+          reason: item.reason ?? null,
+        });
+        if (edited.isOk()) await sp.execute(sql`set constraints all immediate`);
+        return edited;
+      });
+      if (outcome.isErr()) {
+        errors[key] = [
+          ...Object.values(outcome.error.fieldErrors ?? {}).flat(),
+          ...(outcome.error.fieldErrors ? [] : [outcome.error.message]),
+        ];
+        continue;
+      }
+      results.push({ index, id: item.id, status: outcome.value.status });
+    } catch (error) {
+      const mapped = mapDbError(error);
+      if (!mapped) throw error;
+      errors[key] = [mapped.message];
+    } finally {
+      await tx.execute(sql`set constraints all deferred`);
+    }
+  }
+  return { errors, results };
+}
 
 /**
  * Deletion in bulk for agents (A-063), e.g. to restart bookkeeping from a date. Same rule as the
