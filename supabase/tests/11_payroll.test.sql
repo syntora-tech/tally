@@ -2,7 +2,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(15);
+select plan(19);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000c1', 'viewer11@t.local');
 insert into public.app_user (id, email, role) values ('00000000-0000-0000-0000-0000000000c1', 'viewer11@t.local', 'viewer');
@@ -58,6 +58,22 @@ select set_config('app.reason', 'CTO is 803.73', true);
 select lives_ok($$ insert into public.adjustment (period_id, person_id, kind, amount, currency, reason)
   values ('80000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000011', 'correction', -0.27, 'USD', 'cents') $$,
   'the owner adds an adjustment to a closed month with a reason');
+-- A-124: the owner changes it with a reason, but never moves it to another payout.
+select lives_ok($$ update public.adjustment set amount = -0.30, reason = 'cents, corrected'
+  where period_id = '80000000-0000-0000-0000-000000000011' and kind = 'correction' $$,
+  'the owner changes an adjustment of a closed month with a reason');
+select throws_ok($$ update public.adjustment set payout_method = 'crypto'
+  where period_id = '80000000-0000-0000-0000-000000000011' and kind = 'correction' $$,
+  'TL030', null, 'an adjustment of a closed month never moves to another payout');
+select set_config('app.reason', '', true);
+select throws_ok($$ update public.adjustment set amount = -0.31
+  where period_id = '80000000-0000-0000-0000-000000000011' and kind = 'correction' $$,
+  'TL030', null, 'the owner needs app.reason to change an adjustment of a closed month');
+select set_config('request.jwt.claims', json_build_object('sub', '00000000-0000-0000-0000-0000000000c1')::text, true);
+select set_config('app.reason', 'try', true);
+select throws_ok($$ update public.adjustment set amount = -0.32
+  where period_id = '80000000-0000-0000-0000-000000000011' and kind = 'correction' $$,
+  'TL030', null, 'only the owner changes an adjustment of a closed month');
 select set_config('app.reason', '', true);
 select set_config('request.jwt.claims', '', true);
 select throws_ok($$ update public.payroll_line set status = 'payable' where id = 'c1000000-0000-0000-0000-000000000011' $$,
