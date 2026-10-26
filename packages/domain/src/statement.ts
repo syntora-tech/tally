@@ -336,7 +336,11 @@ export function ruleCategory(row: {
   purpose: string | null;
   counterparty: string | null;
 }): StatementRule | null {
-  const text = searchable(`${row.counterparty ?? ''} | ${row.purpose ?? ''}`);
+  // «Без ПДВ», «у т.ч. ПДВ», «ПДВ - 20 % 186.00 грн» only describe the price, not a tax payment.
+  const text = searchable(`${row.counterparty ?? ''} | ${row.purpose ?? ''}`).replace(
+    /(без|у т\.? ?ч\.?|в т\.? ?ч\.?|у тому числі|в тому числі)\s+пдв|пдв\s*-?\s*\d+(?:[.,]\d+)?\s*%/g,
+    ' ',
+  );
   if (row.direction === 'out') {
     if (
       has(
