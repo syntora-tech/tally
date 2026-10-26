@@ -175,7 +175,13 @@ export const getPeriodOverview = defineService({
       return {
         period: p,
         assignments,
-        preview: periodPreview(month, p.workHours, p.referenceFxUsdUah, assignments),
+        preview: periodPreview(
+          month,
+          p.workHours,
+          p.referenceFxUsdUah,
+          assignments,
+          adjustments.map(({ adjustment: a, personName }) => ({ ...a, personName })),
+        ),
         plan: payrollPlan(
           month,
           p.workHours,

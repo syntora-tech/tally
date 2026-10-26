@@ -86,6 +86,8 @@ test.afterAll(async () => {
         where l.payroll_item_id = i.id and i.period_id = p.id and p.month = ${`${MONTH}-01`}`);
       await tx.execute(sql`delete from public.payroll_item i using public.period p
         where i.period_id = p.id and p.month = ${`${MONTH}-01`}`);
+      await tx.execute(sql`delete from public.adjustment j using public.period p
+        where p.id = j.period_id and p.month = ${`${MONTH}-01`}`);
       await tx.execute(sql`delete from public.timesheet t using public.period p
         where p.id = t.period_id and p.month = ${`${MONTH}-01`}`);
       await tx.execute(sql`delete from public.period where month = ${`${MONTH}-01`}`);
@@ -132,7 +134,23 @@ test('v2 period: opened from a dialog, hours on step 2, closed on step 5', async
   await page.getByRole('link', { name: 'Next: Calculation' }).click();
   await expect(page).toHaveURL(/step=3/);
   await expect(page.getByTestId('total-invoice')).toContainText('8,272.00');
-  await page.getByRole('link', { name: 'Next: Adjustments' }).click();
+
+  // An adjustment is a line of the calculation, under its person, and part of the total.
+  await page.getByRole('button', { name: '+ Adjustment' }).click();
+  const adjust = page.getByRole('dialog');
+  await adjust.getByLabel('Person').selectOption({ label: personName });
+  await adjust.getByLabel('Kind').selectOption('other');
+  await adjust.getByLabel('Amount').fill('1000');
+  await adjust.getByLabel('Reason').fill('Compensation: corporate services');
+  await adjust.getByRole('button', { name: 'Add' }).click();
+  await expect(page.getByText('Adjustment added')).toBeVisible();
+  await page.keyboard.press('Escape');
+  const line = page.getByTestId('calc-adjustment');
+  await expect(line).toContainText(personName);
+  await expect(line).toContainText('Compensation: corporate services');
+  await expect(page.getByTestId('total-pay')).toContainText('1,000.00');
+
+  await page.getByRole('link', { name: 'Next: Payouts' }).click();
   await page.getByRole('link', { name: 'Next: Close' }).click();
   await expect(page.getByRole('link', { name: /^Next/ })).toHaveCount(0);
 

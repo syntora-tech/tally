@@ -134,25 +134,12 @@ export default async function PeriodPage({
       {!closed && <HoursCsvForm periodId={p.id} />}
     </div>
   );
+  const v2 = (await getUiPrefs()).version === 'v2';
   const people = [...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries()]
     .filter(([pid]) => pid)
     .map(([pid, name]) => ({ id: pid, name }));
   const adjustStepV2 = (
     <div className="flex flex-col">
-      {adjustments.length > 0 && (
-        <ul className="flex flex-col divide-y border-b">
-          {adjustments.map(({ adjustment: a, personName }) => (
-            <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5">
-              <span className="font-medium">{personName}</span>
-              <Status>{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Status>
-              {a.payoutMethod !== 'fiat' && <Status>{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Status>}
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.reason}</span>
-              <span className="font-semibold tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
-              {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
-            </li>
-          ))}
-        </ul>
-      )}
       <table className="w-full min-w-[36rem] text-sm tabular-nums">
         <thead className="text-xs text-muted-foreground">
           <tr>
@@ -221,26 +208,55 @@ export default async function PeriodPage({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {preview.rows.map((r) => (
-            <TableRow key={r.assignmentId}>
-              <TableCell>{r.personName}</TableCell>
-              <TableCell>
-                {r.clientName ?? tc('internal')}
-                {notes.get(r.assignmentId) && (
-                  <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
-                )}
-              </TableCell>
-              <TableCell>{fmt.amount(r.hours)}</TableCell>
-              <TableCell className={r.payHours === r.hours ? 'text-muted-foreground' : undefined}>
-                {fmt.amount(r.payHours)}
-              </TableCell>
-              <TableCell>
-                {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
-              </TableCell>
-              <TableCell>{fmt.amount(r.pay, r.payCurrency)}</TableCell>
-              <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
-            </TableRow>
-          ))}
+          {preview.lines.map((line) => {
+            if (line.kind === 'adjustment') {
+              const a = line.adjustment;
+              return (
+                <TableRow key={a.id} className="bg-muted/30" data-testid="calc-adjustment">
+                  <TableCell>{a.personName}</TableCell>
+                  <TableCell colSpan={4} className="max-w-[28rem]">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
+                      {a.payoutMethod !== 'fiat' && (
+                        <Badge variant="outline">{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Badge>
+                      )}
+                      <span className="min-w-0 truncate text-muted-foreground" title={a.reason}>
+                        {a.reason}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {fmt.amount(a.amount, a.currency)}
+                      {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
+                    </div>
+                  </TableCell>
+                  <TableCell>{a.payUahApprox ? fmt.amount(a.payUahApprox) : '—'}</TableCell>
+                </TableRow>
+              );
+            }
+            const r = line.row;
+            return (
+              <TableRow key={r.assignmentId}>
+                <TableCell>{r.personName}</TableCell>
+                <TableCell>
+                  {r.clientName ?? tc('internal')}
+                  {notes.get(r.assignmentId) && (
+                    <div className="text-xs text-muted-foreground">{notes.get(r.assignmentId)}</div>
+                  )}
+                </TableCell>
+                <TableCell>{fmt.amount(r.hours)}</TableCell>
+                <TableCell className={r.payHours === r.hours ? 'text-muted-foreground' : undefined}>
+                  {fmt.amount(r.payHours)}
+                </TableCell>
+                <TableCell>
+                  {r.invoiceAmount ? fmt.amount(r.invoiceAmount, r.billing?.currency) : '—'}
+                </TableCell>
+                <TableCell>{fmt.amount(r.pay, r.payCurrency)}</TableCell>
+                <TableCell>{r.payUahApprox ? fmt.amount(r.payUahApprox) : '—'}</TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
         <TableFooter>
           <TableRow>
@@ -267,6 +283,11 @@ export default async function PeriodPage({
           </TableRow>
         </TableFooter>
       </Table>
+      {!closed && !v2 && (
+        <div className="mt-4">
+          <AdjustmentForm periodId={p.id} people={people} />
+        </div>
+      )}
       {docs && (docs.invoices.length > 0 || docs.acts.length > 0) && (
         <div className="mt-6 flex flex-col gap-4">
           <div>
@@ -429,30 +450,6 @@ export default async function PeriodPage({
   );
   const adjustStep = (
     <div className="flex flex-col gap-4">
-      {adjustments.length > 0 && (
-        <ul className="flex flex-col gap-1 text-sm">
-          {adjustments.map(({ adjustment: a, personName }) => (
-            <li key={a.id} className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{personName}</span>
-              <Badge variant="outline">{ADJUSTMENT_KIND_LABELS[a.kind] ?? a.kind}</Badge>
-              <span className="tabular-nums">{fmt.amount(a.amount, a.currency)}</span>
-              {a.payoutMethod !== 'fiat' && (
-                <Badge variant="outline">{PAYOUT_METHOD_LABELS[a.payoutMethod]}</Badge>
-              )}
-              <span className="text-muted-foreground">{a.reason}</span>
-              {!closed && <RemoveAdjustmentButton id={a.id} periodId={p.id} />}
-            </li>
-          ))}
-        </ul>
-      )}
-      {!closed && (
-        <AdjustmentForm
-          periodId={p.id}
-          people={[...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries()]
-            .filter(([id]) => id)
-            .map(([id, name]) => ({ id, name }))}
-        />
-      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -517,7 +514,7 @@ export default async function PeriodPage({
     </div>
   );
 
-  if ((await getUiPrefs()).version === 'v2') {
+  if (v2) {
     const periods = (await listPeriods.run(ctx, {})).unwrapOr([]);
     const requested = Number((await searchParams).step);
     const step = requested >= 1 && requested <= 5 ? requested : closed ? 5 : 2;
@@ -616,15 +613,14 @@ export default async function PeriodPage({
             },
             {
               title: t('step3'),
-              summary: t('v2.summary.rows', { count: preview.rows.length }),
+              summary: [
+                t('v2.summary.rows', { count: preview.rows.length }),
+                adjustments.length > 0 &&
+                  t('v2.summary.adjustments', { count: adjustments.length }),
+              ]
+                .filter(Boolean)
+                .join(' · '),
               help: t('step3Description'),
-              content: calcStep,
-            },
-            {
-              title: t('step4'),
-              summary: t('v2.summary.adjustments', { count: adjustments.length }),
-              help: t('step4Description'),
-              flush: true,
               actions: closed ? undefined : (
                 <DialogButton
                   variant="outline"
@@ -634,6 +630,13 @@ export default async function PeriodPage({
                   + {t('v2.adjustment')}
                 </DialogButton>
               ),
+              content: calcStep,
+            },
+            {
+              title: t('step4'),
+              summary: t('v2.summary.payouts', { count: plan.length }),
+              help: t('step4Description'),
+              flush: true,
               content: adjustStepV2,
             },
             {

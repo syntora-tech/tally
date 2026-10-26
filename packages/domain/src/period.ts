@@ -60,6 +60,7 @@ export type PeriodAssignment = {
 
 export type PreviewRow = {
   assignmentId: string;
+  personId: string;
   personName: string;
   clientName: string | null;
   contractId: string | null;
@@ -74,8 +75,33 @@ export type PreviewRow = {
   payUahApprox: string | null;
 };
 
+/** A bonus, deduction or compensation of the month (step 4) as it adds to the person's pay. */
+export type PreviewAdjustmentInput = {
+  id: string;
+  personId: string;
+  personName: string;
+  kind: string;
+  reason: string;
+  payoutMethod: PayoutMethod;
+  /** Signed: a deduction is negative. */
+  amount: DecimalInput;
+  currency: string;
+};
+
+export type PreviewAdjustment = Omit<PreviewAdjustmentInput, 'amount'> & {
+  amount: string;
+  payUahApprox: string | null;
+};
+
+/** The calculation table: each person's assignments, then that person's adjustments. */
+export type PreviewLine =
+  { kind: 'assignment'; row: PreviewRow } | { kind: 'adjustment'; adjustment: PreviewAdjustment };
+
 export type PeriodPreview = {
   rows: PreviewRow[];
+  adjustments: PreviewAdjustment[];
+  lines: PreviewLine[];
+  /** Pay totals include the adjustments: what the month's payouts come to. */
   totals: { invoiceUsd: string; payUsd: string; payUah: string; payUahApprox: string | null };
 };
 
@@ -107,6 +133,7 @@ export function periodPreview(
   workHours: DecimalInput,
   referenceFx: DecimalInput | null,
   assignments: readonly PeriodAssignment[],
+  adjustmentInputs: readonly PreviewAdjustmentInput[] = [],
 ): PeriodPreview {
   const rows: PreviewRow[] = assignments
     .filter((a) => isActiveInMonth(a, month))
@@ -118,6 +145,7 @@ export function periodPreview(
       const pay = p ? payrollLineAmount(p, personHours(a), workHours) : new Decimal(0);
       return {
         assignmentId: a.assignmentId,
+        personId: a.personId ?? a.personName,
         personName: a.personName,
         clientName: a.clientName,
         contractId: a.contractId,
@@ -133,19 +161,59 @@ export function periodPreview(
         payUahApprox: uahApprox(pay, p?.currency ?? 'USD', referenceFx)?.toFixed(2) ?? null,
       };
     });
-  const payIn = (currency: string) =>
-    sum(rows.filter((r) => r.payCurrency === currency).map((r) => r.pay)).toFixed(2);
+  const adjustments: PreviewAdjustment[] = adjustmentInputs.map((a) => {
+    const amount = toDecimal(a.amount);
+    return {
+      ...a,
+      amount: amount.toFixed(2),
+      payUahApprox: uahApprox(amount, a.currency, referenceFx)?.toFixed(2) ?? null,
+    };
+  });
+  // Stablecoin adjustments of crypto payouts count as dollars, like crypto pay terms.
+  const pays = [
+    ...rows.map((r) => ({ amount: r.pay, uah: r.payCurrency === 'UAH', approx: r.payUahApprox })),
+    ...adjustments.map((a) => ({
+      amount: a.amount,
+      uah: a.currency === 'UAH',
+      approx: a.payUahApprox,
+    })),
+  ];
+  const payIn = (uah: boolean) =>
+    sum(pays.filter((x) => x.uah === uah).map((x) => x.amount)).toFixed(2);
   return {
     rows,
+    adjustments,
+    lines: previewLines(rows, adjustments),
     totals: {
       invoiceUsd: sum(rows.map((r) => r.invoiceAmount ?? '0')).toFixed(2),
-      payUsd: payIn('USD'),
-      payUah: payIn('UAH'),
-      payUahApprox: rows.some((r) => r.payUahApprox === null)
+      payUsd: payIn(false),
+      payUah: payIn(true),
+      payUahApprox: pays.some((x) => x.approx === null)
         ? null
-        : sum(rows.map((r) => r.payUahApprox ?? '0')).toFixed(2),
+        : sum(pays.map((x) => x.approx ?? '0')).toFixed(2),
     },
   };
+}
+
+/** Rows in their order; each person's adjustments follow that person's last row. */
+function previewLines(
+  rows: readonly PreviewRow[],
+  adjustments: readonly PreviewAdjustment[],
+): PreviewLine[] {
+  const lines: PreviewLine[] = [];
+  const placed = new Set<string>();
+  rows.forEach((row, i) => {
+    lines.push({ kind: 'assignment', row });
+    if (rows.slice(i + 1).some((r) => r.personId === row.personId)) return;
+    for (const adjustment of adjustments.filter((a) => a.personId === row.personId)) {
+      lines.push({ kind: 'adjustment', adjustment });
+      placed.add(adjustment.id);
+    }
+  });
+  for (const adjustment of adjustments.filter((a) => !placed.has(a.id))) {
+    lines.push({ kind: 'adjustment', adjustment });
+  }
+  return lines;
 }
 
 export type DraftLine = {

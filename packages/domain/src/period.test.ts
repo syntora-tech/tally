@@ -320,4 +320,45 @@ describe('client hours and person hours (A-074)', () => {
       totalUahApprox: '60000.00',
     });
   });
+
+  it('lists adjustments under their person and counts them in the pay totals', () => {
+    const other: PeriodAssignment = {
+      ...row,
+      assignmentId: 'b1',
+      personId: 'b',
+      personName: 'B',
+      payHours: null,
+    };
+    const own = (id: string, personId: string, amount: string, currency: string) => ({
+      id,
+      personId,
+      personName: personId,
+      kind: 'other',
+      reason: 'Compensation',
+      payoutMethod: 'fiat' as const,
+      amount,
+      currency,
+    });
+    const preview = periodPreview(
+      JAN,
+      '184',
+      '41.50',
+      [
+        { ...row, personId: 'a', payHours: null },
+        { ...row, assignmentId: 'a2', personId: 'a', payHours: null },
+        other,
+      ],
+      [own('j1', 'a', '1828', 'USD'), own('j2', 'c', '-1000', 'UAH')],
+    );
+    expect(
+      preview.lines.map((l) => (l.kind === 'assignment' ? l.row.assignmentId : l.adjustment.id)),
+    ).toEqual([row.assignmentId, 'a2', 'j1', 'b1', 'j2']);
+    expect(preview.adjustments[0]).toMatchObject({ amount: '1828.00', payUahApprox: '75862.00' });
+    // 3 × 4 000 + 1 828 USD; −1 000 UAH; 13 828 × 41.50 − 1 000.
+    expect(preview.totals).toMatchObject({
+      payUsd: '13828.00',
+      payUah: '-1000.00',
+      payUahApprox: '572862.00',
+    });
+  });
 });
