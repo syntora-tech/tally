@@ -27,7 +27,7 @@ import {
   type ActDateRule,
   type LocalDate,
 } from '@tally/domain';
-import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { carveAct } from '../acts';
@@ -223,11 +223,14 @@ async function fiatPay(tx: DbTransaction, p: PeriodRow): Promise<PersonPay[]> {
 }
 
 /** Monthly acts whose period starts in the month: one, or several split from it (A-089). */
+/**
+ * Monthly acts of a month: of its payouts, or dated in it when not linked to one. The last act of
+ * a closed payout may run into the next month (A-098) and still belongs to the payout's month.
+ */
 export const actsOfMonth = (month: LocalDate) =>
   and(
     eq(supplierAct.type, 'monthly'),
-    gte(supplierAct.periodFrom, month),
-    lte(supplierAct.periodFrom, endOfMonth(month)),
+    sql`public.act_month("supplier_act") = ${month}::date`,
     ne(supplierAct.status, 'void'),
   );
 
