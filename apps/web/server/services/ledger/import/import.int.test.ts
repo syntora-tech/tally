@@ -282,6 +282,41 @@ describe('bank statement import (A-121)', () => {
     await discardImport.run(ctx, { id: both._unsafeUnwrap().id });
   });
 
+  it('splits a multi-account export by account (A-126)', async () => {
+    const ctx = ctxOf(owner);
+    const multi = [
+      ';;;;Виписка по декількох рахунках з01.06.2045 по 30.06.2045',
+      '№;Дата проводки;Час проводки;Сума;Валюта;Призначення платежу;ЄДРПОУ;Назва контрагента;Рахунок контрагента;Ваш ЄДРПОУ;Ваш рахунок;Референс',
+      `M${tag}1;02.06.2045;12:37:00;8946;UAH;Гривнi вiд продажу 200.00 USD по курсу 44.73;14360570;Продаж UAH клiєнтiв;UA06;10000000;${UAH_ACC};BLDZ1.P`,
+      `M${tag}2;02.06.2045;12:37:00;-200;USD;Списання коштiв в сумi 200.00, USD, по курсу 44.73;14360570;Продаж USD клiєнта;UA58;10000000;${USD_ACC};BLDZ2.1`,
+      `131;02.06.2045;12:39:00;-1016;UAH;ПДФО;37607526;ГОЛОВНЕ УДКСУ;UA22;10000000;${UAH_ACC};JBKL3.1`,
+    ].join('\n');
+
+    const chosen = await prepareBankImport.run(ctx, {
+      files: [file('multi.csv', multi)],
+      accountId: ids[uahName],
+    });
+    expect(chosen._unsafeUnwrapErr().fieldErrors?.files?.[0]).toContain('import.mixedAccounts');
+
+    const prepared = await prepareBankImport.run(ctx, { files: [file('multi.csv', multi)] });
+    const id = prepared._unsafeUnwrap().id;
+    const draft = (await getImport.run(ctx, { id }))._unsafeUnwrap();
+    const by = (n: number) => draft.rows.find((r) => r.source.line === n) as ImportRow;
+    expect(by(3)).toMatchObject({ accountId: ids[uahName], currency: 'UAH', attachTo: by(4).key });
+    expect(by(4)).toMatchObject({ accountId: ids[usdName], currency: 'USD' });
+    expect(by(5)).toMatchObject({
+      externalRef: `privat:5293:2045-06-02:131:1016.00`,
+      counterpartyTaxId: '37607526',
+    });
+    expect(
+      (draft.sources as { accountId: string; rows: number }[]).map((s) => [s.accountId, s.rows]),
+    ).toEqual([
+      [ids[uahName], 2],
+      [ids[usdName], 1],
+    ]);
+    await discardImport.run(ctx, { id });
+  });
+
   it('pairs the exchange, attaches the fee, links a hand-entered row and books in one go', async () => {
     const ctx = ctxOf(owner);
     // The tax payment was entered by hand before the statement arrived.

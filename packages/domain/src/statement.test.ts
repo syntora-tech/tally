@@ -32,7 +32,25 @@ const USD_CSV = [
   '10000000;UA000000000000000000000001648;USD;13.10.2026;;1;;7896.00;From GlobalSoft OU EE Tallinn for No 25/26-2;GlobalSoft OU',
 ].join('\n');
 
-const parse = (csv: string) => parseStatementTable(parseCsvTable(csv))._unsafeUnwrap();
+// Privat24 «Виписка по декількох рахунках»: «№» holds our order number or the short bank
+// reference, «Референс» an id of the bank posting, «ЄДРПОУ» is the counterparty's.
+const MULTI_CSV = [
+  'АТ КБ "ПРИВАТБАНК", ЄДРПОУ 14360570;;;;;від 30.10.2026 13:39',
+  ';;;;Виписка по декількох рахунках з01.10.2026 по 30.10.2026',
+  '№;Дата проводки;Час проводки;Сума;Валюта;Призначення платежу;ЄДРПОУ;Назва контрагента;Рахунок контрагента;МФО контрагента;Ваш МФО;Ваш ЄДРПОУ;Ваш рахунок;Назва вашого рахунку;Референс',
+  '123;02.10.2026;12:39:00;-1116;UAH;Оплата згiдно рахунку №ЛХМ-46140580;36865753;ЦСК УКРАЇНА ТОВ;UA813052990000026002026218651;305299;305299;10000000;UA000000000000000000000005293;СIНТОРА ТОВ;JBKLQA2OEV8ATV.1',
+  'Q1002D3OJC;02.10.2026;12:37:00;-600;USD;Списання коштiв на здiйснення валютно-обмiнних операцiй в сумi 600.00, USD, по курсу 44.7300000;14360570;Продаж USD клiєнта;UA583052990000029008828900113;305299;305299;10000000;UA000000000000000000000001648;СIНТОРА ТОВ;BLDZQ1002D3OJC.1',
+  'Q1002D3OLR;02.10.2026;12:37:00;26838;UAH;Гривнi вiд продажу 600.00 USD по курсу 44.73;14360570;Продаж UAH клiєнтiв;UA063052990000029004828900021;305299;305299;10000000;UA000000000000000000000005293;СIНТОРА ТОВ;BLDZQ1002D3OLR.P',
+  'Q1002D3OJM;02.10.2026;12:37:00;-200;USD;Списання коштiв на здiйснення валютно-обмiнних операцiй в сумi 200.00, USD, по курсу 44.7300000;14360570;Продаж USD клiєнта;UA583052990000029008828900113;305299;305299;10000000;UA000000000000000000000001648;СIНТОРА ТОВ;BLDZQ1002D3OJM.1',
+  'Q1002D3OMH;02.10.2026;12:37:00;8946;UAH;Гривнi вiд продажу 200.00 USD по курсу 44.73;14360570;Продаж UAH клiєнтiв;UA063052990000029004828900021;305299;305299;10000000;UA000000000000000000000005293;СIНТОРА ТОВ;BLDZQ1002D3OMH.P',
+].join('\n');
+
+const parseAll = (csv: string) => parseStatementTable(parseCsvTable(csv))._unsafeUnwrap();
+const parse = (csv: string) => {
+  const [only, ...rest] = parseAll(csv);
+  if (!only || rest.length) throw new Error('expected one statement');
+  return only;
+};
 
 describe('parseBankAmount', () => {
   it.each([
@@ -113,12 +131,58 @@ describe('parseStatementTable', () => {
     expect(parseStatementTable([])._unsafeUnwrapErr()).toEqual({ code: 'empty' });
   });
 
-  it('refuses a file with rows of two accounts', () => {
-    const csv = 'Рахунок;Дата;Сума\nUA1;01.10.2026;1\nUA2;01.10.2026;2';
-    expect(parseStatementTable(parseCsvTable(csv))._unsafeUnwrapErr()).toEqual({
-      code: 'mixed_accounts',
-      accounts: ['UA1', 'UA2'],
+  it('splits a file with rows of several accounts into one statement per account', () => {
+    const csv =
+      'Рахунок;Дата;Сума;Валюта\nUA1;01.10.2026;1;UAH\nUA2;01.10.2026;2;USD\n;01.10.2026;3;UAH';
+    expect(
+      parseAll(csv).map((s) => [s.ourAccount, s.currency, s.rows.map((r) => r.amount)]),
+    ).toEqual([
+      ['UA1', 'UAH', ['1']],
+      ['UA2', 'USD', ['2']],
+      [null, 'UAH', ['3']],
+    ]);
+  });
+
+  it('keeps rows without an account with the only account the file names', () => {
+    const [s] = parseAll('Рахунок;Дата;Сума\nUA1;01.10.2026;1\n;01.10.2026;2');
+    expect(s?.ourAccount).toBe('UA1');
+    expect(s?.rows).toHaveLength(2);
+  });
+
+  it('reads the multi-account Privat24 layout with the Ledger keys of the single-account one', () => {
+    const [uah, usd] = parseAll(MULTI_CSV);
+    expect(uah?.ourAccount).toBe('UA000000000000000000000005293');
+    expect(uah?.currency).toBe('UAH');
+    expect(usd?.ourAccount).toBe('UA000000000000000000000001648');
+    expect(usd?.currency).toBe('USD');
+    expect(uah?.rows[0]).toMatchObject({
+      direction: 'out',
+      amount: '1116',
+      docNumber: '123',
+      ref: null,
+      counterpartyTaxId: '36865753',
+      counterpartyAccount: 'UA813052990000026002026218651',
     });
+    expect(uah?.rows[1]).toMatchObject({ direction: 'in', ref: 'Q1002D3OLR', docNumber: null });
+    expect(uah?.rows[0] && statementExternalRef(uah.rows[0], '5293')).toBe(
+      'privat:5293:2026-10-02:123:1116.00',
+    );
+    expect(usd?.rows[0] && statementExternalRef(usd.rows[0], '1648')).toBe('privat:Q1002D3OJC');
+  });
+
+  it('pairs each of several exchanges of one day by the amount the hryvnia leg names', () => {
+    const rows = parseAll(MULTI_CSV).flatMap((s) =>
+      s.rows.map((r) => ({
+        ...r,
+        key: r.ref ?? String(r.line),
+        accountId: s.ourAccount ?? '',
+        currency: s.currency ?? '',
+      })),
+    );
+    expect([...pairStatementRows(rows).counterOf]).toEqual([
+      ['Q1002D3OLR', 'Q1002D3OJC'],
+      ['Q1002D3OMH', 'Q1002D3OJM'],
+    ]);
   });
 
   it('flags a row with money but an unreadable date', () => {

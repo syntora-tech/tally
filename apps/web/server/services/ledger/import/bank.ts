@@ -46,11 +46,14 @@ export const bankImportInput = z.object({
 const fileError = (key: string, values: Record<string, string>): ServiceError =>
   serviceError('validation_error', msg(key, values), { files: [msg(key, values)] });
 
-/** CSV in UTF-8 or Windows-1251 (older Privat24 exports), or the first sheet of an .xlsx. */
+/**
+ * CSV in UTF-8 or Windows-1251 (older Privat24 exports), or the first sheet of an .xlsx; one
+ * statement per account the file has rows of.
+ */
 export function readStatementFile(
   name: string,
   bytes: Buffer,
-): Result<ParsedStatement, ServiceError> {
+): Result<ParsedStatement[], ServiceError> {
   let table: string[][];
   if (bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
     const sheet = readXlsxFirstSheet(bytes);
@@ -75,13 +78,6 @@ export function readStatementFile(
   switch (parsed.error.code) {
     case 'empty':
       return err(fileError('import.emptyStatement', { file: name }));
-    case 'mixed_accounts':
-      return err(
-        fileError('import.mixedAccounts', {
-          file: name,
-          accounts: parsed.error.accounts.join(', '),
-        }),
-      );
     case 'unknown_format':
       return err(
         fileError('import.unknownFormat', {
@@ -108,7 +104,7 @@ type BankSource = {
 };
 
 /**
- * Reads up to six statements (one per account, any period) into a draft import (A-121). Nothing
+ * Reads up to six statements (any accounts, any period; A-126) into a draft import (A-121). Nothing
  * is booked here: the draft shows which rows are new, already in the Ledger, or the second leg
  * or fee of another row, with suggestions; `commitImport` books what the person confirms.
  */
@@ -119,14 +115,28 @@ export const prepareBankImport = defineService({
     const files = await Promise.all(
       input.files.map(async (f) => ({ name: f.name, bytes: Buffer.from(await f.arrayBuffer()) })),
     );
-    const parsed: { name: string; sha256: string; statement: ParsedStatement }[] = [];
-    for (const f of files) {
-      const statement = readStatementFile(f.name, f.bytes);
-      if (statement.isErr()) return err(statement.error);
+    const parsed: {
+      index: number;
+      name: string;
+      sha256: string;
+      statement: ParsedStatement;
+    }[] = [];
+    for (const [index, f] of files.entries()) {
+      const statements = readStatementFile(f.name, f.bytes);
+      if (statements.isErr()) return err(statements.error);
       const sha256 = createHash('sha256').update(f.bytes).digest('hex');
       if (parsed.some((p) => p.sha256 === sha256))
         return err(fileError('import.sameFile', { file: f.name }));
-      parsed.push({ name: f.name, sha256, statement: statement.value });
+      if (input.accountId && statements.value.length > 1) {
+        return err(
+          fileError('import.mixedAccounts', {
+            file: f.name,
+            accounts: statements.value.map((s) => s.ourAccount ?? '?').join(', '),
+          }),
+        );
+      }
+      for (const statement of statements.value)
+        parsed.push({ index, name: f.name, sha256, statement });
     }
     return inActorScope(ctx, async (tx) => {
       const banks = await tx
@@ -154,7 +164,7 @@ export const prepareBankImport = defineService({
       const rows: ImportRow[] = [];
       const sources: BankSource[] = [];
       const seenRefs = new Set<string>();
-      for (const [index, p] of parsed.entries()) {
+      for (const p of parsed) {
         const { statement } = p;
         const chosen = input.accountId
           ? banks.find((b) => b.id === input.accountId)
@@ -166,7 +176,24 @@ export const prepareBankImport = defineService({
               );
               return byCurrency.length === 1 ? byCurrency[0] : undefined;
             })());
-        if (!chosen) return err(fileError('import.chooseAccount', { file: p.name }));
+        if (!chosen) {
+          return err(
+            fileError('import.chooseAccount', {
+              file: statement.ourAccount ? `${p.name} (${statement.ourAccount})` : p.name,
+            }),
+          );
+        }
+        // Two accounts of one file guessed into the same Tally account would merge their rows.
+        const twin = sources.find((s) => s.sha256 === p.sha256 && s.accountId === chosen.id);
+        if (twin) {
+          return err(
+            fileError('import.accountsCollide', {
+              file: p.name,
+              accounts: [twin.ourAccount, statement.ourAccount].map((a) => a ?? '?').join(', '),
+              account: chosen.name,
+            }),
+          );
+        }
         if (statement.currency && statement.currency !== chosen.currency) {
           return err(
             fileError('import.currencyMismatch', {
@@ -195,7 +222,7 @@ export const prepareBankImport = defineService({
           }
           seenRefs.add(externalRef);
           rows.push({
-            key: `${String(index)}:${String(r.line)}`,
+            key: `${String(p.index)}:${String(r.line)}`,
             accountId: chosen.id,
             occurredOn: r.occurredOn,
             direction: r.direction,

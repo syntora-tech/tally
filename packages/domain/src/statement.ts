@@ -26,13 +26,13 @@ export type StatementField =
 /** Header names after `headerKey`, best first; a later entry is used only when no earlier one is present. */
 const HEADERS: Record<StatementField, readonly string[]> = {
   date: ['датаоперації', 'датапроводки', 'датаопераціі', 'дата', 'date'],
-  time: ['час', 'часоперації', 'time'],
+  time: ['час', 'часоперації', 'часпроводки', 'time'],
   debit: ['дебет', 'сумадебет', 'видаток', 'списання', 'debit'],
   credit: ['кредит', 'сумакредит', 'надходження', 'зарахування', 'credit'],
   amount: ['сума', 'сумаоперації', 'сумаувалютірахунку', 'amount'],
   currency: ['валюта', 'валютарахунку', 'currency'],
   ref: ['референс', 'референсоперації', 'референспроводки', 'ref', 'reference'],
-  docNumber: ['номердокумента', 'номердокументу', 'документ', 'номердок', 'document'],
+  docNumber: ['номердокумента', 'номердокументу', 'документ', 'номердок', 'номер', 'document'],
   purpose: ['призначенняплатежу', 'призначення', 'деталіплатежу', 'purpose', 'details'],
   counterparty: [
     'кореспондент',
@@ -49,6 +49,7 @@ const HEADERS: Record<StatementField, readonly string[]> = {
     'кодконтрагента',
     'єдрпоуіпнконтрагента',
     'іпнконтрагента',
+    'єдрпоу',
   ],
   counterpartyAccount: [
     'рахуноккореспондента',
@@ -56,13 +57,13 @@ const HEADERS: Record<StatementField, readonly string[]> = {
     'ibanкореспондента',
     'ibanконтрагента',
   ],
-  ourAccount: ['рахунок', 'номеррахунку', 'iban', 'account'],
+  ourAccount: ['вашрахунок', 'рахунок', 'номеррахунку', 'iban', 'account'],
   balance: ['залишок', 'залишокпісляоперації', 'вихіднийзалишок', 'balance'],
 };
 
 /** Lower case, Latin look-alikes as Cyrillic (statements mix «I» and «І»), letters and digits only. */
 export function headerKey(raw: string): string {
-  return normalizeText(raw).replace(/[^\p{L}\p{N}]/gu, '');
+  return normalizeText(raw.replaceAll('№', 'номер')).replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 const LOOKALIKES: Record<string, string> = { i: 'і', ï: 'ї' };
@@ -101,7 +102,7 @@ export type StatementRow = {
 export type ParsedStatement = {
   columns: Partial<Record<StatementField, string>>;
   rows: StatementRow[];
-  /** Our account number/IBAN when every row names the same one. */
+  /** Our account number/IBAN of every row, when the export names it. */
   ourAccount: string | null;
   currency: string | null;
   /** Rows without a date or an amount (totals, blank lines) that were left out. */
@@ -110,10 +111,7 @@ export type ParsedStatement = {
   problems: { line: number; field: StatementField; value: string }[];
 };
 
-export type StatementError =
-  | { code: 'empty' }
-  | { code: 'unknown_format'; headers: string[] }
-  | { code: 'mixed_accounts'; accounts: string[] };
+export type StatementError = { code: 'empty' } | { code: 'unknown_format'; headers: string[] };
 
 const HEADER_SCAN_ROWS = 30;
 
@@ -138,8 +136,11 @@ function findColumns(header: readonly string[]) {
     'balance',
     'ourAccount',
   ];
+  // A bare «ЄДРПОУ» is ours unless the export also has «Ваш ЄДРПОУ» (multi-account Privat24).
+  const bareTaxIdIsTheirs = keys.includes('вашєдрпоу');
   for (const field of order) {
     for (const name of HEADERS[field]) {
+      if (name === 'єдрпоу' && !bareTaxIdIsTheirs) continue;
       const index = keys.findIndex((k, i) => k === name && !taken.has(i));
       if (index >= 0) {
         columns[field] = index;
@@ -206,13 +207,14 @@ const cell = (row: readonly string[], index: number | undefined) =>
   index === undefined ? null : (row[index] ?? '').trim() || null;
 
 /**
- * Reads statement rows from a table. The header is the first of the top rows that names a date
- * and an amount column; rows without a date and a non-zero amount (totals, blank lines) are left
- * out and counted.
+ * Reads statement rows from a table, one statement per our account (a Privat24 export «по
+ * декількох рахунках» has rows of several). The header is the first of the top rows that names a
+ * date and an amount column; rows without a date and a non-zero amount (totals, blank lines) are
+ * left out and counted in the first statement.
  */
 export function parseStatementTable(
   table: readonly (readonly string[])[],
-): Result<ParsedStatement, StatementError> {
+): Result<ParsedStatement[], StatementError> {
   const nonEmpty = table.filter((r) => r.some((c) => c.trim()));
   if (!nonEmpty.length) return err({ code: 'empty' });
   let headerIndex = -1;
@@ -220,6 +222,9 @@ export function parseStatementTable(
   for (const [i, row] of table.slice(0, HEADER_SCAN_ROWS).entries()) {
     const columns = findColumns(row);
     if (columns.date !== undefined && hasMoney(columns)) {
+      // The multi-account export («Ваш рахунок») adds «Референс», an id of its own postings; the
+      // Ledger is keyed by «№» as in the single-account export (A-123), so that column is not used.
+      if (row.some((c) => headerKey(c) === 'вашрахунок')) delete columns.ref;
       headerIndex = i;
       found = columns;
       break;
@@ -282,21 +287,29 @@ export function parseStatementTable(
       balance: balance ? balance.toFixed() : null,
     });
   }
-  const accounts = [...new Set(rows.flatMap((r) => (r.ourAccount ? [r.ourAccount] : [])))];
-  if (accounts.length > 1) return err({ code: 'mixed_accounts', accounts });
-  const currencies = [...new Set(rows.flatMap((r) => (r.currency ? [r.currency] : [])))];
   const columns: ParsedStatement['columns'] = {};
   for (const [field, index] of Object.entries(found) as [StatementField, number][]) {
     columns[field] = (header[index] ?? '').trim();
   }
-  return ok({
-    columns,
-    rows,
-    ourAccount: accounts[0] ?? null,
-    currency: currencies.length === 1 ? (currencies[0] ?? null) : null,
-    skipped,
-    problems,
-  });
+  const accounts = [...new Set(rows.flatMap((r) => (r.ourAccount ? [r.ourAccount] : [])))];
+  // With a single account named, rows that leave it out belong to it too.
+  const parts: (string | null)[] =
+    accounts.length > 1 && rows.some((r) => !r.ourAccount) ? [...accounts, null] : accounts;
+  return ok(
+    (parts.length ? parts : [null]).map((ourAccount, i) => {
+      const own =
+        parts.length > 1 ? rows.filter((r) => (r.ourAccount ?? null) === ourAccount) : rows;
+      const currencies = [...new Set(own.flatMap((r) => (r.currency ? [r.currency] : [])))];
+      return {
+        columns,
+        rows: own,
+        ourAccount,
+        currency: currencies.length === 1 ? (currencies[0] ?? null) : null,
+        skipped: i === 0 ? skipped : 0,
+        problems: i === 0 ? problems : [],
+      };
+    }),
+  );
 }
 
 /**
@@ -504,8 +517,20 @@ export function pairStatementRows(rows: readonly PairingRow[]): Pairing {
         d.counterpartyAccount === credit.ourAccount
       );
     });
-    if (candidates.length !== 1) continue;
-    const [debit] = candidates;
+    // A foreign debit names its own amount, so with several exchanges a day every one of them is a
+    // candidate: the leg whose amount the other leg names is the one.
+    const named =
+      candidates.length > 1
+        ? candidates.filter((d) => {
+            const foreign = d.currency !== 'UAH' ? d : credit;
+            const other = foreign === d ? credit : d;
+            return mentionedAmounts(other.purpose).includes(
+              `${toDecimal(foreign.amount).toFixed(2)} ${foreign.currency}`,
+            );
+          })
+        : candidates;
+    if (named.length !== 1) continue;
+    const [debit] = named;
     if (!debit) continue;
     counterOf.set(credit.key, debit.key);
     used.add(debit.key);
