@@ -29,6 +29,16 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
  * client gets 403 even though its token is still well-formed (13.6).
  */
 export async function handleMcpRequest(request: Request, deps: McpHttpDeps): Promise<Response> {
+  // A stateless server closes the GET event stream as soon as the request ends, and clients reopen
+  // it at once: a reconnect loop that hit the token lookup ~150 times a minute. 405 tells them we
+  // have no server-to-client stream, so they stop asking.
+  if (request.method === 'GET') {
+    return json(
+      405,
+      { error: 'method_not_allowed', message: 'This server has no event stream; use POST' },
+      { allow: 'POST, DELETE' },
+    );
+  }
   const header = request.headers.get('authorization') ?? '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
   if (!looksLikeToken(token)) {

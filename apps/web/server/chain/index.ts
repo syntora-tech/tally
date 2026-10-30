@@ -31,6 +31,7 @@ export type ChainReader = {
 
 const MAX_TRANSFERS = 2000;
 const TIMEOUT_MS = 20_000;
+const BLOCKSCOUT_PAGE = 100;
 
 async function getJson(
   url: string,
@@ -53,20 +54,22 @@ const BLOCKSCOUT: Partial<Record<CryptoNetwork, string>> = {
   ETH: 'https://eth.blockscout.com',
 };
 
-const blockscoutTransfers = z.object({
-  items: z.array(
-    z.object({
-      transaction_hash: z.string().optional(),
-      tx_hash: z.string().optional(),
-      log_index: z.coerce.number(),
-      timestamp: z.string(),
-      from: z.object({ hash: z.string() }),
-      to: z.object({ hash: z.string() }),
-      token: z.object({ address_hash: z.string().optional(), address: z.string().optional() }),
-      total: z.object({ value: z.string().nullable() }).nullable(),
-    }),
-  ),
-  next_page_params: z.record(z.string(), z.unknown()).nullable(),
+// The Etherscan-style endpoint: v2 `token-transfers?token=` regularly times out on busy tokens like USDC.
+const blockscoutTokenTx = z.object({
+  status: z.string(),
+  message: z.string(),
+  result: z
+    .array(
+      z.object({
+        hash: z.string(),
+        timeStamp: z.coerce.number(),
+        from: z.string(),
+        to: z.string(),
+        contractAddress: z.string(),
+        value: z.string(),
+      }),
+    )
+    .nullable(),
 });
 
 const blockscoutTx = z.object({
@@ -145,40 +148,55 @@ export function chainReader(options: { trongridApiKey?: string } = {}): ChainRea
       const base = BLOCKSCOUT[network];
       if (!base) return err('unsupported');
       const transfers: ChainTransfer[] = [];
-      let next: Record<string, unknown> | null = {};
+      const perHash = new Map<string, number>();
+      let page = 1;
+      let more = true;
       // Newest first: stop at the first page that reaches back past `since`.
-      while (next && transfers.length < MAX_TRANSFERS) {
-        const q = new URLSearchParams({ type: 'ERC-20', token: contract });
-        for (const [k, v] of Object.entries(next)) q.set(k, String(v));
-        const raw = await getJson(
-          `${base}/api/v2/addresses/${address}/token-transfers?${q.toString()}`,
-        );
+      while (more && transfers.length < MAX_TRANSFERS) {
+        const q = new URLSearchParams({
+          module: 'account',
+          action: 'tokentx',
+          address,
+          contractaddress: contract,
+          sort: 'desc',
+          page: String(page),
+          offset: String(BLOCKSCOUT_PAGE),
+        });
+        const raw = await getJson(`${base}/api?${q.toString()}`);
         if (raw.isErr()) return err(raw.error);
-        const page = blockscoutTransfers.safeParse(raw.value);
-        if (!page.success) return err('bad_response');
+        const parsed = blockscoutTokenTx.safeParse(raw.value);
+        if (!parsed.success) return err('bad_response');
+        const items = parsed.data.result ?? [];
+        if (
+          parsed.data.status !== '1' &&
+          items.length === 0 &&
+          !/no token transfers/i.test(parsed.data.message)
+        )
+          return err('bad_response');
         let reachedSince = false;
-        for (const t of page.data.items) {
-          const at = new Date(t.timestamp);
+        for (const t of items) {
+          const at = new Date(t.timeStamp * 1000);
           if (at < since) {
             reachedSince = true;
             continue;
           }
-          const hash = t.transaction_hash ?? t.tx_hash;
-          const tokenAddress = t.token.address_hash ?? t.token.address;
-          if (!hash || !tokenAddress || !t.total?.value) continue;
+          // No log index here; an ordinal within the transaction keeps batch transfers apart.
+          const logIndex = perHash.get(t.hash) ?? 0;
+          perHash.set(t.hash, logIndex + 1);
           transfers.push({
-            hash,
-            logIndex: t.log_index,
+            hash: t.hash,
+            logIndex,
             at,
-            from: t.from.hash,
-            to: t.to.hash,
-            contract: tokenAddress,
-            value: t.total.value,
+            from: t.from,
+            to: t.to,
+            contract: t.contractAddress,
+            value: t.value,
           });
         }
-        next = reachedSince ? null : page.data.next_page_params;
+        more = !reachedSince && items.length === BLOCKSCOUT_PAGE;
+        page++;
       }
-      return ok({ transfers, truncated: Boolean(next) });
+      return ok({ transfers, truncated: more });
     },
 
     async transactionFee({ network, hash }) {
