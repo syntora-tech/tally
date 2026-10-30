@@ -24,7 +24,7 @@ import {
 } from '@tally/db/schema';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { PDFDocument } from 'pdf-lib';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { intHarness } from '../../test/int-helpers';
 import { createMcpClient, revokeMcpClient } from '../services/mcp';
 import { LocalStorage } from '../storage/local-storage';
@@ -197,6 +197,40 @@ describe('MCP server (13.3–13.6, A-054)', () => {
     expect(missing.status).toBe(401);
     expect(missing.headers.get('www-authenticate')).toContain('Bearer');
     expect((await rpc(`tally_pat_${'x'.repeat(43)}`, list)).status).toBe(401);
+  });
+
+  it('refuses the GET event stream without touching the database', async () => {
+    const findClient = vi.fn(deps.findClient);
+    const response = await handleMcpRequest(
+      new Request('http://localhost/api/mcp', {
+        method: 'GET',
+        headers: { accept: 'text/event-stream', authorization: `Bearer ${readOnlyToken}` },
+      }),
+      { ...deps, findClient },
+    );
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST, DELETE');
+    expect(findClient).not.toHaveBeenCalled();
+  });
+
+  it('records last use at most once per window, so polling does not flood the audit', async () => {
+    const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' };
+    const policyAudits = async () => {
+      const [policy] = await h.db
+        .select({ id: mcpClientPolicy.id })
+        .from(mcpClientPolicy)
+        .where(eq(mcpClientPolicy.clientId, clientIds[1] ?? ''));
+      return h.db
+        .select({ id: auditLog.id })
+        .from(auditLog)
+        .where(
+          and(eq(auditLog.tableName, 'mcp_client_policy'), eq(auditLog.rowId, policy?.id ?? '')),
+        );
+    };
+    expect((await rpc(readOnlyToken, list)).status).toBe(200);
+    const before = (await policyAudits()).length;
+    for (let i = 0; i < 3; i++) expect((await rpc(readOnlyToken, list)).status).toBe(200);
+    expect((await policyAudits()).length).toBe(before);
   });
 
   it('serves tools/list over stateless HTTP', async () => {

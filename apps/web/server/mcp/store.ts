@@ -36,7 +36,13 @@ export async function findClientByToken(db: Db, token: string): Promise<McpClien
     await tx
       .update(mcpClientPolicy)
       .set({ lastUsedAt: sql`now()` })
-      .where(eq(mcpClientPolicy.id, row.policy.id));
+      // Every write is an audit row: a busy client would otherwise flood audit_log.
+      .where(
+        and(
+          eq(mcpClientPolicy.id, row.policy.id),
+          sql`(${mcpClientPolicy.lastUsedAt} is null or ${mcpClientPolicy.lastUsedAt} < now() - interval '5 minutes')`,
+        ),
+      );
     return {
       clientId: row.policy.clientId,
       clientName: row.policy.clientName,
