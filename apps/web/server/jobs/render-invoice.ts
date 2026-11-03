@@ -26,6 +26,14 @@ export function invoiceLayout(quantities: readonly string[]): InvoiceLayout {
   return quantities.every((q) => toDecimal(q).eq(1)) ? 'invoice_fixed' : 'invoice_hourly';
 }
 
+/** Without a fixed template of its own, the hourly one prints quantity-1 lines just as well (A-131). */
+export function invoiceTemplate(
+  templates: Partial<Record<InvoiceLayout, string>>,
+  layout: InvoiceLayout,
+): string | null {
+  return templates[layout] ?? templates.invoice_hourly ?? null;
+}
+
 /** File name as in spec 7.3: `Invoice 25-26 Boosty 2026-10-01`. */
 export function invoiceFileName(number: string, clientName: string, issueDate: string): string {
   return `Invoice ${number.replaceAll('/', '-')} ${clientName} ${issueDate}`;
@@ -68,7 +76,7 @@ export function renderInvoiceHandler(deps: RenderDeps): JobHandler {
     const fileName = invoiceFileName(inv.number, clientName, inv.issueDate);
     const out = await deps.renderer.render({
       layout,
-      templateId: loaded.templateId ?? deps.templates[layout] ?? null,
+      templateId: loaded.templateId ?? invoiceTemplate(deps.templates, layout),
       folderPath: folderPathFor(
         'invoice',
         { kind: 'client', name: clientName },

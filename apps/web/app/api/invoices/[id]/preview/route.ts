@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { localizeForUser } from '@/server/i18n';
 import { invoicePreviewRenderer } from '@/server/jobs';
-import { invoiceFileName, invoiceLayout } from '@/server/jobs/render-invoice';
+import { invoiceFileName, invoiceLayout, invoiceTemplate } from '@/server/jobs/render-invoice';
 import { requireRole } from '@/server/request-context';
 import { invoiceDraftPreview } from '@/server/services/invoices';
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, route: RouteContext<'/api/invoic
   try {
     const file = await renderer.preview({
       layout,
-      templateId: draft.templateId ?? templates[layout] ?? null,
+      templateId: draft.templateId ?? invoiceTemplate(templates, layout),
       fileName: `${invoiceFileName(draft.number, draft.clientName, draft.issueDate)} (preview)`,
       snapshot: draft.snapshot,
     });

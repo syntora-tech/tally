@@ -190,18 +190,20 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
     });
   });
 
-  it('by_hours: effective hourly rate r / H', () => {
+  it('by_hours: the month as one unit, hours kept for the description (A-131)', () => {
     expect(
       draftLine(
         'x',
         { type: 'fixed_monthly', rate: '5500', prorationPolicy: 'by_hours' },
-        '32',
-        '160',
+        '176',
+        '168',
       ),
-    ).toMatchObject({
-      quantity: '32.00',
-      unitPrice: '34.37500000',
-      amount: '1100.00',
+    ).toEqual({
+      assignmentId: 'x',
+      quantity: '1.00',
+      unitPrice: '5761.90000000',
+      amount: '5761.90',
+      hours: { worked: '176.00', norm: '168.00' },
     });
   });
 
