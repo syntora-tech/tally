@@ -20,9 +20,7 @@ import {
   dueDate,
   isActiveInMonth,
   sum,
-  toDecimal,
   WorkCalendar,
-  type DraftLine,
   type InvoiceDateRule,
   type LocalDate,
   type PaymentDueRule,
@@ -127,14 +125,11 @@ export async function loadPeriodData(tx: DbTransaction, p: PeriodRow) {
   return { month, assignments, timesheetIds, annexIds };
 }
 
-function describe(personName: string, roleTitle: string | null, hours?: DraftLine['hours']) {
+function describe(personName: string, roleTitle: string | null) {
   const role = roleTitle ? `, ${roleTitle}` : '';
-  const h = (v: string) => toDecimal(v).toString();
-  const en = hours ? `: ${h(hours.worked)} h (norm ${h(hours.norm)} h)` : '';
-  const ua = hours ? `: ${h(hours.worked)} год (норма ${h(hours.norm)} год)` : '';
   return {
-    descriptionEn: `Software development services — ${personName}${role}${en}`,
-    descriptionUa: `Послуги з розробки програмного забезпечення — ${personName}${role}${ua}`,
+    descriptionEn: `Software development services — ${personName}${role}`,
+    descriptionUa: `Послуги з розробки програмного забезпечення — ${personName}${role}`,
   };
 }
 
@@ -284,7 +279,7 @@ export async function writeDraftInvoice(
       invoiceId: inv.id,
       timesheetId: input.timesheetIds.get(l.a.assignmentId) ?? null,
       position: i + 1,
-      ...describe(l.a.personName, l.a.roleTitle, l.line.hours),
+      ...describe(l.a.personName, l.a.roleTitle),
       quantity: l.line.quantity,
       unitPrice: l.line.unitPrice,
       amount: l.line.amount,

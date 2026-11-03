@@ -221,14 +221,12 @@ export type DraftLine = {
   quantity: string;
   unitPrice: string;
   amount: string;
-  /** `by_hours` lines bill the month as one unit; the hours go into the description (A-131). */
-  hours?: { worked: string; norm: string };
 };
 
 /**
- * Invoice line numbers (spec 5.1): quantity = hours and unit price = hourly rate; for
- * `full_month` and `by_hours` the month's amount with quantity 1, because r / H rarely ends in
- * cents and a rounded rate × hours would not give the amount (A-131).
+ * Invoice line numbers (spec 5.1): quantity = hours and unit price = hourly rate, for `by_hours`
+ * r / H in cents so that hours × price is the amount (A-133); for `full_month` the monthly fee
+ * with quantity 1.
  */
 export function draftLine(
   assignmentId: string,
@@ -243,16 +241,12 @@ export function draftLine(
   if (billing.type === 'fixed_monthly' && billing.prorationPolicy === 'full_month') {
     return { assignmentId, quantity: '1.00', unitPrice: r.toFixed(8), amount: amount.toFixed(2) };
   }
-  if (billing.type === 'fixed_monthly' && billing.prorationPolicy === 'by_hours') {
-    return {
-      assignmentId,
-      quantity: '1.00',
-      unitPrice: amount.toFixed(8),
-      amount: amount.toFixed(2),
-      hours: { worked: toDecimal(hours).toFixed(2), norm: H.toFixed(2) },
-    };
-  }
-  const unit = billing.type === 'hourly' ? r : r.div(H).floor();
+  const unit =
+    billing.type === 'hourly'
+      ? r
+      : billing.prorationPolicy === 'trunc_hourly'
+        ? r.div(H).floor()
+        : roundHalfUp(r.div(H));
   return {
     assignmentId,
     quantity: toDecimal(hours).toFixed(2),

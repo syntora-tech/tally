@@ -190,7 +190,7 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
     });
   });
 
-  it('by_hours: the month as one unit, hours kept for the description (A-131)', () => {
+  it('by_hours: hourly rate r / H in cents × hours (A-133)', () => {
     expect(
       draftLine(
         'x',
@@ -200,10 +200,9 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
       ),
     ).toEqual({
       assignmentId: 'x',
-      quantity: '1.00',
-      unitPrice: '5761.90000000',
-      amount: '5761.90',
-      hours: { worked: '176.00', norm: '168.00' },
+      quantity: '176.00',
+      unitPrice: '32.74000000',
+      amount: '5762.24',
     });
   });
 

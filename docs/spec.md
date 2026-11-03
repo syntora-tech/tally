@@ -290,10 +290,10 @@ RLS увімкнений на всіх таблицях `public`. Роль бе�
 | --- | --- | --- |
 | `hourly` | r × h | IdeaSoft: 47 × 184 = 8 648.00 |
 | `fixed_monthly` + `full_month` | r | Trady: 5 500.00 незалежно від годин |
-| `fixed_monthly` + `by_hours` | r / H × h | Boosty SOW: 5 500 / 184 × h |
+| `fixed_monthly` + `by_hours` | round₂(r / H) × h | Boosty SOW: 29.89 × h (5 500 / 184 до центів, A-133) |
 | `fixed_monthly` + `trunc_hourly` | floor(r / H) × h | Boosty (Pavlo): floor(5 000 / 184) = 27 × h |
 
-Округлення: сума рядка — до 2 знаків, half-up; `invoice.total` = сума рядків. В інвойсі `quantity` = h, `unit_price` = ставка; для `full_month` і `by_hours` — кількість 1 і сума рядка як ціна, а для `by_hours` години й норма йдуть в опис («176 h (norm 168 h)», A-131). Один інвойс = один контракт × період; рядки — всі assignments контракту з h > 0.
+Округлення: сума рядка — до 2 знаків, half-up; `invoice.total` = сума рядків. В інвойсі `quantity` = h, `unit_price` = ставка (для `by_hours` — r / H до центів, тож h × ціна = сума рядка, A-133); для `full_month` — місячна сума, кількість 1. Один інвойс = один контракт × період; рядки — всі assignments контракту з h > 0.
 
 ### 5.2 Нарахування ЗП
 
