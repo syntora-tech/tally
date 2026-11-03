@@ -1,5 +1,6 @@
 import type { DbTransaction } from '@tally/db';
 import {
+  assignment,
   client,
   company,
   contract,
@@ -12,6 +13,7 @@ import {
   job,
   payrollLine,
   period,
+  timesheet,
 } from '@tally/db/schema';
 import {
   defaultInvoiceDate,
@@ -24,7 +26,7 @@ import {
   type LocalDate,
   type PaymentDueRule,
 } from '@tally/domain';
-import { and, asc, desc, eq, inArray, isNotNull, ne, notExists, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
@@ -34,7 +36,7 @@ import { defineService } from '../define-service';
 import { serviceError } from '../errors';
 import { localDateString, nonNegativeDecimal, optionalText, requiredText } from '../fields';
 import { loadCalendar } from '../periods';
-import { buildInvoiceSnapshot } from './snapshot';
+import { buildInvoiceSnapshot, type InvoiceAnnex } from './snapshot';
 
 export const INVOICE_STATUSES = [
   'draft',
@@ -221,7 +223,37 @@ async function replaceLines(
   return { rows, total: sum(rows.map((r) => r.amount)).toFixed(2) };
 }
 
-function snapshotFor(
+/** SOWs/annexes of the people on the invoice, plus the one whose date rules it follows (A-072). */
+export async function invoiceAnnexes(
+  tx: DbTransaction,
+  inv: { id: string; annexId: string | null },
+) {
+  const rows: InvoiceAnnex[] = await tx
+    .selectDistinct({ kind: contractAnnex.kind, number: contractAnnex.number })
+    .from(contractAnnex)
+    .where(
+      or(
+        inv.annexId ? eq(contractAnnex.id, inv.annexId) : undefined,
+        inArray(
+          contractAnnex.id,
+          tx
+            .select({ id: assignment.annexId })
+            .from(invoiceLine)
+            .innerJoin(timesheet, eq(timesheet.id, invoiceLine.timesheetId))
+            .innerJoin(assignment, eq(assignment.id, timesheet.assignmentId))
+            .where(eq(invoiceLine.invoiceId, inv.id)),
+        ),
+      ),
+    );
+  return rows.sort(
+    (a, b) =>
+      a.kind.localeCompare(b.kind) ||
+      a.number.localeCompare(b.number, undefined, { numeric: true }),
+  );
+}
+
+async function snapshotFor(
+  tx: DbTransaction,
   row: NonNullable<Awaited<ReturnType<typeof loadInvoice>>>,
   co: NonNullable<Awaited<ReturnType<typeof companyRow>>>,
   values: {
@@ -245,6 +277,8 @@ function snapshotFor(
     company: co,
     client: row.client,
     contract: { number: row.contract.number, signedOn: row.contract.signedOn as LocalDate | null },
+    annexes: await invoiceAnnexes(tx, row.invoice),
+    paymentDue: row.rules.paymentDue,
     periodMonth: row.periodMonth as LocalDate | null,
     lines,
   });
@@ -295,7 +329,8 @@ export const saveInvoice = defineService({
         .set({
           ...base,
           revision,
-          snapshot: snapshotFor(
+          snapshot: await snapshotFor(
+            tx,
             row,
             co,
             { number: inv.number ?? '', issueDate: input.issueDate, dueDate: due, revision, total },
@@ -386,7 +421,8 @@ export const issueInvoice = defineService({
           dueDate: due,
           total,
           dateOverrideReason,
-          snapshot: snapshotFor(
+          snapshot: await snapshotFor(
+            tx,
             row,
             co,
             { number, issueDate, dueDate: due, revision: row.invoice.revision, total },

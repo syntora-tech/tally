@@ -146,7 +146,15 @@ describe('invoices (spec 6.5, A-044)', () => {
     expect(res._unsafeUnwrap().number).toBe('T1/37');
     const card = (await getInvoice.run(h.ctxFor(finance), { id: id() }))._unsafeUnwrap();
     expect(card.invoice.status).toBe('issued');
-    expect(card.invoice.snapshot).toMatchObject({ doc: { number: 'T1/37', date: '04.08.2037' } });
+    expect(card.invoice.snapshot).toMatchObject({
+      version: 2,
+      doc: { number: 'T1/37', date: '04.08.2037' },
+      contract: { annexes_en: '', annexes_ua: '' },
+      payment: {
+        terms_en:
+          'The Customer shall pay all undisputed invoices no later than the 20th day of the month of their receipt, or of the following month if received after that day',
+      },
+    });
   });
 
   it('revises an unpaid issued invoice keeping its number', async () => {

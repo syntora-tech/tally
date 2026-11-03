@@ -8,7 +8,7 @@ import { withSystem } from '../db/with-user';
 import type { ServiceContext } from '../services/context';
 import { insertDocument } from '../services/documents';
 import { currentInvoiceDocument } from '../services/invoices';
-import type { InvoiceSnapshot } from '../services/invoices/snapshot';
+import { withTemplateDefaults, type InvoiceSnapshot } from '../services/invoices/snapshot';
 import { folderPathFor } from '../storage/folders';
 import type { DocumentStorage } from '../storage/types';
 import type { JobHandler } from './worker';
@@ -75,7 +75,7 @@ export function renderInvoiceHandler(deps: RenderDeps): JobHandler {
         inv.issueDate.slice(0, 4),
       ),
       fileName,
-      snapshot: inv.snapshot as InvoiceSnapshot,
+      snapshot: withTemplateDefaults(inv.snapshot as InvoiceSnapshot),
     });
 
     const ctx: ServiceContext = {

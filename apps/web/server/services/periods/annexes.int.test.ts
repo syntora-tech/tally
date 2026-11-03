@@ -16,6 +16,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
+import { invoiceAnnexes } from '../invoices';
 import { closePeriod, openPeriod, setHours } from '.';
 
 // September 2039: invoices fall on Monday 03.10.2039, far from real periods in the shared DB.
@@ -155,5 +156,21 @@ describe('SOW/annex date rules (A-072)', () => {
     });
     // The SOW without rules of its own shares the contract's invoice.
     expect(byAnnex.get(null)).toMatchObject({ dueDate: '2039-10-20', total: '200.00000000' });
+  });
+
+  it('an invoice refers to the SOWs of the people it bills', async () => {
+    const invoices = await h.db
+      .select()
+      .from(invoice)
+      .where(eq(invoice.contractId, ids.contracts[0] ?? ''));
+    const ruled = invoices.find((i) => i.annexId === ids.annexes.ruled);
+    const shared = invoices.find((i) => i.annexId === null);
+    const annexesOf = (inv: typeof ruled) =>
+      h.db.transaction((tx) =>
+        invoiceAnnexes(tx, { id: inv?.id ?? '', annexId: inv?.annexId ?? null }),
+      );
+    expect(await annexesOf(ruled)).toEqual([{ kind: 'sow', number: '1' }]);
+    // The contract's own invoice bills the SOW #2 person and one with no SOW.
+    expect(await annexesOf(shared)).toEqual([{ kind: 'sow', number: '2' }]);
   });
 });

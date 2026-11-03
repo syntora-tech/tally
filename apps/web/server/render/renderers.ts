@@ -136,10 +136,11 @@ function invoiceHtml(layout: InvoiceLayout, fileName: string, s: InvoiceSnapshot
 <p>${e(s.doc.place_en)}, ${e(s.doc.date)} · ${e(s.doc.place_ua)}, ${e(s.doc.date_ua)}</p>
 <p><b>${e(s.company.name_en)}</b> / ${e(s.company.name_ua)}<br>${e(s.company.address_en)}<br>${e(s.company.bank_en)}</p>
 <p>Bill to: <b>${e(s.client.name)}</b><br>${e(s.client.address)}</p>
-<p>${e(s.contract.title_en)}${s.contract.date ? ` dated ${e(s.contract.date)}` : ''}${s.period.text_ua ? ` · Період: ${e(s.period.text_ua)}` : ''}</p>
+<p>${e(s.contract.title_en)}${s.contract.date ? ` dated ${e(s.contract.date)}` : ''}${e(s.contract.annexes_short_en)}${s.period.text_ua ? ` · Період: ${e(s.period.text_ua)}` : ''}</p>
 <table><thead><tr><th>№</th><th>Description / Опис</th>${hourly ? '<th>Qty</th><th>Price</th>' : ''}<th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <p><b>Total: ${e(s.total.amount)} ${e(s.total.currency)}</b><br>${e(s.total.words_en)}<br>${e(s.total.words_ua)}</p>
 <p>Due date / Оплатити до: ${e(s.doc.due_date)}</p>
+<p>${e(s.payment.terms_en)}.<br>${e(s.payment.terms_ua)}.</p>
 </body></html>`;
   return html;
 }

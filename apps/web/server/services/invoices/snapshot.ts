@@ -6,8 +6,34 @@ import {
   moneyToWordsEn,
   SCALE,
   moneyToWordsUa,
+  paymentTermsText,
   type LocalDate,
+  type PaymentDueRule,
 } from '@tally/domain';
+
+export type InvoiceAnnex = { kind: string; number: string };
+
+/**
+ * " and SOW #3 of this Agreement" / " та Додатку SOW №3 до цієї угоди", empty without annexes; the
+ * leading space lets the template put the placeholder right after the contract date.
+ */
+function annexReference(annexes: readonly InvoiceAnnex[]) {
+  if (!annexes.length) return { en: '', ua: '', short_en: '', short_ua: '' };
+  const en = annexes.map((a) => (a.kind === 'sow' ? `SOW #${a.number}` : `Annex ${a.number}`));
+  const ua = annexes.map((a) => (a.kind === 'sow' ? `SOW №${a.number}` : `№${a.number}`));
+  const one = annexes.length === 1;
+  return {
+    en: ` and ${en.join(', ')} of this Agreement`,
+    ua: ` та ${one ? 'Додатку' : 'Додатків'} ${ua.join(', ')} до цієї угоди`,
+    short_en: ` (${en.join(', ')})`,
+    short_ua: ` (${one ? 'Додаток' : 'Додатки'} ${ua.join(', ')})`,
+  };
+}
+
+const paymentTerms = (rule: PaymentDueRule) => {
+  const terms = paymentTermsText(rule);
+  return { terms_en: terms.en, terms_ua: terms.ua };
+};
 
 export type SnapshotInput = {
   number: string;
@@ -31,6 +57,9 @@ export type SnapshotInput = {
   };
   client: { legalName: string; address: string | null; bankDetails: string | null };
   contract: { number: string; signedOn: LocalDate | null };
+  /** SOWs/annexes the billed people work under, as referenced in the offer clause. */
+  annexes: readonly InvoiceAnnex[];
+  paymentDue: PaymentDueRule;
   periodMonth: LocalDate | null;
   lines: {
     descriptionEn: string;
@@ -57,8 +86,9 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
         text_ua: `з ${formatUaDate(i.periodMonth)} року по ${formatUaDate(endOfMonth(i.periodMonth))} року`,
       }
     : { from: '', to: '', text_ua: '' };
+  const annexes = annexReference(i.annexes);
   return {
-    version: 1,
+    version: 2,
     revision: i.revision,
     doc: {
       number: i.number,
@@ -72,7 +102,12 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
       number: i.contract.number,
       date: i.contract.signedOn ? formatUaDate(i.contract.signedOn) : '',
       title_en: `Contract No ${i.contract.number}`,
+      annexes_en: annexes.en,
+      annexes_ua: annexes.ua,
+      annexes_short_en: annexes.short_en,
+      annexes_short_ua: annexes.short_ua,
     },
+    payment: paymentTerms(i.paymentDue),
     company: {
       name_en: i.company.nameEn,
       name_ua: i.company.nameUa,
@@ -108,3 +143,22 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
 }
 
 export type InvoiceSnapshot = ReturnType<typeof buildInvoiceSnapshot>;
+
+/**
+ * Snapshots frozen before version 2 lack the payment and annex placeholders; they get the text the
+ * template had hardcoded when they were issued, so a re-render prints the same document.
+ */
+export function withTemplateDefaults(snapshot: InvoiceSnapshot): InvoiceSnapshot {
+  if (snapshot.version >= 2) return snapshot;
+  return {
+    ...snapshot,
+    contract: {
+      ...snapshot.contract,
+      annexes_en: ' and Exhibit A of this Agreement',
+      annexes_ua: ' та Додатку А до цієї угоди',
+      annexes_short_en: ' (Exhibit A)',
+      annexes_short_ua: ' (Додаток А)',
+    },
+    payment: paymentTerms({ type: 'net_days', days: 20 }),
+  };
+}

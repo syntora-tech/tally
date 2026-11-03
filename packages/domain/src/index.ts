@@ -10,6 +10,7 @@ export * from './csv';
 export * from './calendar';
 export * from './date-rules';
 export * from './words';
+export * from './payment-terms';
 export * from './period';
 export * from './payroll';
 export * from './crypto';

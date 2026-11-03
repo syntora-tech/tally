@@ -531,6 +531,9 @@ sequenceDiagram
 ```text
 {{doc.number}} {{doc.date}} {{doc.date_ua}} {{doc.place_en}} {{doc.place_ua}}
 {{contract.number}} {{contract.date}} {{contract.title_en}}
+{{contract.annexes_en}} {{contract.annexes_ua}}            -- " and SOW #3 of this Agreement" / " та Додатку SOW №3 до цієї угоди" (A-128)
+{{contract.annexes_short_en}} {{contract.annexes_short_ua}} -- " (SOW #3)" / " (Додаток SOW №3)"; порожні без SOW
+{{payment.terms_en}} {{payment.terms_ua}}                  -- речення про строк оплати за правилом договору/SOW, без крапки
 {{company.name_en}} {{company.name_ua}} {{company.address_en}} {{company.address_ua}}
 {{company.director_ua}} {{company.bank_en}} {{company.bank_ua}} {{company.legal_code}}
 {{client.name}} {{client.address}} {{client.bank}}
