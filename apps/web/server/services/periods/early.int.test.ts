@@ -21,6 +21,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness } from '../../../test/int-helpers';
 import { updateBillingVersion, updatePayVersion } from '../assignments';
+import { saveInvoice } from '../invoices';
 import {
   addAdjustment,
   closePeriod,
@@ -206,6 +207,44 @@ describe('documents before the period closes (A-076)', () => {
     expect(await myInvoice()).toMatchObject({ total: '6000.00000000' });
   });
 
+  it('a line added by hand survives rebuilding the draft (A-127)', async () => {
+    const draft = await myInvoice();
+    const [hourly] = await h.db
+      .select()
+      .from(invoiceLine)
+      .where(eq(invoiceLine.invoiceId, draft?.id ?? ''));
+    const saved = await saveInvoice.run(ctx(), {
+      id: draft?.id ?? '',
+      issueDate: draft?.issueDate ?? '',
+      lines: [
+        { ...hourly, id: hourly?.id },
+        {
+          descriptionEn: 'Reimbursement of expenses: Claude subscription',
+          descriptionUa: 'Відшкодування витрат: підписка Claude',
+          quantity: '1',
+          unitPrice: '255',
+        },
+      ],
+    });
+    expect(saved.isOk()).toBe(true);
+    expect(await myInvoice()).toMatchObject({ total: '6255.00000000' });
+
+    expect((await hours('110')).isOk()).toBe(true);
+    const rebuilt = await myInvoice();
+    expect(rebuilt).toMatchObject({ total: '5755.00000000' });
+    const lines = await h.db
+      .select()
+      .from(invoiceLine)
+      .where(eq(invoiceLine.invoiceId, rebuilt?.id ?? ''))
+      .orderBy(invoiceLine.position);
+    expect(lines.map((l) => [l.position, l.timesheetId !== null, l.amount])).toEqual([
+      [1, true, '5500.00000000'],
+      [2, false, '255.00000000'],
+    ]);
+    expect(lines[1]?.descriptionUa).toBe('Відшкодування витрат: підписка Claude');
+    expect((await hours('120')).isOk()).toBe(true);
+  });
+
   it('an early act takes the approved rate and follows adjustments', async () => {
     const docs = (await periodDocuments.run(ctx(), { periodId: ids.period }))._unsafeUnwrap();
     expect(docs.nbuRate).toBe('41.000000');
@@ -282,7 +321,7 @@ describe('documents before the period closes (A-076)', () => {
       .from(invoice)
       .where(eq(invoice.contractId, ids.contracts[0] ?? ''));
     expect(invoices).toHaveLength(1);
-    expect(invoices[0]).toMatchObject({ status: 'issued', number: 'E-1' });
+    expect(invoices[0]).toMatchObject({ status: 'issued', number: 'E-1', total: '6255.00000000' });
     const [item] = await h.db
       .select()
       .from(payrollItem)

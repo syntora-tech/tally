@@ -26,7 +26,7 @@ import {
   type PaymentDueRule,
   type PeriodAssignment,
 } from '@tally/domain';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { serviceError, msg } from '../errors';
 
@@ -185,6 +185,40 @@ export async function invoiceGroups(
   return { groups, annexes };
 }
 
+export type ManualLine = Pick<
+  typeof invoiceLine.$inferSelect,
+  'descriptionEn' | 'descriptionUa' | 'quantity' | 'unitPrice' | 'amount'
+>;
+
+/**
+ * Lines added by hand to drafts (reimbursed expenses and the like, A-127), by invoice group. Drafts
+ * are rebuilt from hours, so these are carried over instead of being lost with the old draft.
+ */
+export async function manualDraftLines(tx: DbTransaction, periodId: string) {
+  const rows = await tx
+    .select({ line: invoiceLine, contractId: invoice.contractId, annexId: invoice.annexId })
+    .from(invoiceLine)
+    .innerJoin(invoice, eq(invoice.id, invoiceLine.invoiceId))
+    .where(
+      and(
+        eq(invoice.periodId, periodId),
+        eq(invoice.status, 'draft'),
+        isNull(invoiceLine.timesheetId),
+      ),
+    )
+    .orderBy(asc(invoiceLine.position));
+  const byGroup = new Map<string, ManualLine[]>();
+  for (const { line, contractId, annexId } of rows) {
+    const key = invoiceKey(contractId, annexId);
+    const { descriptionEn, descriptionUa, quantity, unitPrice, amount } = line;
+    byGroup.set(key, [
+      ...(byGroup.get(key) ?? []),
+      { descriptionEn, descriptionUa, quantity, unitPrice, amount },
+    ]);
+  }
+  return byGroup;
+}
+
 /** One draft invoice of a group (5.1); null when the contract has no client. */
 export async function writeDraftInvoice(
   tx: DbTransaction,
@@ -195,9 +229,11 @@ export async function writeDraftInvoice(
     group: InvoiceGroup;
     annexes: Map<string, typeof contractAnnex.$inferSelect>;
     timesheetIds: Map<string, string>;
+    manualLines?: readonly ManualLine[] | undefined;
   },
 ) {
   const { contractId, annexId, lines } = input.group;
+  const manual = input.manualLines ?? [];
   const [c] = await tx.select().from(contract).where(eq(contract.id, contractId));
   if (!c?.clientId) return ok(null);
   const foreign = lines.find((l) => l.currency !== c.currency);
@@ -234,12 +270,12 @@ export async function writeDraftInvoice(
         input.cal,
       ),
       currency: c.currency,
-      total: sum(lines.map((l) => l.line.amount)).toFixed(2),
+      total: sum([...lines.map((l) => l.line.amount), ...manual.map((l) => l.amount)]).toFixed(2),
     })
     .returning({ id: invoice.id });
   if (!inv) throw new Error('Invoice insert returned no row');
-  await tx.insert(invoiceLine).values(
-    lines.map((l, i) => ({
+  await tx.insert(invoiceLine).values([
+    ...lines.map((l, i) => ({
       invoiceId: inv.id,
       timesheetId: input.timesheetIds.get(l.a.assignmentId) ?? null,
       position: i + 1,
@@ -248,6 +284,12 @@ export async function writeDraftInvoice(
       unitPrice: l.line.unitPrice,
       amount: l.line.amount,
     })),
-  );
+    ...manual.map((l, i) => ({
+      ...l,
+      invoiceId: inv.id,
+      timesheetId: null,
+      position: lines.length + i + 1,
+    })),
+  ]);
   return ok(inv);
 }

@@ -41,6 +41,7 @@ import {
   invoiceKey,
   loadCalendar,
   loadPeriodData,
+  manualDraftLines,
   writeDraftInvoice,
   type PeriodRow,
 } from './data';
@@ -84,6 +85,7 @@ async function rebuildDraftInvoice(
       : ok(null);
   }
   if (!create && existing.length === 0) return ok(null);
+  const manual = await manualDraftLines(tx, p.id);
   await tx.delete(invoice).where(and(sameGroup, eq(invoice.status, 'draft')));
   const data = await loadPeriodData(tx, p);
   const { groups, annexes } = await invoiceGroups(
@@ -103,6 +105,7 @@ async function rebuildDraftInvoice(
     group,
     annexes,
     timesheetIds: data.timesheetIds,
+    manualLines: manual.get(group.key),
   });
 }
 

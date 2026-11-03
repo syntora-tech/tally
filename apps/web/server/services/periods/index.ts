@@ -43,6 +43,7 @@ import {
   invoiceKey,
   loadCalendar,
   loadPeriodData,
+  manualDraftLines,
   writeDraftInvoice,
 } from './data';
 
@@ -292,6 +293,7 @@ export const closePeriod = defineService({
       const { month, assignments, timesheetIds, annexIds } = await loadPeriodData(tx, p);
       const cal = await loadCalendar(tx);
 
+      const manual = await manualDraftLines(tx, periodId);
       await tx
         .delete(invoice)
         .where(and(eq(invoice.periodId, periodId), eq(invoice.status, 'draft')));
@@ -318,6 +320,7 @@ export const closePeriod = defineService({
           group,
           annexes,
           timesheetIds,
+          manualLines: manual.get(group.key),
         });
         if (written.isErr()) return err(written.error);
         if (written.value) created++;
