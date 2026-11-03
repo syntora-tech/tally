@@ -20,7 +20,8 @@ export type InvoiceAnnex = { kind: string; number: string };
 function annexReference(annexes: readonly InvoiceAnnex[]) {
   if (!annexes.length) return { en: '', ua: '', short_en: '', short_ua: '' };
   const en = annexes.map((a) => (a.kind === 'sow' ? `SOW #${a.number}` : `Annex ${a.number}`));
-  const ua = annexes.map((a) => (a.kind === 'sow' ? `SOW №${a.number}` : `№${a.number}`));
+  // As the documents title themselves: "Statement of Work #3", "Annex 3 to Contract".
+  const ua = annexes.map((a) => (a.kind === 'sow' ? `SOW №${a.number}` : a.number));
   const one = annexes.length === 1;
   return {
     en: ` and ${en.join(', ')} of this Agreement`,

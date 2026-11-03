@@ -86,9 +86,9 @@ describe('buildInvoiceSnapshot (spec 7.2 placeholders)', () => {
   it('refers to the SOWs and annexes of the billed people', () => {
     expect(snap.contract).toMatchObject({
       annexes_en: ' and Annex 3 of this Agreement',
-      annexes_ua: ' та Додатку №3 до цієї угоди',
+      annexes_ua: ' та Додатку 3 до цієї угоди',
       annexes_short_en: ' (Annex 3)',
-      annexes_short_ua: ' (Додаток №3)',
+      annexes_short_ua: ' (Додаток 3)',
     });
     const two = buildInvoiceSnapshot({
       ...input,
