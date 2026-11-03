@@ -75,7 +75,7 @@ export type SnapshotInput = {
  * Frozen document data (spec 7): PDFs are rendered only from this, never from live rows, so a
  * re-render a year later gives the same document. Keys match the `{{path}}` placeholders of 7.2.
  */
-/** Hours and rates are shown as stored: a 34.375 rate must not print as 34.38 next to its amount. */
+/** Hours are shown as stored; the rate is rounded to cents (A-130), so qty × price may differ from the amount. */
 const EXACT = { maxDp: SCALE.amount } as const;
 
 export function buildInvoiceSnapshot(i: SnapshotInput) {
@@ -137,7 +137,7 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
       description_en: l.descriptionEn,
       description_ua: l.descriptionUa,
       qty: formatAmount(l.quantity, undefined, EXACT),
-      price: formatAmount(l.unitPrice, undefined, EXACT),
+      price: formatAmount(l.unitPrice),
       amount: formatAmount(l.amount),
     })),
   };

@@ -74,6 +74,18 @@ describe('buildInvoiceSnapshot (spec 7.2 placeholders)', () => {
     expect(JSON.stringify(snap)).not.toContain('null');
   });
 
+  it('rounds the rate to cents but keeps hours as stored (A-130)', () => {
+    const line = {
+      descriptionEn: 'Dev — Anton',
+      descriptionUa: 'Розробка — Антон',
+      quantity: '7.125',
+      unitPrice: '32.73809524',
+      amount: '233.26',
+    };
+    const [printed] = buildInvoiceSnapshot({ ...input, lines: [line] }).lines;
+    expect(printed).toMatchObject({ qty: '7.125', price: '32.74', amount: '233.26' });
+  });
+
   it('words the payment clause from the contract rule', () => {
     expect(snap.payment).toEqual({
       terms_en:
