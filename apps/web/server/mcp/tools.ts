@@ -1,4 +1,4 @@
-import { getInvoice, listInvoices } from '../services/invoices';
+import { getInvoice, listInvoices, reviseIssuedInvoice } from '../services/invoices';
 import { reconcileInvoiceNumbers } from '../services/invoices/reconcile';
 import type { McpProfile } from '@tally/db/schema';
 import type { z } from 'zod';
@@ -223,7 +223,7 @@ function annexSummary(r: AnnexRow) {
  * its links since A-071, deleting documents and contracts with their SOWs/annexes since A-072,
  * assignments with their terms since A-073, planned payments with their taxes and marking them
  * paid since A-082, the payroll queue and merging the acts of a month paid in parts since A-083
- * (paying stays in the UI).
+ * (paying stays in the UI), revising an issued unpaid invoice since A-132.
  */
 export const TOOLS: readonly ToolDef[] = [
   tool({
@@ -281,6 +281,14 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       'Invoice snapshot, lines, previous revisions and attached signed copies. Read before reconciliation.',
     service: getInvoice,
+  }),
+  tool({
+    name: 'revise_invoice',
+    title: 'Revise an issued invoice',
+    kind: 'write',
+    description:
+      'Owner only, on an explicit request (A-132). Replaces the lines of an issued unpaid invoice, exactly as Edit in the UI does: the number and issue date stay, a new revision with a fresh snapshot is stored and its PDF is rendered. Read get_invoice first and send expectedRevision and every line of the new revision in order (descriptionEn, descriptionUa, quantity, unitPrice as decimal strings; the amount is quantity × unitPrice rounded to cents); keep a line id to keep its hours link. A reason is required. Drafts are edited and invoices issued only in the UI. Run dryRun first and show the new lines and total.',
+    service: reviseIssuedInvoice,
   }),
   tool({
     name: 'reconcile_invoice_numbers',

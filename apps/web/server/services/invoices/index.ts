@@ -33,9 +33,10 @@ import { alias } from 'drizzle-orm/pg-core';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { enqueueJob, renderInvoiceJob } from '../../jobs/queue';
+import { inActorScopeAtomic } from '../atomic';
 import { inActorScope, type ServiceContext } from '../context';
 import { defineService } from '../define-service';
-import { serviceError } from '../errors';
+import { msg, serviceError } from '../errors';
 import { localDateString, nonNegativeDecimal, optionalText, requiredText } from '../fields';
 import { loadCalendar } from '../periods';
 import { buildInvoiceSnapshot, type InvoiceAnnex } from './snapshot';
@@ -290,61 +291,110 @@ async function snapshotFor(
  * Edits a draft, or revises an issued invoice with no payments keeping its number (A-044). Changing
  * the date recomputes the due date from the contract rule (5.5).
  */
+async function saveInvoiceIn(tx: DbTransaction, input: z.output<typeof saveInvoiceInput>) {
+  const row = await loadInvoice(tx, input.id);
+  if (!row) return err(serviceError('not_found', 'invoices.notFound'));
+  const inv = row.invoice;
+  const revising = inv.status !== 'draft';
+  if (revising && !(inv.status === 'issued' && toDecimal(inv.paidAmount).isZero())) {
+    return err(serviceError('conflict', 'invoices.paidLocked'));
+  }
+  if (revising && !input.reason) {
+    return err(
+      serviceError('validation_error', 'invoices.changeReason', {
+        reason: ['invoices.changeReason'],
+      }),
+    );
+  }
+  if (revising) await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
+
+  const due = dueDate(row.rules.paymentDue, input.issueDate, await loadCalendar(tx));
+  const { rows, total } = await replaceLines(tx, inv.id, input.lines);
+  const base = {
+    issueDate: input.issueDate,
+    dueDate: due,
+    total,
+    dateOverrideReason: input.dateOverrideReason,
+  };
+  if (!revising) {
+    await tx.update(invoice).set(base).where(eq(invoice.id, inv.id));
+    return ok({ id: inv.id, revision: inv.revision, total, lines: rows });
+  }
+  const co = await companyRow(tx);
+  if (!co) return err(serviceError('conflict', 'company.missing'));
+  const revision = inv.revision + 1;
+  await tx
+    .update(invoice)
+    .set({
+      ...base,
+      revision,
+      snapshot: await snapshotFor(
+        tx,
+        row,
+        co,
+        { number: inv.number ?? '', issueDate: input.issueDate, dueDate: due, revision, total },
+        rows,
+      ),
+      pdfFileId: null,
+      gdocFileId: null,
+    })
+    .where(eq(invoice.id, inv.id));
+  await enqueueJob(tx, renderInvoiceJob(inv.id, revision));
+  return ok({ id: inv.id, revision, total, lines: rows });
+}
+
 export const saveInvoice = defineService({
   name: 'invoices.save',
   input: saveInvoiceInput,
-  handler: async (ctx, input) =>
-    inActorScope(ctx, async (tx) => {
+  handler: async (ctx, input) => inActorScope(ctx, (tx) => saveInvoiceIn(tx, input)),
+});
+
+/**
+ * MCP revision of an issued unpaid invoice (A-132): the same save as the edit form, keeping the
+ * issue date, so the number stays and a new revision with a fresh snapshot and PDF follows.
+ */
+export const reviseIssuedInvoice = defineService({
+  name: 'invoices.revise',
+  input: z.object({
+    id: z.uuid(),
+    expectedRevision: z
+      .number()
+      .int()
+      .positive()
+      .describe('Current revision from get_invoice, for concurrency protection'),
+    lines: z
+      .array(lineInput)
+      .min(1, 'invoices.lineRequired')
+      .max(100)
+      .describe('All lines of the new revision in order; send a line id to keep its hours link'),
+    reason: requiredText('invoices.changeReason'),
+    dryRun: z.boolean().default(false),
+  }),
+  handler: async (ctx, input) => {
+    if (ctx.actor.kind !== 'user' || ctx.actor.role !== 'owner') {
+      return err(serviceError('forbidden', 'general.forbidden'));
+    }
+    return inActorScopeAtomic(ctx, input, async (tx) => {
       const row = await loadInvoice(tx, input.id);
       if (!row) return err(serviceError('not_found', 'invoices.notFound'));
       const inv = row.invoice;
-      const revising = inv.status !== 'draft';
-      if (revising && !(inv.status === 'issued' && toDecimal(inv.paidAmount).isZero())) {
-        return err(serviceError('conflict', 'invoices.paidLocked'));
-      }
-      if (revising && !input.reason) {
+      if (inv.status !== 'issued')
+        return err(serviceError('conflict', 'invoices.reviseIssuedOnly'));
+      if (inv.revision !== input.expectedRevision) {
         return err(
-          serviceError('validation_error', 'invoices.changeReason', {
-            reason: ['invoices.changeReason'],
-          }),
+          serviceError('conflict', msg('invoices.revisionChanged', { revision: inv.revision })),
         );
       }
-      if (revising) await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
-
-      const due = dueDate(row.rules.paymentDue, input.issueDate, await loadCalendar(tx));
-      const { rows, total } = await replaceLines(tx, inv.id, input.lines);
-      const base = {
-        issueDate: input.issueDate,
-        dueDate: due,
-        total,
-        dateOverrideReason: input.dateOverrideReason,
-      };
-      if (!revising) {
-        await tx.update(invoice).set(base).where(eq(invoice.id, inv.id));
-        return ok({ id: inv.id, revision: inv.revision });
-      }
-      const co = await companyRow(tx);
-      if (!co) return err(serviceError('conflict', 'company.missing'));
-      const revision = inv.revision + 1;
-      await tx
-        .update(invoice)
-        .set({
-          ...base,
-          revision,
-          snapshot: await snapshotFor(
-            tx,
-            row,
-            co,
-            { number: inv.number ?? '', issueDate: input.issueDate, dueDate: due, revision, total },
-            rows,
-          ),
-          pdfFileId: null,
-          gdocFileId: null,
-        })
-        .where(eq(invoice.id, inv.id));
-      await enqueueJob(tx, renderInvoiceJob(inv.id, revision));
-      return ok({ id: inv.id, revision });
-    }),
+      const saved = await saveInvoiceIn(tx, {
+        id: inv.id,
+        issueDate: inv.issueDate as LocalDate,
+        dateOverrideReason: inv.dateOverrideReason,
+        reason: input.reason,
+        lines: input.lines,
+      });
+      return saved.map((v) => ({ dryRun: input.dryRun, number: inv.number, ...v }));
+    });
+  },
 });
 
 /** Issue dialog data (6.5): date by rule, recomputed due, working-day and ordering warnings. */

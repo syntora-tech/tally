@@ -101,9 +101,10 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `list_acts`                | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
 | `add_legacy_acts`          | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
 | `list_contractor_invoices` | read  | Invoices contractors abroad issue to us for a payout (A-090): number, status, date, hours, USD amount, payee, contract, filed bill                      |
+| `revise_invoice`           | write | Owner only: replaces the lines of an issued unpaid invoice like Edit in the UI (number and date stay, new revision and PDF); `expectedRevision`, reason |
 | `update_planned_payments`  | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
 
-A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry.
+A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry. An issued unpaid invoice may be revised with `revise_invoice` only on the owner's explicit request (A-132): read `get_invoice`, send all lines of the new revision, run `dryRun` first and show the new lines and total.
 
 ## 4. Rules for every call
 

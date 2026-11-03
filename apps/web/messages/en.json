@@ -404,7 +404,9 @@
       "reissueState": "Only a void invoice can be reissued",
       "pdfIssuedOnly": "A PDF is generated only for an issued invoice",
       "pdfExists": "This revision already has a PDF",
-      "writeOffState": "Only an issued unpaid or partially paid invoice can be written off"
+      "writeOffState": "Only an issued unpaid or partially paid invoice can be written off",
+      "reviseIssuedOnly": "Only an issued invoice is revised here; edit a draft in the UI",
+      "revisionChanged": "The invoice has changed meanwhile: it is at revision {revision} now. Read it again"
     },
     "auth": {
       "email": "Enter a valid email",

@@ -24,6 +24,7 @@ import {
   listInvoices,
   issuePreview,
   reissueInvoice,
+  reviseIssuedInvoice,
   saveInvoice,
   voidInvoice,
   writeOffInvoice,
@@ -216,6 +217,40 @@ describe('invoices (spec 6.5, A-044)', () => {
     const card = (await getInvoice.run(h.ctxFor(finance), { id: id() }))._unsafeUnwrap();
     expect(card.invoice.revision).toBe(3);
     expect(card.signed.map((s) => s.sourceRevision)).toEqual([2]);
+  });
+
+  it('revises an issued invoice through MCP: owner only, dry run first, same number (A-132)', async () => {
+    const input = {
+      id: id(),
+      expectedRevision: 3,
+      lines: [line('1', '8272')],
+      reason: 'Monthly fee line: 1 × amount',
+    };
+    expect((await reviseIssuedInvoice.run(h.ctxFor(finance), input))._unsafeUnwrapErr().code).toBe(
+      'forbidden',
+    );
+    expect(
+      (
+        await reviseIssuedInvoice.run(h.ctxFor(owner), { ...input, expectedRevision: 2 })
+      )._unsafeUnwrapErr().code,
+    ).toBe('conflict');
+
+    const dry = await reviseIssuedInvoice.run(h.ctxFor(owner), { ...input, dryRun: true });
+    expect(dry._unsafeUnwrap()).toMatchObject({ dryRun: true, revision: 4, total: '8272.00' });
+    const untouched = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();
+    expect(untouched.invoice.revision).toBe(3);
+
+    const res = await reviseIssuedInvoice.run(h.ctxFor(owner), input);
+    expect(res._unsafeUnwrap()).toMatchObject({ number: 'T1/37', revision: 4 });
+    const card = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();
+    expect(card.invoice).toMatchObject({
+      number: 'T1/37',
+      issueDate: '2037-08-04',
+      revision: 4,
+      total: '8272.00000000',
+    });
+    expect(card.lines.map((l) => [l.quantity, l.unitPrice])).toEqual([['1.00', '8272.00000000']]);
+    expect(card.revisions.find((r) => r.revision === 3)?.reason).toBe(input.reason);
   });
 
   it('freezes the invoice after any payment', async () => {

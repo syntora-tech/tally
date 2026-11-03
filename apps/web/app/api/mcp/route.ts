@@ -1,5 +1,6 @@
 import { getDb } from '@/server/db/client';
 import { getServerEnv } from '@/server/env';
+import { runJobsAfterResponse } from '@/server/jobs';
 import { handleMcpRequest } from '@/server/mcp/http';
 import * as store from '@/server/mcp/store';
 import { getDocumentStorage } from '@/server/storage';
@@ -9,6 +10,8 @@ export const maxDuration = 60;
 
 function handle(request: Request) {
   const db = getDb();
+  // A revision queues its PDF; render it now rather than on the next cron tick (7.1).
+  if (request.method === 'POST') runJobsAfterResponse();
   return handleMcpRequest(request, {
     db,
     today: getToday(),
