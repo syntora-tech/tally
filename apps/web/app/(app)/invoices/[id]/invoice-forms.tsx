@@ -224,6 +224,7 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
   const fmt = useFormat();
   const error = useResult(state, t('issued'));
   const [preview, setPreview] = useState(props.preview);
+  const [date, setDate] = useState(props.issueDate);
   const [checking, startCheck] = useTransition();
 
   return (
@@ -243,6 +244,7 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
             className="w-44"
             onChange={(e) => {
               const value = e.target.value;
+              setDate(value);
               startCheck(async () => {
                 const res = await issuePreviewAction(props.invoiceId, value);
                 if (res.ok) setPreview(res.data);
@@ -270,10 +272,23 @@ export function IssueForm(props: { invoiceId: string; issueDate: string; preview
         </Alert>
       )}
       <ErrorAlert message={error && !error.fieldErrors ? error.message : undefined} />
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={pending}>
           {t('issue')}
         </Button>
+        <Button
+          variant="outline"
+          render={
+            <a
+              href={`/api/invoices/${props.invoiceId}/preview?date=${encodeURIComponent(date)}`}
+              target="_blank"
+              rel="noopener"
+            />
+          }
+        >
+          {t('preview')}
+        </Button>
+        <span className="text-sm text-muted-foreground">{t('previewHint')}</span>
       </div>
     </form>
   );

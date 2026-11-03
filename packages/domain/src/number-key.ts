@@ -23,6 +23,22 @@ export function formatSequenceNumber(
     .replaceAll('{contract}', contractNumber);
 }
 
+/**
+ * The number a draft would get if it were issued now (A-107): `issue_number()` read without taking
+ * it — the contract's sequence, the year of the document date, a year-scoped sequence restarting
+ * at 1. Null when the date is before the sequence's year (issuing fails).
+ */
+export function previewSequenceNumber(
+  seq: { template: string; nextValue: number; yearScoped: boolean; currentYear: number | null },
+  docDate: string,
+  contractNumber: string,
+): string | null {
+  const year = Number(docDate.slice(0, 4));
+  if (seq.yearScoped && seq.currentYear !== null && year < seq.currentYear) return null;
+  const value = seq.yearScoped && seq.currentYear !== year ? 1 : seq.nextValue;
+  return formatSequenceNumber(seq.template, value, year, contractNumber);
+}
+
 /** The counter of an issued number: its last group of digits (`OD-1002-А12` → 12). */
 export function sequenceValueOf(number: string): number | null {
   const m = /(\d+)\D*$/.exec(number);

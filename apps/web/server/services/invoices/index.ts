@@ -11,6 +11,7 @@ import {
   invoiceLine,
   invoiceRevision,
   job,
+  numberSequence,
   payrollLine,
   period,
   timesheet,
@@ -19,6 +20,7 @@ import {
   defaultInvoiceDate,
   diffDays,
   dueDate,
+  previewSequenceNumber,
   roundHalfUp,
   sum,
   toDecimal,
@@ -432,6 +434,57 @@ export const issueInvoice = defineService({
         .where(eq(invoice.id, id));
       await enqueueJob(tx, renderInvoiceJob(id, row.invoice.revision));
       return ok({ id, number });
+    }),
+});
+
+/**
+ * What issuing on this date would print (6.5): the draft's saved lines in a snapshot built exactly
+ * as `issueInvoice` builds it, numbered with the number it would take. Nothing is written.
+ */
+export const invoiceDraftPreview = defineService({
+  name: 'invoices.draftPreview',
+  input: z.object({
+    id: z.uuid(),
+    issueDate: z.preprocess((v) => (v === '' ? undefined : v), localDateString.optional()),
+  }),
+  handler: async (ctx, { id, issueDate }) =>
+    inActorScope(ctx, async (tx) => {
+      const row = await loadInvoice(tx, id);
+      if (!row) return err(serviceError('not_found', 'invoices.notFound'));
+      if (row.invoice.status !== 'draft') {
+        return err(serviceError('conflict', 'invoices.alreadyIssued'));
+      }
+      const lines = await tx
+        .select()
+        .from(invoiceLine)
+        .where(eq(invoiceLine.invoiceId, id))
+        .orderBy(asc(invoiceLine.position));
+      if (lines.length === 0) return err(serviceError('validation_error', 'invoices.noLines'));
+      const co = await companyRow(tx);
+      if (!co) return err(serviceError('conflict', 'company.missing'));
+
+      const date = issueDate ?? (row.invoice.issueDate as LocalDate);
+      const [seq] = await tx
+        .select()
+        .from(numberSequence)
+        .where(eq(numberSequence.key, row.contract.numberSequenceKey ?? DEFAULT_SEQUENCE));
+      const number = (seq && previewSequenceNumber(seq, date, row.contract.number)) ?? '—';
+      const due = dueDate(row.rules.paymentDue, date, await loadCalendar(tx));
+      const total = sum(lines.map((l) => l.amount)).toFixed(2);
+      return ok({
+        number,
+        issueDate: date,
+        clientName: row.client.shortName ?? row.client.legalName,
+        templateId: row.contract.invoiceTemplateFileId,
+        quantities: lines.map((l) => l.quantity),
+        snapshot: await snapshotFor(
+          tx,
+          row,
+          co,
+          { number, issueDate: date, dueDate: due, revision: row.invoice.revision, total },
+          lines,
+        ),
+      });
     }),
 });
 

@@ -19,6 +19,7 @@ import { LocalStorage } from '../../storage/local-storage';
 import { documentServices } from '../documents';
 import {
   getInvoice,
+  invoiceDraftPreview,
   issueInvoice,
   listInvoices,
   issuePreview,
@@ -139,6 +140,23 @@ describe('invoices (spec 6.5, A-044)', () => {
       isWorkingDay: false,
       sequenceKey: SEQUENCE,
     });
+  });
+
+  it('previews the draft with the number it would take, without taking it', async () => {
+    const res = await invoiceDraftPreview.run(h.ctxFor(finance), {
+      id: id(),
+      issueDate: '2037-08-04',
+    });
+    const draft = res._unsafeUnwrap();
+    expect(draft).toMatchObject({ number: 'T1/37', issueDate: '2037-08-04' });
+    expect(draft.snapshot).toMatchObject({
+      version: 2,
+      doc: { number: 'T1/37', date: '04.08.2037', due_date: '20.08.2037' },
+    });
+    const [seq] = await h.db.select().from(numberSequence).where(eq(numberSequence.key, SEQUENCE));
+    expect(seq?.nextValue).toBe(1);
+    const card = (await getInvoice.run(h.ctxFor(finance), { id: id() }))._unsafeUnwrap();
+    expect(card.invoice).toMatchObject({ status: 'draft', number: null, snapshot: null });
   });
 
   it('issues with a number from the contract sequence and a snapshot', async () => {

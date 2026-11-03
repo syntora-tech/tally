@@ -28,25 +28,42 @@ export type RenderOutput = {
   file: { data: Uint8Array; mimeType: string; fileName: string };
 };
 
+export type RenderedFile = RenderOutput['file'];
+
 export interface DocumentRenderer {
   render(input: RenderInput): Promise<RenderOutput>;
+  /** The same document, not filed anywhere: shown before issuing and then thrown away. */
+  preview(input: Omit<RenderInput, 'folderPath'>): Promise<RenderedFile>;
 }
+
+const PREVIEW_FOLDER = '_previews';
 
 /** Spec 7.1: copy the template, fill it through batchUpdate, export to PDF. */
 export class GoogleDocsRenderer implements DocumentRenderer {
   constructor(
-    private readonly files: Pick<drive_v3.Resource$Files, 'copy' | 'export'>,
+    private readonly files: Pick<drive_v3.Resource$Files, 'copy' | 'export' | 'delete'>,
     private readonly documents: Pick<docs_v1.Resource$Documents, 'get' | 'batchUpdate'>,
     private readonly storage: DriveStorage,
   ) {}
 
-  async render({
-    templateId,
-    folderPath,
-    fileName,
-    snapshot,
-    layout,
-  }: RenderInput): Promise<RenderOutput> {
+  async render(input: RenderInput): Promise<RenderOutput> {
+    const documentId = await this.fill(input, input.folderPath);
+    return { sourceFileId: documentId, file: await this.exportPdf(documentId, input.fileName) };
+  }
+
+  async preview(input: Omit<RenderInput, 'folderPath'>): Promise<RenderedFile> {
+    const documentId = await this.fill(input as RenderInput, PREVIEW_FOLDER);
+    try {
+      return await this.exportPdf(documentId, input.fileName);
+    } finally {
+      await this.files.delete({ fileId: documentId, supportsAllDrives: true });
+    }
+  }
+
+  private async fill(
+    { templateId, fileName, snapshot, layout }: RenderInput,
+    folderPath: string,
+  ): Promise<string> {
     if (!templateId) throw new Error(`No Google Docs template configured for ${layout}`);
     const parent = await this.storage.ensureFolder(folderPath);
     const copy = await this.files.copy({
@@ -58,31 +75,39 @@ export class GoogleDocsRenderer implements DocumentRenderer {
     const documentId = copy.data.id;
     if (!documentId) throw new Error('Drive did not return an id for the template copy');
 
-    const original = (await this.documents.get({ documentId })).data;
-    const plan = planTemplate(original, snapshot);
-    if (plan.isErr()) throw new Error(describeTemplateError(plan.error));
+    try {
+      const original = (await this.documents.get({ documentId })).data;
+      const plan = planTemplate(original, snapshot);
+      if (plan.isErr()) throw new Error(describeTemplateError(plan.error));
 
-    const insert = insertRowRequests(plan.value, 'lines' in snapshot ? snapshot.lines.length : 0);
-    if (insert.length) {
-      await this.documents.batchUpdate({ documentId, requestBody: { requests: insert } });
+      const insert = insertRowRequests(plan.value, 'lines' in snapshot ? snapshot.lines.length : 0);
+      if (insert.length) {
+        await this.documents.batchUpdate({ documentId, requestBody: { requests: insert } });
+      }
+      const expanded = insert.length ? (await this.documents.get({ documentId })).data : original;
+      const fill = fillRequests(expanded, plan.value, snapshot);
+      if (fill.length) {
+        await this.documents.batchUpdate({ documentId, requestBody: { requests: fill } });
+      }
+    } catch (error) {
+      // A half-filled copy is useless; a preview must not leave one behind either.
+      if (folderPath === PREVIEW_FOLDER) {
+        await this.files.delete({ fileId: documentId, supportsAllDrives: true });
+      }
+      throw error;
     }
-    const expanded = insert.length ? (await this.documents.get({ documentId })).data : original;
-    const fill = fillRequests(expanded, plan.value, snapshot);
-    if (fill.length) {
-      await this.documents.batchUpdate({ documentId, requestBody: { requests: fill } });
-    }
+    return documentId;
+  }
 
+  private async exportPdf(documentId: string, fileName: string): Promise<RenderedFile> {
     const pdf = await this.files.export(
       { fileId: documentId, mimeType: 'application/pdf' },
       { responseType: 'arraybuffer' },
     );
     return {
-      sourceFileId: documentId,
-      file: {
-        data: new Uint8Array(pdf.data as ArrayBuffer),
-        mimeType: 'application/pdf',
-        fileName: `${fileName}.pdf`,
-      },
+      data: new Uint8Array(pdf.data as ArrayBuffer),
+      mimeType: 'application/pdf',
+      fileName: `${fileName}.pdf`,
     };
   }
 }
@@ -100,6 +125,10 @@ const escapeHtml = (s: string) =>
  * snapshot, so the issue → file → document flow is exercised end to end.
  */
 export class HtmlRenderer implements DocumentRenderer {
+  async preview(input: Omit<RenderInput, 'folderPath'>): Promise<RenderedFile> {
+    return (await this.render({ ...input, folderPath: '' } as RenderInput)).file;
+  }
+
   render(input: RenderInput): Promise<RenderOutput> {
     const html =
       input.layout === 'act_fop'

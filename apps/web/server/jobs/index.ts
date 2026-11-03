@@ -5,7 +5,12 @@ import { JWT } from 'google-auth-library';
 import { after } from 'next/server';
 import { getDb } from '../db/client';
 import { driveConfig, getServerEnv } from '../env';
-import { GoogleDocsRenderer, HtmlRenderer, type DocumentRenderer } from '../render/renderers';
+import {
+  GoogleDocsRenderer,
+  HtmlRenderer,
+  type DocumentRenderer,
+  type InvoiceLayout,
+} from '../render/renderers';
 import { getDocumentStorage } from '../storage';
 import { DriveStorage } from '../storage/drive-storage';
 import { renderActHandler } from './render-act';
@@ -32,6 +37,18 @@ function getRenderer(): DocumentRenderer {
     docs({ version: 'v1', auth }).documents,
     storage,
   );
+}
+
+/** Renders a draft for the issue dialog with the renderer and templates the jobs use (6.5). */
+export function invoicePreviewRenderer() {
+  const env = getServerEnv();
+  return {
+    renderer: getRenderer(),
+    templates: {
+      invoice_hourly: env.GOOGLE_TEMPLATE_INVOICE_HOURLY_ID,
+      invoice_fixed: env.GOOGLE_TEMPLATE_INVOICE_FIXED_ID,
+    } as Partial<Record<InvoiceLayout, string>>,
+  };
 }
 
 function getHandlers(): Record<string, JobHandler> {

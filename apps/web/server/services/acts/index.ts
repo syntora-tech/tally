@@ -20,7 +20,7 @@ import {
   defaultActDate,
   Decimal,
   endOfMonth,
-  formatSequenceNumber,
+  previewSequenceNumber,
   renumberedInFormat,
   nextPartPeriod,
   payoutPartOf,
@@ -779,21 +779,8 @@ export const listActs = defineService({
   },
 });
 
-/**
- * The number a draft would get if it were issued now (A-107): `issue_number()` read without taking
- * it — the contract's sequence, the year of the act date, a year-scoped sequence restarting at 1.
- * Null when the contract has no sequence or the date is before the sequence's year (issuing fails).
- */
-export function previewActNumber(
-  seq: { template: string; nextValue: number; yearScoped: boolean; currentYear: number | null },
-  actDate: string,
-  contractNumber: string,
-): string | null {
-  const year = Number(actDate.slice(0, 4));
-  if (seq.yearScoped && seq.currentYear !== null && year < seq.currentYear) return null;
-  const value = seq.yearScoped && seq.currentYear !== year ? 1 : seq.nextValue;
-  return formatSequenceNumber(seq.template, value, year, contractNumber);
-}
+/** Acts number like any document of the contract's sequence (A-107). */
+export const previewActNumber = previewSequenceNumber;
 
 export const getAct = defineService({
   name: 'acts.get',

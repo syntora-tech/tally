@@ -1810,6 +1810,8 @@
     "nonWorkingReason": "Reason for a non-working date (owner)",
     "byRule": "By the contract rule: {date}. Due: {due}.",
     "checking": " Checking…",
+    "preview": "Preview",
+    "previewHint": "Opens the invoice exactly as issuing it would print it: saved lines, this date and the expected number. Takes a few seconds.",
     "nonWorkingDay": "The chosen date is a non-working day. Only the owner can issue with a reason.",
     "earlier": "The date is earlier than the previous issued document of this numbering ({number}, {date}).",
     "issue": "Issue and assign a number",
