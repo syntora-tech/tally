@@ -86,7 +86,7 @@ describe('buildInvoiceSnapshot (spec 7.2 placeholders)', () => {
     expect(printedRate('1.00', '255.00000000', '255.00')).toBe('255.00');
   });
 
-  it('prints a monthly fee billed by hours as hours / norm at the fee per month (A-135)', () => {
+  it('prints a monthly fee billed by hours as plain hours at the fee per month (A-135, A-136)', () => {
     const monthly = (quantity: string, amount: string, unitPrice = '32.73809524') =>
       buildInvoiceSnapshot({
         ...input,
@@ -103,11 +103,11 @@ describe('buildInvoiceSnapshot (spec 7.2 placeholders)', () => {
         ],
       }).lines[0];
     expect(monthly('176.00', '5761.90')).toMatchObject({
-      qty: '176.00 / 168.00',
+      qty: '176.00',
       price: `5${nb}500.00 / month`,
       amount: `5${nb}761.90`,
     });
-    expect(monthly('168.00', '5500.00')).toMatchObject({ qty: '168.00 / 168.00' });
+    expect(monthly('168.00', '5500.00')).toMatchObject({ qty: '168.00' });
     // Edited by hand to another rate: the line no longer follows the fee, so print the rate.
     expect(monthly('10.00', '400.00', '40.00000000')).toMatchObject({
       qty: '10.00',

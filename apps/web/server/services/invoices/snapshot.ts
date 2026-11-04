@@ -98,18 +98,16 @@ export function printedRate(quantity: string, unitPrice: string, amount: string)
 }
 
 /**
- * A monthly fee billed by hours reads as hours / norm at the fee per month (A-135), as the SOW
- * states it; only while fee × hours / norm still gives the amount, else the hourly rate.
+ * A monthly fee billed by hours shows its fee per month instead of an hourly rate (A-135, A-136:
+ * the Boosty template prints no price column at all); only while fee × hours / norm still gives
+ * the amount, else the hourly rate.
  */
 function lineFigures(l: SnapshotInput['lines'][number]): { qty: string; price: string } {
   const qty = formatAmount(l.quantity, undefined, EXACT);
   if (l.monthlyFee && l.normHours) {
     const amount = roundHalfUp(toDecimal(l.monthlyFee).times(l.quantity).div(l.normHours));
     if (amount.eq(roundHalfUp(l.amount))) {
-      return {
-        qty: `${qty} / ${formatAmount(l.normHours, undefined, EXACT)}`,
-        price: `${formatAmount(l.monthlyFee)} / month`,
-      };
+      return { qty, price: `${formatAmount(l.monthlyFee)} / month` };
     }
   }
   return { qty, price: printedRate(l.quantity, l.unitPrice, l.amount) };

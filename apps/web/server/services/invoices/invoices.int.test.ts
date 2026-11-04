@@ -273,7 +273,7 @@ describe('invoices (spec 6.5, A-044)', () => {
     const shown = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();
     expect(shown.lines[0]).toMatchObject({ monthlyFee: '5500.00000000', normHours: '168.00' });
     expect(shown.invoice.snapshot).toMatchObject({
-      lines: [{ qty: '176.00 / 168.00', price: '5\u202f500.00 / month' }],
+      lines: [{ qty: '176.00', price: '5\u202f500.00 / month' }],
     });
     // A later edit that does not send them keeps them by line id.
     const kept = await reviseIssuedInvoice.run(h.ctxFor(owner), {
