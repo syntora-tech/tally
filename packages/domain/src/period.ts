@@ -224,9 +224,8 @@ export type DraftLine = {
 };
 
 /**
- * Invoice line numbers (spec 5.1): quantity = hours and unit price = hourly rate, for `by_hours`
- * r / H in cents so that hours × price is the amount (A-133); for `full_month` the monthly fee
- * with quantity 1.
+ * Invoice line numbers (spec 5.1): quantity = hours and unit price = effective hourly rate; for
+ * `full_month` the monthly fee with quantity 1. Amount is the rounded line total from 5.1.
  */
 export function draftLine(
   assignmentId: string,
@@ -246,7 +245,7 @@ export function draftLine(
       ? r
       : billing.prorationPolicy === 'trunc_hourly'
         ? r.div(H).floor()
-        : roundHalfUp(r.div(H));
+        : r.div(H);
   return {
     assignmentId,
     quantity: toDecimal(hours).toFixed(2),

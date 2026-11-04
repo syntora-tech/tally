@@ -7,6 +7,7 @@ import {
   SCALE,
   moneyToWordsUa,
   paymentTermsText,
+  roundHalfUp,
   type LocalDate,
   type PaymentDueRule,
 } from '@tally/domain';
@@ -75,8 +76,23 @@ export type SnapshotInput = {
  * Frozen document data (spec 7): PDFs are rendered only from this, never from live rows, so a
  * re-render a year later gives the same document. Keys match the `{{path}}` placeholders of 7.2.
  */
-/** Hours are shown as stored; the rate is rounded to cents (A-130), so qty × price may differ from the amount. */
+/** Hours are shown as stored. */
 const EXACT = { maxDp: SCALE.amount } as const;
+
+/**
+ * The rate with the fewest decimals, 2 to 8, at which qty × rate still rounds to the line amount
+ * (A-134): 47.00, 23.8095 for 4000 / 168 × 168, 32.738095 for 5500 / 168 × 176.
+ */
+export function printedRate(quantity: string, unitPrice: string, amount: string): string {
+  const target = roundHalfUp(amount);
+  for (let dp = 2; dp < SCALE.amount; dp++) {
+    const rate = roundHalfUp(unitPrice, dp);
+    if (roundHalfUp(rate.times(quantity)).eq(target)) {
+      return formatAmount(rate, undefined, { maxDp: dp });
+    }
+  }
+  return formatAmount(unitPrice, undefined, EXACT);
+}
 
 export function buildInvoiceSnapshot(i: SnapshotInput) {
   const date = formatUaDate(i.issueDate);
@@ -137,7 +153,7 @@ export function buildInvoiceSnapshot(i: SnapshotInput) {
       description_en: l.descriptionEn,
       description_ua: l.descriptionUa,
       qty: formatAmount(l.quantity, undefined, EXACT),
-      price: formatAmount(l.unitPrice),
+      price: printedRate(l.quantity, l.unitPrice, l.amount),
       amount: formatAmount(l.amount),
     })),
   };

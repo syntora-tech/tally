@@ -1,6 +1,11 @@
 import { parseLocalDate } from '@tally/domain';
 import { describe, expect, it } from 'vitest';
-import { buildInvoiceSnapshot, withTemplateDefaults, type SnapshotInput } from './snapshot';
+import {
+  buildInvoiceSnapshot,
+  printedRate,
+  withTemplateDefaults,
+  type SnapshotInput,
+} from './snapshot';
 
 const d = (s: string) => parseLocalDate(s)._unsafeUnwrap();
 const nb = ' ';
@@ -74,16 +79,11 @@ describe('buildInvoiceSnapshot (spec 7.2 placeholders)', () => {
     expect(JSON.stringify(snap)).not.toContain('null');
   });
 
-  it('rounds the rate to cents but keeps hours as stored (A-130)', () => {
-    const line = {
-      descriptionEn: 'Dev — Anton',
-      descriptionUa: 'Розробка — Антон',
-      quantity: '7.125',
-      unitPrice: '32.73809524',
-      amount: '233.26',
-    };
-    const [printed] = buildInvoiceSnapshot({ ...input, lines: [line] }).lines;
-    expect(printed).toMatchObject({ qty: '7.125', price: '32.74', amount: '233.26' });
+  it('prints the rate with the fewest decimals that still give the amount (A-134)', () => {
+    expect(printedRate('168.00', '47.00000000', '7896.00')).toBe('47.00');
+    expect(printedRate('168.00', '23.80952381', '4000.00')).toBe('23.8095');
+    expect(printedRate('176.00', '32.73809524', '5761.90')).toBe('32.738095');
+    expect(printedRate('1.00', '255.00000000', '255.00')).toBe('255.00');
   });
 
   it('words the payment clause from the contract rule', () => {

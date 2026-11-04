@@ -21,12 +21,12 @@ describe('billingLineAmount (spec 5.1)', () => {
     expect(billingLineAmount(terms, '40', H)?.toFixed(2)).toBe('5500.00');
   });
 
-  it('fixed_monthly + by_hours: round(r / H) × h — Boosty SOW, 5500 / 184 = 29.89 (A-133)', () => {
+  it('fixed_monthly + by_hours: r / H × h — Boosty SOW, a full month is r exactly (A-134)', () => {
     const terms = { type: 'fixed_monthly', rate: '5500', prorationPolicy: 'by_hours' } as const;
-    expect(billingLineAmount(terms, '92', H)?.toFixed(2)).toBe('2749.88');
-    expect(billingLineAmount(terms, '100', H)?.toFixed(2)).toBe('2989.00');
+    expect(billingLineAmount(terms, '92', H)?.toFixed(2)).toBe('2750.00');
+    expect(billingLineAmount(terms, '100', H)?.toFixed(2)).toBe('2989.13');
+    expect(billingLineAmount(terms, H, H)?.toFixed(2)).toBe('5500.00');
   });
-
   it('fixed_monthly + trunc_hourly: floor(r / H) × h — Pavlo, floor(5000 / 184) = 27', () => {
     const terms = { type: 'fixed_monthly', rate: '5000', prorationPolicy: 'trunc_hourly' } as const;
     expect(billingLineAmount(terms, '10', H)?.toFixed(2)).toBe('270.00');

@@ -33,8 +33,7 @@ export function billingLineAmount(
     case 'full_month':
       return roundHalfUp(r);
     case 'by_hours':
-      // The invoice prints the hourly rate in cents, so the line is that rate × hours (A-133).
-      return roundHalfUp(roundHalfUp(r.div(H)).times(h));
+      return roundHalfUp(r.div(H).times(h));
     case 'trunc_hourly':
       return roundHalfUp(r.div(H).floor().times(h));
   }

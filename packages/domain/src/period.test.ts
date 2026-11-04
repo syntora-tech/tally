@@ -190,7 +190,7 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
     });
   });
 
-  it('by_hours: hourly rate r / H in cents × hours (A-133)', () => {
+  it('by_hours: effective hourly rate r / H, amount exact (A-134)', () => {
     expect(
       draftLine(
         'x',
@@ -201,8 +201,8 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
     ).toEqual({
       assignmentId: 'x',
       quantity: '176.00',
-      unitPrice: '32.74000000',
-      amount: '5762.24',
+      unitPrice: '32.73809524',
+      amount: '5761.90',
     });
   });
 
