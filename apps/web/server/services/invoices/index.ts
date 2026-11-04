@@ -385,6 +385,16 @@ export const reviseIssuedInvoice = defineService({
           serviceError('conflict', msg('invoices.revisionChanged', { revision: inv.revision })),
         );
       }
+      // Line ids change with every revision; a stale one would silently drop its hours link.
+      const current = await tx
+        .select({ id: invoiceLine.id })
+        .from(invoiceLine)
+        .where(eq(invoiceLine.invoiceId, inv.id));
+      const own = new Set(current.map((l) => l.id));
+      const stale = input.lines.find((l) => l.id && !own.has(l.id));
+      if (stale?.id) {
+        return err(serviceError('conflict', msg('invoices.lineNotFound', { id: stale.id })));
+      }
       const saved = await saveInvoiceIn(tx, {
         id: inv.id,
         issueDate: inv.issueDate as LocalDate,

@@ -235,6 +235,12 @@ describe('invoices (spec 6.5, A-044)', () => {
       )._unsafeUnwrapErr().code,
     ).toBe('conflict');
 
+    const stale = await reviseIssuedInvoice.run(h.ctxFor(owner), {
+      ...input,
+      lines: [{ ...line('1', '8272'), id: '00000000-0000-4000-8000-000000000000' }],
+    });
+    expect(stale._unsafeUnwrapErr().code).toBe('conflict');
+
     const dry = await reviseIssuedInvoice.run(h.ctxFor(owner), { ...input, dryRun: true });
     expect(dry._unsafeUnwrap()).toMatchObject({ dryRun: true, revision: 4, total: '8272.00' });
     const untouched = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();

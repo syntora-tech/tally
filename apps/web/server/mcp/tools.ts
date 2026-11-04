@@ -287,7 +287,7 @@ export const TOOLS: readonly ToolDef[] = [
     title: 'Revise an issued invoice',
     kind: 'write',
     description:
-      'Owner only, on an explicit request (A-132). Replaces the lines of an issued unpaid invoice, exactly as Edit in the UI does: the number and issue date stay, a new revision with a fresh snapshot is stored and its PDF is rendered. Read get_invoice first and send expectedRevision and every line of the new revision in order (descriptionEn, descriptionUa, quantity, unitPrice as decimal strings; the amount is quantity × unitPrice rounded to cents); keep a line id to keep its hours link. A reason is required. Drafts are edited and invoices issued only in the UI. Run dryRun first and show the new lines and total.',
+      'Owner only, on an explicit request (A-132). Replaces the lines of an issued unpaid invoice, exactly as Edit in the UI does: the number and issue date stay, a new revision with a fresh snapshot is stored and its PDF is rendered. Read get_invoice first and send expectedRevision and every line of the new revision in order (descriptionEn, descriptionUa, quantity, unitPrice as decimal strings; the amount is quantity × unitPrice rounded to cents); send the current line id (from get_invoice; ids change with every revision, a stale one is refused) to keep its hours link. A reason is required. Drafts are edited and invoices issued only in the UI. Run dryRun first and show the new lines and total.',
     service: reviseIssuedInvoice,
   }),
   tool({
