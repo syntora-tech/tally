@@ -256,6 +256,41 @@ describe('invoices (spec 6.5, A-044)', () => {
       total: '8272.00000000',
     });
     expect(card.lines.map((l) => [l.quantity, l.unitPrice])).toEqual([['1.00', '8272.00000000']]);
+
+    const monthly = await reviseIssuedInvoice.run(h.ctxFor(owner), {
+      id: id(),
+      expectedRevision: 4,
+      lines: [
+        {
+          ...line('176', '32.73809524'),
+          id: card.lines[0]?.id,
+          monthly: { fee: '5500', normHours: '168' },
+        },
+      ],
+      reason: 'Monthly fee shown as hours / norm (A-135)',
+    });
+    expect(monthly._unsafeUnwrap().total).toBe('5761.90');
+    const shown = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();
+    expect(shown.lines[0]).toMatchObject({ monthlyFee: '5500.00000000', normHours: '168.00' });
+    expect(shown.invoice.snapshot).toMatchObject({
+      lines: [{ qty: '176.00 / 168.00', price: '5\u202f500.00 / month' }],
+    });
+    // A later edit that does not send them keeps them by line id.
+    const kept = await reviseIssuedInvoice.run(h.ctxFor(owner), {
+      id: id(),
+      expectedRevision: 5,
+      lines: [{ ...line('176', '32.73809524'), id: shown.lines[0]?.id }],
+      reason: 'Same lines',
+    });
+    expect(kept.isOk()).toBe(true);
+    const again = (await getInvoice.run(h.ctxFor(owner), { id: id() }))._unsafeUnwrap();
+    expect(again.lines[0]?.monthlyFee).toBe('5500.00000000');
+    await reviseIssuedInvoice.run(h.ctxFor(owner), {
+      id: id(),
+      expectedRevision: 6,
+      lines: [{ ...line('1', '8272'), id: again.lines[0]?.id }],
+      reason: 'Back to the agreed total',
+    });
     expect(card.revisions.find((r) => r.revision === 3)?.reason).toBe(input.reason);
   });
 

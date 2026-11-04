@@ -1,0 +1,3 @@
+ALTER TABLE "invoice_line" ADD COLUMN "monthly_fee" numeric(20, 8);--> statement-breakpoint
+ALTER TABLE "invoice_line" ADD COLUMN "norm_hours" numeric(10, 2);--> statement-breakpoint
+ALTER TABLE "invoice_line" ADD CONSTRAINT "invoice_line_monthly_fee_check" CHECK (("invoice_line"."monthly_fee" is null) = ("invoice_line"."norm_hours" is null) and ("invoice_line"."norm_hours" is null or "invoice_line"."norm_hours" > 0));

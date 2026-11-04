@@ -221,6 +221,8 @@ export type DraftLine = {
   quantity: string;
   unitPrice: string;
   amount: string;
+  /** `by_hours`: the fee and norm the rate comes from, so the invoice can print them (A-135). */
+  monthly?: { fee: string; normHours: string };
 };
 
 /**
@@ -251,6 +253,9 @@ export function draftLine(
     quantity: toDecimal(hours).toFixed(2),
     unitPrice: unit.toDecimalPlaces(8).toFixed(8),
     amount: amount.toFixed(2),
+    ...(billing.type === 'fixed_monthly' && billing.prorationPolicy === 'by_hours'
+      ? { monthly: { fee: r.toFixed(8), normHours: H.toFixed(2) } }
+      : {}),
   };
 }
 

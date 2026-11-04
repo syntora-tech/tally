@@ -98,6 +98,9 @@ export const invoiceLine = pgTable(
     quantity: numeric({ precision: 10, scale: 2 }).notNull(),
     unitPrice: numeric({ precision: 20, scale: 8 }).notNull(),
     amount: numeric({ precision: 20, scale: 8 }).notNull(),
+    /** A monthly fee billed by hours (A-135): printed as hours / norm at the fee per month. */
+    monthlyFee: numeric({ precision: 20, scale: 8 }),
+    normHours: numeric({ precision: 10, scale: 2 }),
   },
   (t) => [
     unique('invoice_line_timesheet_key').on(t.timesheetId),
@@ -105,6 +108,10 @@ export const invoiceLine = pgTable(
     check(
       'invoice_line_amounts_check',
       sql`${t.quantity} >= 0 and ${t.unitPrice} >= 0 and ${t.amount} >= 0`,
+    ),
+    check(
+      'invoice_line_monthly_fee_check',
+      sql`(${t.monthlyFee} is null) = (${t.normHours} is null) and (${t.normHours} is null or ${t.normHours} > 0)`,
     ),
     ...rolePolicies('invoice_line', { read: 'finance', write: 'finance' }),
   ],

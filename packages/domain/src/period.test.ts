@@ -203,6 +203,7 @@ describe('draftLine (invoice line layout, spec 5.1)', () => {
       quantity: '176.00',
       unitPrice: '32.73809524',
       amount: '5761.90',
+      monthly: { fee: '5500.00000000', normHours: '168.00' },
     });
   });
 

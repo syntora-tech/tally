@@ -39,7 +39,7 @@ import { defineService } from '../define-service';
 import { msg, serviceError } from '../errors';
 import { localDateString, nonNegativeDecimal, optionalText, requiredText } from '../fields';
 import { loadCalendar } from '../periods';
-import { buildInvoiceSnapshot, type InvoiceAnnex } from './snapshot';
+import { buildInvoiceSnapshot, type InvoiceAnnex, type SnapshotInput } from './snapshot';
 
 export const INVOICE_STATUSES = [
   'draft',
@@ -188,6 +188,11 @@ const lineInput = z.object({
   descriptionUa: requiredText('invoices.descriptionUa'),
   quantity: nonNegativeDecimal,
   unitPrice: nonNegativeDecimal,
+  /** Sent only to set them; otherwise a line keeps its own by id, like its hours link (A-135). */
+  monthly: z
+    .object({ fee: nonNegativeDecimal, normHours: nonNegativeDecimal })
+    .optional()
+    .describe('Monthly fee and norm hours a by-hours rate comes from: fee / normHours = unitPrice'),
 });
 
 export const saveInvoiceInput = z.object({
@@ -210,18 +215,23 @@ async function replaceLines(
   lines: z.output<typeof lineInput>[],
 ) {
   const existing = await tx.select().from(invoiceLine).where(eq(invoiceLine.invoiceId, invoiceId));
-  const timesheetOf = new Map(existing.map((l) => [l.id, l.timesheetId]));
+  const byId = new Map(existing.map((l) => [l.id, l]));
   await tx.delete(invoiceLine).where(eq(invoiceLine.invoiceId, invoiceId));
-  const rows = lines.map((l, i) => ({
-    invoiceId,
-    timesheetId: (l.id && timesheetOf.get(l.id)) ?? null,
-    position: i + 1,
-    descriptionEn: l.descriptionEn,
-    descriptionUa: l.descriptionUa,
-    quantity: toDecimal(l.quantity).toFixed(2),
-    unitPrice: toDecimal(l.unitPrice).toFixed(8),
-    amount: roundHalfUp(toDecimal(l.quantity).times(l.unitPrice)).toFixed(2),
-  }));
+  const rows = lines.map((l, i) => {
+    const kept = l.id ? byId.get(l.id) : undefined;
+    return {
+      invoiceId,
+      timesheetId: kept?.timesheetId ?? null,
+      monthlyFee: l.monthly ? toDecimal(l.monthly.fee).toFixed(8) : (kept?.monthlyFee ?? null),
+      normHours: l.monthly ? toDecimal(l.monthly.normHours).toFixed(2) : (kept?.normHours ?? null),
+      position: i + 1,
+      descriptionEn: l.descriptionEn,
+      descriptionUa: l.descriptionUa,
+      quantity: toDecimal(l.quantity).toFixed(2),
+      unitPrice: toDecimal(l.unitPrice).toFixed(8),
+      amount: roundHalfUp(toDecimal(l.quantity).times(l.unitPrice)).toFixed(2),
+    };
+  });
   await tx.insert(invoiceLine).values(rows);
   return { rows, total: sum(rows.map((r) => r.amount)).toFixed(2) };
 }
@@ -266,13 +276,7 @@ async function snapshotFor(
     revision: number;
     total: string;
   },
-  lines: {
-    descriptionEn: string;
-    descriptionUa: string;
-    quantity: string;
-    unitPrice: string;
-    amount: string;
-  }[],
+  lines: SnapshotInput['lines'],
 ) {
   return buildInvoiceSnapshot({
     ...values,

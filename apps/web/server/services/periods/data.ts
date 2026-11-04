@@ -283,6 +283,8 @@ export async function writeDraftInvoice(
       quantity: l.line.quantity,
       unitPrice: l.line.unitPrice,
       amount: l.line.amount,
+      monthlyFee: l.line.monthly?.fee ?? null,
+      normHours: l.line.monthly?.normHours ?? null,
     })),
     ...manual.map((l, i) => ({
       ...l,
