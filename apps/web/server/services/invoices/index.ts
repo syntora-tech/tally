@@ -109,6 +109,7 @@ async function loadInvoice(tx: DbTransaction, id: string) {
       periodMonth: period.month,
       annexPaymentDueRule: contractAnnex.paymentDueRule,
       annexInvoiceDateRule: contractAnnex.invoiceDateRule,
+      annexTemplateId: contractAnnex.invoiceTemplateFileId,
     })
     .from(invoice)
     .innerJoin(contract, eq(contract.id, invoice.contractId))
@@ -118,10 +119,11 @@ async function loadInvoice(tx: DbTransaction, id: string) {
     .where(eq(invoice.id, id))
     .for('update', { of: invoice });
   if (!row) return null;
-  const { annexPaymentDueRule, annexInvoiceDateRule, ...rest } = row;
+  const { annexPaymentDueRule, annexInvoiceDateRule, annexTemplateId, ...rest } = row;
   // The SOW/annex the invoice was made for may replace the contract's date rules (A-072).
   return {
     ...rest,
+    templateId: annexTemplateId ?? row.contract.invoiceTemplateFileId,
     rules: {
       paymentDue: (annexPaymentDueRule ?? row.contract.paymentDueRule) as PaymentDueRule,
       invoiceDate: (annexInvoiceDateRule ?? row.contract.invoiceDateRule) as InvoiceDateRule,
@@ -539,7 +541,7 @@ export const invoiceDraftPreview = defineService({
         number,
         issueDate: date,
         clientName: row.client.shortName ?? row.client.legalName,
-        templateId: row.contract.invoiceTemplateFileId,
+        templateId: row.templateId,
         quantities: lines.map((l) => l.quantity),
         snapshot: await snapshotFor(
           tx,

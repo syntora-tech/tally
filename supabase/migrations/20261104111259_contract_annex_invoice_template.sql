@@ -1,0 +1,1 @@
+ALTER TABLE "contract_annex" ADD COLUMN "invoice_template_file_id" text;

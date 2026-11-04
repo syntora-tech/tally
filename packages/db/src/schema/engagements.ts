@@ -104,6 +104,8 @@ export const contractAnnex = pgTable(
     status: text().notNull().default('active'),
     paymentDueRule: jsonb(),
     invoiceDateRule: jsonb(),
+    /** Google Docs template for this SOW's invoices; null = the contract's (A-137). */
+    invoiceTemplateFileId: text(),
     notes: text(),
   },
   (t) => [

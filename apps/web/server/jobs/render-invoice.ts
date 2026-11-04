@@ -1,7 +1,7 @@
 import type { Db } from '@tally/db';
-import { client, contract, document, invoice, invoiceLine } from '@tally/db/schema';
+import { client, contract, contractAnnex, document, invoice, invoiceLine } from '@tally/db/schema';
 import { localDateInZone, toDecimal, type LocalDate } from '@tally/domain';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { InvoiceLayout, DocumentRenderer } from '../render/renderers';
 import { withSystem } from '../db/with-user';
@@ -50,13 +50,17 @@ export function renderInvoiceHandler(deps: RenderDeps): JobHandler {
       const [row] = await tx
         .select({
           invoice,
-          templateId: contract.invoiceTemplateFileId,
+          // A SOW's own template comes before the contract's (A-137).
+          templateId: sql<
+            string | null
+          >`coalesce(${contractAnnex.invoiceTemplateFileId}, ${contract.invoiceTemplateFileId})`,
           clientName: client.shortName,
           legalName: client.legalName,
         })
         .from(invoice)
         .innerJoin(contract, eq(contract.id, invoice.contractId))
         .innerJoin(client, eq(client.id, invoice.clientId))
+        .leftJoin(contractAnnex, eq(contractAnnex.id, invoice.annexId))
         .where(eq(invoice.id, invoiceId));
       if (!row) return null;
       const lines = await tx

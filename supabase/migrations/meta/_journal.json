@@ -624,6 +624,13 @@
       "when": 1793786057786,
       "tag": "20261104095417_invoice_line_monthly_fee",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793790779703,
+      "tag": "20261104111259_contract_annex_invoice_template",
+      "breakpoints": true
     }
   ]
 }

@@ -171,6 +171,9 @@ const annexFields = z.object({
   status: z.enum(ANNEX_STATUSES).default('active'),
   paymentDueRule: paymentDueRule.nullable().default(null),
   invoiceDateRule: invoiceDateRule.nullable().default(null),
+  invoiceTemplateFileId: optionalText.describe(
+    "Google Docs template for this SOW's invoices; empty = the contract's",
+  ),
   notes: optionalText,
 });
 

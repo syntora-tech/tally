@@ -209,6 +209,7 @@ function annexSummary(r: AnnexRow) {
     status: a.status,
     paymentDueRule: a.paymentDueRule,
     invoiceDateRule: a.invoiceDateRule,
+    invoiceTemplateFileId: a.invoiceTemplateFileId,
     notes: a.notes,
     assignments: r.assignments,
     documents: r.documents,
@@ -518,7 +519,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'upsert_contract_annexes',
     title: 'Create or update SOWs and annexes',
     description:
-      'SOWs/annexes inside contracts in bulk (max 100). Matched by id, else by contractId + kind + number; only the fields sent change, a missing one is created (contractId, kind sow|annex and number required). Fields: title, signedOn, validFrom, validTo, status draft|active|ended (default active), notes, paymentDueRule and invoiceDateRule (same shapes as upsert_contracts) to replace the contract\'s rules for this SOW — its assignments then get an invoice of their own; null returns to the contract\'s rules. documentIds links documents already in the registry. Each result has the id to use for assignments. All-or-nothing; errors keyed "annexes.<index>"; use dryRun first.',
+      "SOWs/annexes inside contracts in bulk (max 100). Matched by id, else by contractId + kind + number; only the fields sent change, a missing one is created (contractId, kind sow|annex and number required). Fields: title, signedOn, validFrom, validTo, status draft|active|ended (default active), notes, paymentDueRule and invoiceDateRule (same shapes as upsert_contracts) to replace the contract's rules for this SOW — its assignments then get an invoice of their own; null returns to the contract's rules. invoiceTemplateFileId gives the SOW's invoices a Google Docs template of their own (A-137; empty = the contract's). documentIds links documents already in the registry. Each result has the id to use for assignments. All-or-nothing; errors keyed \"annexes.<index>\"; use dryRun first.",
     kind: 'write',
     service: upsertContractAnnexes,
   }),

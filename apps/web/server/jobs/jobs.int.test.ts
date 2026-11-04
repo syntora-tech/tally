@@ -5,6 +5,7 @@ import {
   client,
   company,
   contract,
+  contractAnnex,
   document,
   documentLink,
   invoice,
@@ -94,6 +95,7 @@ afterAll(async () => {
       await db.delete(document).where(inArray(document.id, docIds));
     }
     await purgeProtected(db, { invoiceIds: [ids.invoice] });
+    await db.delete(contractAnnex).where(eq(contractAnnex.contractId, ids.contract));
     await db.delete(contract).where(eq(contract.id, ids.contract));
     await db.delete(numberSequence).where(eq(numberSequence.key, SEQUENCE));
     await db.delete(client).where(eq(client.id, ids.client));
@@ -151,6 +153,34 @@ describe('render queue (7.1, 10.4)', () => {
       { version: 1, sourceRevision: 1 },
       { version: 2, sourceRevision: 2 },
     ]);
+  });
+
+  it("renders a SOW's invoice with the SOW's own template (A-137)", async () => {
+    const [sow] = await h.db
+      .insert(contractAnnex)
+      .values({
+        contractId: ids.contract,
+        kind: 'sow',
+        number: '6',
+        invoiceTemplateFileId: 'sow-template',
+      })
+      .returning();
+    await h.db.update(invoice).set({ annexId: sow?.id }).where(eq(invoice.id, ids.invoice));
+    const used: (string | null)[] = [];
+    class Capturing extends HtmlRenderer {
+      override render(input: Parameters<HtmlRenderer['render']>[0]) {
+        used.push(input.templateId);
+        return super.render(input);
+      }
+    }
+    await saveInvoice.run(h.ctxFor(finance), {
+      id: ids.invoice,
+      issueDate: '2039-02-01',
+      lines: [{ descriptionEn: 'Dev', descriptionUa: 'Розробка', quantity: '10', unitPrice: '17' }],
+      reason: 'Hourly SOW',
+    });
+    await runNextJob(h.db, handlers(new Capturing()));
+    expect(used).toEqual(['sow-template']);
   });
 
   it('retries a failing job with backoff, then marks it failed', async () => {
