@@ -26,7 +26,7 @@ import {
   type PayoutMethod,
 } from '@tally/domain';
 import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { ensureMonthlyActDraft, syncMonthlyActDraft } from '../acts';
+import { ensureMonthlyActDraft, fitIssuedRestAct, syncMonthlyActDraft } from '../acts';
 import { actsOfMonth } from './early';
 
 export async function loadAdjustments(tx: DbTransaction, periodId: string) {
@@ -255,6 +255,7 @@ async function attachMonthlyAct(tx: DbTransaction, itemId: string, month: LocalD
         ),
       );
     if (waiting.some((a) => a.status === 'draft')) await syncMonthlyActDraft(tx, itemId);
+    await fitIssuedRestAct(tx, itemId);
     return;
   }
   await ensureMonthlyActDraft(tx, itemId);

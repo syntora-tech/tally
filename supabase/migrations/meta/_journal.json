@@ -631,6 +631,13 @@
       "when": 1793790779703,
       "tag": "20261104111259_contract_annex_invoice_template",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793970022179,
+      "tag": "20261106130022_act_fit_issued_rest",
+      "breakpoints": true
     }
   ]
 }
