@@ -137,11 +137,31 @@ export function LinkTransaction({ transactionId }: { transactionId: string }) {
     })),
   };
   const kinds = (Object.keys(options) as Kind[]).filter((k) => options[k].length > 0);
+  const waiting = targets.waitingActs.length > 0 && (
+    <Alert data-testid="link-waiting-acts">
+      <AlertDescription className="flex flex-col gap-1.5">
+        {targets.waitingActs.map((a) => (
+          <span key={a.actId}>
+            {t('waitingAct', {
+              number: a.number ?? '—',
+              amount: fmt.amount(a.amountUah, 'UAH'),
+              month: fmt.month(a.month),
+            })}{' '}
+            <Link href={`/periods/${a.periodId}`} className="text-link hover:underline">
+              {t('openPeriod', { month: fmt.month(a.month) })}
+            </Link>
+          </span>
+        ))}
+      </AlertDescription>
+    </Alert>
+  );
   if (!kind || kinds.length === 0) {
     return (
-      <p className="py-2 text-sm text-muted-foreground">
-        {t(targets.type === 'revenue' ? 'nothingRevenue' : 'nothingExpense')}
-      </p>
+      waiting || (
+        <p className="py-2 text-sm text-muted-foreground">
+          {t(targets.type === 'revenue' ? 'nothingRevenue' : 'nothingExpense')}
+        </p>
+      )
     );
   }
 
@@ -186,6 +206,7 @@ export function LinkTransaction({ transactionId }: { transactionId: string }) {
         {t('free', { amount: fmt.amount(targets.free, targets.currency) })}
       </p>
       <input type="hidden" name="transactionId" value={transactionId} />
+      {waiting}
       {kinds.length > 1 && (
         <div
           role="radiogroup"

@@ -2117,7 +2117,12 @@
       "nextTitle": "After issue",
       "nextSign": "Sign in Vchasno or upload the signed PDF",
       "nextPay": "Pay it in Payroll",
-      "flowLabel": "Act state"
+      "flowLabel": "Act state",
+      "signed": "Signed",
+      "nextClose": "Close {month} — the payout is made then",
+      "paymentTitle": "Payment",
+      "waitsForClose": "The act is signed. Its payout appears when {month} is closed: then pay it in Payroll or link the bank payment in the Ledger.",
+      "openPeriod": "Open {month}"
     }
   },
   "actForms": {
@@ -2587,7 +2592,9 @@
     "nothingExpense": "Nothing fits this expense: no planned payments due in its currency around its date, no unpaid trip reimbursements in UAH, and no open payouts (those take Contractors and Payroll expenses).",
     "amountFor": "Amount for {name}",
     "rateFor": "Rate for {name}",
-    "splitTotal": "Linking {total} of {free} free"
+    "splitTotal": "Linking {total} of {free} free",
+    "waitingAct": "Act {number} for {amount} is waiting for {month} to be closed: its payout, which this payment would pay, is made at the close.",
+    "openPeriod": "Open {month}"
   },
   "aiKey": {
     "notConfigured": "AI is not set up on this server: the administrator has to set APP_ENCRYPTION_KEY.",

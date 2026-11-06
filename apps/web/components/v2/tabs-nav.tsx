@@ -1,7 +1,14 @@
 import { cn } from 'cn';
 import Link from 'next/link';
 
-export type TabLink = { key: string; label: string; href: string; count?: number };
+export type TabLink = {
+  key: string;
+  label: string;
+  href: string;
+  count?: number;
+  /** The count is something late: shown in red, as in the sidebar. */
+  urgent?: boolean;
+};
 
 /** Tabs as links: the URL keeps the choice, and switching needs no "Show" button. */
 export function TabsNav({
@@ -62,7 +69,11 @@ export function TabsNav({
               <span
                 className={cn(
                   'rounded-full px-1.5 text-xs tabular-nums',
-                  current ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground',
+                  tab.urgent
+                    ? 'bg-red-500 text-white'
+                    : current
+                      ? 'bg-foreground text-background'
+                      : 'bg-muted text-muted-foreground',
                 )}
               >
                 {tab.count}

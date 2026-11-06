@@ -7,13 +7,17 @@ import {
   contract,
   invoice,
   invoiceLine,
+  payee,
+  period,
   plannedExpense,
   plannedPayment,
+  supplierAct,
   transaction,
 } from '@tally/db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { intHarness, purgeProtected } from '../../../test/int-helpers';
+import { getAct } from '../acts';
 import { createTransaction } from '../ledger';
 import { savePlannedExpense } from '../planned';
 import { markPlannedPaid } from '../planned/payments';
@@ -238,6 +242,75 @@ describe('linkTargets (A-106)', () => {
 
     const none = await allocateToInvoices.run(ctx, { transactionId: txId, items: [] });
     expect(none.isErr()).toBe(true);
+  });
+
+  it('points a payout expense to an act waiting for its month to close (A-089)', async () => {
+    const ctx = h.ctxFor(finance);
+    const made = { payee: '', contract: '', period: '', act: '' };
+    try {
+      const [fop] = await h.db
+        .insert(payee)
+        .values({ kind: 'fop', legalNameUa: `${tag} ФОП`, taxId: '1234509876' })
+        .returning();
+      made.payee = fop?.id ?? '';
+      const [fopContract] = await h.db
+        .insert(contract)
+        .values({ kind: 'fop', number: `${tag}-F`, companyId: ids.company, payeeId: made.payee })
+        .returning();
+      made.contract = fopContract?.id ?? '';
+      const [march] = await h.db
+        .insert(period)
+        .values({ month: '2036-03-01', workHours: '176' })
+        .returning();
+      made.period = march?.id ?? '';
+      const [act] = await h.db
+        .insert(supplierAct)
+        .values({
+          contractId: made.contract,
+          payeeId: made.payee,
+          type: 'monthly',
+          actDate: '2036-03-31',
+          periodFrom: '2036-03-16',
+          periodTo: '2036-03-31',
+          amountUah: '4321.50',
+          status: 'issued',
+          number: `${tag} А1`,
+          signedUrl: 'https://edo.vchasno.ua/app/documents/x',
+          snapshot: { version: 1 },
+        })
+        .returning();
+      made.act = act?.id ?? '';
+
+      const paid = await book('expense', ids.uah, '4321.50', 'Contractors');
+      const targets = (await linkTargets.run(ctx, { transactionId: paid }))._unsafeUnwrap();
+      expect(targets.waitingActs).toContainEqual({
+        actId: made.act,
+        number: `${tag} А1`,
+        amountUah: '4321.50',
+        periodId: made.period,
+        month: '2036-03-01',
+      });
+      const tools = await book('expense', ids.uah, '4321.50', 'Software / Tools');
+      expect(
+        (await linkTargets.run(ctx, { transactionId: tools }))._unsafeUnwrap().waitingActs,
+      ).toEqual([]);
+      const shown = (await getAct.run(ctx, { id: made.act }))._unsafeUnwrap();
+      expect(shown.waitsForClose).toEqual({ id: made.period, month: '2036-03-01' });
+
+      await h.db.update(period).set({ status: 'closed' }).where(eq(period.id, made.period));
+      expect(
+        (await linkTargets.run(ctx, { transactionId: paid }))._unsafeUnwrap().waitingActs,
+      ).toEqual([]);
+      expect((await getAct.run(ctx, { id: made.act }))._unsafeUnwrap().waitsForClose).toBeNull();
+    } finally {
+      await h.db.transaction(async (tx) => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        if (made.act) await tx.delete(supplierAct).where(eq(supplierAct.id, made.act));
+        if (made.period) await tx.delete(period).where(eq(period.id, made.period));
+        if (made.contract) await tx.delete(contract).where(eq(contract.id, made.contract));
+        if (made.payee) await tx.delete(payee).where(eq(payee.id, made.payee));
+      });
+    }
   });
 
   it('reports an unknown transaction', async () => {
