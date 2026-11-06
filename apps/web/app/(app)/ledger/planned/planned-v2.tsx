@@ -15,7 +15,7 @@ import { listAccounts, listCategories } from '@/server/services/ledger';
 import { listPlannedExpenses } from '@/server/services/planned';
 import { listPlannedPayments, plannedPaymentCandidates } from '@/server/services/planned/payments';
 import { peopleOptions } from '../../people/payees/people-options';
-import { LedgerHeader } from '../ledger-v2';
+import { LedgerHeader, plannedDue } from '../ledger-v2';
 import {
   DeletePlannedExpenseButton,
   DeletePlannedPartButton,
@@ -40,7 +40,7 @@ export async function PlannedV2({
   ctx: Awaited<ReturnType<typeof requireRole>>;
   tab: 'payments' | 'plans';
 }) {
-  const [t, tp, tch, tm, tc, fmt, categories, people] = await Promise.all([
+  const [t, tp, tch, tm, tc, fmt, categories, people, due] = await Promise.all([
     getTranslations('planned'),
     getTranslations('plannedPayments'),
     getTranslations('charges'),
@@ -49,6 +49,7 @@ export async function PlannedV2({
     getFormat(),
     listCategories.run(ctx, {}),
     peopleOptions(ctx),
+    plannedDue(),
   ]);
   const thisMonth = ctx.today.slice(0, 7);
   const expenseCategories = categories
@@ -77,7 +78,12 @@ export async function PlannedV2({
         label={t('title')}
         active={tab}
         tabs={[
-          { key: 'payments', label: tp('tab'), href: '/ledger/planned' },
+          {
+            key: 'payments',
+            label: tp('tab'),
+            href: '/ledger/planned',
+            ...(due > 0 && { count: due, urgent: true }),
+          },
           { key: 'plans', label: t('tab'), href: '/ledger/planned?tab=plans' },
         ]}
       />

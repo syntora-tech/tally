@@ -22,6 +22,8 @@ import { EmptyState } from '@/components/v2/panel';
 import { Status } from '@/components/v2/status';
 import { TabsNav } from '@/components/v2/tabs-nav';
 import { getFormat, getLabels } from '@/server/i18n';
+import { requireUserContext } from '@/server/request-context';
+import { countPlannedDue } from '@/server/services/planned/payments';
 import { impliedRate, type listAccounts, type listTransactions } from '@/server/services/ledger';
 import { DialogButton, RowMenu } from '@/components/v2/form-dialog';
 import { LinkTransaction } from './link-transaction';
@@ -43,6 +45,11 @@ const SECTIONS = [
   { key: 'import', href: '/ledger/import' },
 ] as const;
 
+/** The sidebar's Ledger counter, repeated on the tab where those payments are. */
+export async function plannedDue(): Promise<number> {
+  return (await countPlannedDue.run(await requireUserContext(), {})).unwrapOr(0);
+}
+
 /** v2 header of every Ledger page: one title, the sections as tabs, the main action. */
 export async function LedgerHeader({
   section,
@@ -55,7 +62,7 @@ export async function LedgerHeader({
   help?: string;
   children?: ReactNode;
 }) {
-  const t = await getTranslations('ledger');
+  const [t, due] = await Promise.all([getTranslations('ledger'), plannedDue()]);
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={title ?? (section === 'journal' ? 'Ledger' : t(section))} help={help}>
@@ -70,6 +77,7 @@ export async function LedgerHeader({
           key: s.key,
           href: s.href,
           label: s.key === 'journal' ? t('v2.journal') : t(s.key),
+          ...(s.key === 'planned' && due > 0 && { count: due, urgent: true }),
         }))}
       />
     </div>

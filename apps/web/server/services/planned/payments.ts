@@ -389,3 +389,21 @@ export const plannedPaymentCandidates = defineService({
     return ok(rows.filter((r) => toDecimal(r.amount).gt(toDecimal(r.allocated))));
   },
 });
+
+/**
+ * Planned payments due today or overdue: the Ledger's sidebar counter and its Planned tab show
+ * the same figure, so the counter always points somewhere visible.
+ */
+export const countPlannedDue = defineService({
+  name: 'planned.countDue',
+  input: z.object({}),
+  handler: async (ctx) => {
+    const [row] = await inActorScope(ctx, (tx) =>
+      tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(plannedPayment)
+        .where(and(eq(plannedPayment.status, 'due'), lte(plannedPayment.dueOn, ctx.today))),
+    );
+    return ok(row?.n ?? 0);
+  },
+});

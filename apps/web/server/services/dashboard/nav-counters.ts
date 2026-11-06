@@ -8,6 +8,7 @@ import { actsRegistry } from '../acts/registry';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { documentChecks, documentInbox } from '../documents/structure';
+import { countPlannedDue } from '../planned/payments';
 import { dashboardOverview } from './overview';
 
 /** `count: null` is a dot: worth a look, nothing to count. `urgent` is something already late. */
@@ -50,13 +51,10 @@ export const navCounters = defineService({
       put('/dashboard', o.shortfallOn ? 1 : 0, true, true);
       put('/invoices', o.receivables.filter((r) => r.daysPastDue > 0).length, true);
       put('/payroll', o.events.filter((e) => e.kind === 'payable_now').length, false);
-      // Planned events are pulled to today when their date has passed, so `on === today` is
-      // everything due today or overdue.
-      put(
-        '/ledger',
-        o.events.filter((e) => e.kind === 'planned' && e.on === ctx.today).length,
-        true,
-      );
+    }
+    // After the overview, which brings the planned payments up to date first.
+    if (visible.has('/ledger')) {
+      put('/ledger', (await countPlannedDue.run(ctx, {})).unwrapOr(0), true);
     }
     put('/periods', openBefore[0]?.n ?? 0, false, true);
     if (registry?.isOk()) {
