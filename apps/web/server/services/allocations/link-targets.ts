@@ -3,15 +3,17 @@ import {
   category,
   client,
   invoice,
+  period,
   person,
   plannedPayment,
   posting,
   reimbursement,
+  supplierAct,
   transaction,
   trip,
 } from '@tally/db/schema';
 import { addMonths, diffDays, toDecimal, type LocalDate } from '@tally/domain';
-import { and, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -49,6 +51,17 @@ export type LinkTargets = {
     match: boolean;
   }[];
   reimbursements: { id: string; label: string; remaining: string; match: boolean }[];
+  /**
+   * Monthly acts made before the close (A-089) of the same payee or for this amount: their payout,
+   * and so something to link to, appears only once their month is closed.
+   */
+  waitingActs: {
+    actId: string;
+    number: string | null;
+    amountUah: string;
+    periodId: string;
+    month: string;
+  }[];
 };
 
 /**
@@ -150,7 +163,50 @@ export const linkTargets = defineService({
               ),
             )
         : [];
-      return { main, free, on, invoices, planned, unpaid, names };
+      const payoutExpense =
+        open &&
+        main.type === 'expense' &&
+        main.currency === 'UAH' &&
+        main.categoryName !== null &&
+        PAYOUT_CATEGORIES.includes(main.categoryName);
+      const [owner] =
+        payoutExpense && main.personId
+          ? await tx
+              .select({ payeeId: person.defaultPayeeId })
+              .from(person)
+              .where(eq(person.id, main.personId))
+          : [];
+      const waitingActs = payoutExpense
+        ? await tx
+            .select({
+              actId: supplierAct.id,
+              number: supplierAct.number,
+              amountUah: supplierAct.amountUah,
+              periodId: period.id,
+              month: period.month,
+            })
+            .from(supplierAct)
+            .innerJoin(
+              period,
+              and(
+                eq(period.month, sql`date_trunc('month', ${supplierAct.periodFrom})::date`),
+                eq(period.status, 'open'),
+              ),
+            )
+            .where(
+              and(
+                eq(supplierAct.type, 'monthly'),
+                isNull(supplierAct.payrollItemId),
+                ne(supplierAct.status, 'void'),
+                or(
+                  owner?.payeeId ? eq(supplierAct.payeeId, owner.payeeId) : undefined,
+                  eq(supplierAct.amountUah, free.toFixed(2)),
+                ),
+              ),
+            )
+            .orderBy(supplierAct.periodFrom)
+        : [];
+      return { main, free, on, invoices, planned, unpaid, names, waitingActs };
     });
     if (!found) return err(serviceError('not_found', 'ledger.txNotFound'));
     const { main, free, on } = found;
@@ -227,6 +283,10 @@ export const linkTargets = defineService({
           };
         }),
       ),
+      waitingActs: found.waitingActs.map((a) => ({
+        ...a,
+        amountUah: toDecimal(a.amountUah).toFixed(2),
+      })),
     });
   },
 });

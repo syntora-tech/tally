@@ -831,10 +831,24 @@ export const getAct = defineService({
               )
               .orderBy(asc(supplierAct.periodFrom))
           : [];
+      // A monthly act made before the close (A-089) gets its payout only when its month closes.
+      const [waitsForClose] =
+        row.act.type === 'monthly' && !row.act.payrollItemId && row.act.periodFrom
+          ? await tx
+              .select({ id: period.id, month: period.month })
+              .from(period)
+              .where(
+                and(
+                  eq(period.month, startOfMonth(row.act.periodFrom as LocalDate)),
+                  eq(period.status, 'open'),
+                ),
+              )
+          : [];
       return {
         ...row,
         trips,
         mergeable,
+        waitsForClose: waitsForClose ?? null,
         nextNumber:
           seq && row.act.status === 'draft'
             ? previewActNumber(seq, row.act.actDate, row.contract.number)

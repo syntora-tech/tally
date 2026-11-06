@@ -44,7 +44,16 @@ export default async function ActPage({
   const { id } = await params;
   const result = await getAct.run(ctx, { id });
   if (result.isErr()) notFound();
-  const { act: a, payeeName, contract, nextNumber, renumberTo, trips, mergeable } = result.value;
+  const {
+    act: a,
+    payeeName,
+    contract,
+    nextNumber,
+    renumberTo,
+    trips,
+    mergeable,
+    waitsForClose,
+  } = result.value;
   const draft = a.status === 'draft';
   const uploaded =
     typeof a.snapshot === 'object' && a.snapshot !== null && 'uploaded' in a.snapshot;
@@ -84,7 +93,9 @@ export default async function ActPage({
           crumb={a.number ?? t('titleDraft')}
           badges={
             <Status tone={tone} testId="act-status">
-              {DOC_STATUS_LABELS[a.status] ?? a.status}
+              {a.status === 'issued' && signed
+                ? tv('signed')
+                : (DOC_STATUS_LABELS[a.status] ?? a.status)}
             </Status>
           }
           meta={`${payeeName} · ${contract.number}`}
@@ -274,6 +285,15 @@ export default async function ActPage({
                   <ol className="flex flex-col gap-2.5">
                     {[
                       tv('nextSign'),
+                      waitsForClose ? (
+                        <Link
+                          key="close"
+                          href={`/periods/${waitsForClose.id}`}
+                          className="text-link hover:underline"
+                        >
+                          {tv('nextClose', { month: fmt.month(waitsForClose.month) })}
+                        </Link>
+                      ) : null,
                       a.payrollItemId ? (
                         <Link key="pay" href="/payroll" className="text-link hover:underline">
                           {tv('nextPay')}
@@ -281,15 +301,38 @@ export default async function ActPage({
                       ) : (
                         tv('nextPay')
                       ),
-                    ].map((step, i) => (
-                      <li key={i} className="flex gap-2.5">
-                        <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
-                          {i + 1}
-                        </span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
+                    ]
+                      .filter((step) => step !== null)
+                      .map((step, i) => (
+                        <li key={i} className="flex gap-2.5">
+                          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">
+                            {i + 1}
+                          </span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
                   </ol>
+                </Panel>
+              )}
+              {a.status === 'issued' && signed && (waitsForClose || a.payrollItemId) && (
+                <Panel title={tv('paymentTitle')} emphasis={!!waitsForClose}>
+                  {waitsForClose ? (
+                    <>
+                      <p className="text-muted-foreground" data-testid="act-waits-for-close">
+                        {tv('waitsForClose', { month: fmt.month(waitsForClose.month) })}
+                      </p>
+                      <Link
+                        href={`/periods/${waitsForClose.id}`}
+                        className="text-link hover:underline"
+                      >
+                        {tv('openPeriod', { month: fmt.month(waitsForClose.month) })}
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href="/payroll" className="text-link hover:underline">
+                      {tv('nextPay')}
+                    </Link>
+                  )}
                 </Panel>
               )}
               <LinkedDocuments ctx={ctx} entityType="supplier_act" entityId={a.id} />
