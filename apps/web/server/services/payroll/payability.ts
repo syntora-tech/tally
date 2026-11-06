@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { withSystem } from '../../db/with-user';
+import { fitIssuedRestActs } from '../acts';
 import { inActorScope } from '../context';
 import { defineService } from '../define-service';
 import { serviceError } from '../errors';
@@ -18,6 +19,7 @@ import { loadCalendar } from '../periods';
  */
 export async function refreshPayability(db: Db, today: LocalDate) {
   return withSystem(db, 'system:payability', async (tx) => {
+    await fitIssuedRestActs(tx);
     const waiting = await tx
       .select({
         line: payrollLine,

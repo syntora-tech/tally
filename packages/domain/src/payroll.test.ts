@@ -3,6 +3,7 @@ import { WorkCalendar } from './calendar';
 import { parseLocalDate, type LocalDate } from './local-date';
 import { roundHalfUp, sum, toDecimal } from './money';
 import {
+  activitiesForAmount,
   linePaidAmounts,
   nextPartPeriod,
   payoutPartOf,
@@ -291,5 +292,43 @@ describe('linePaidAmounts (A-110)', () => {
     const paid = linePaidAmounts(held, [], [{ usd: '500', uah: '0', rate: null }]);
     expect(paid.get('ready')?.toFixed(2)).toBe('500.00');
     expect(paid.get('held')?.toFixed(2)).toBe('0.00');
+  });
+});
+
+describe('activitiesForAmount (A-139)', () => {
+  const cto = { id: 'cto', amount: '1828', currency: 'USD', group: 'a-cto' };
+  const boosty = { id: 'boosty', amount: '4190.48', currency: 'USD', group: 'a-boosty' };
+  const costs = ['4745', '1199', '1869', '1591', '731'].map((amount, i) => ({
+    id: `adj${String(i)}`,
+    amount,
+    currency: 'UAH',
+  }));
+
+  it('finds the work an act issued before the close was signed for', () => {
+    const fit = activitiesForAmount([cto, boosty, ...costs], '92669.20', '45.15');
+    expect(fit?.map((a) => a.id).sort()).toEqual(['adj0', 'adj1', 'adj2', 'adj3', 'adj4', 'cto']);
+  });
+
+  it('never takes all the activities or none', () => {
+    expect(activitiesForAmount([cto, boosty], '271735.17', '45.15')).toBeNull();
+    expect(activitiesForAmount([cto, boosty], '0', '45.15')).toBeNull();
+  });
+
+  it('refuses to guess when two sets fit', () => {
+    const twin = { ...cto, id: 'twin', group: 'a-twin' };
+    expect(activitiesForAmount([cto, twin, boosty], '82534.20', '45.15')).toBeNull();
+  });
+
+  it('keeps the lines of one assignment together', () => {
+    const half = { id: 'cto2', amount: '100', currency: 'USD', group: 'a-cto' };
+    expect(activitiesForAmount([cto, half, boosty], '82534.20', '45.15')).toBeNull();
+    expect(activitiesForAmount([cto, half, boosty], '87049.20', '45.15')?.map((a) => a.id)).toEqual(
+      ['cto', 'cto2'],
+    );
+  });
+
+  it('needs a rate for USD work, not for UAH alone', () => {
+    expect(activitiesForAmount([cto, ...costs], '10135', null)?.length).toBe(5);
+    expect(activitiesForAmount([cto, boosty], '82534.20', null)).toBeNull();
   });
 });

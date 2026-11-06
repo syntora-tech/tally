@@ -292,3 +292,45 @@ export function nextPartPeriod(
   const sameMonthDay = localDate(year, m, day);
   return { from, to: sameMonthDay < from ? from : sameMonthDay };
 }
+
+export type ActActivity = {
+  id: string;
+  amount: DecimalInput;
+  currency: string;
+  /** Work of one assignment goes into one act whole, so its lines are chosen together. */
+  group?: string;
+};
+
+const MAX_FIT_ACTIVITIES = 16;
+
+/**
+ * The activities of a payout an act of `uah` covers at `rate` (A-139): the one set whose
+ * round2(USD × rate) + UAH is exactly the act's amount, never all of them and never none. Null
+ * when no set or more than one fits, or when there are too many activities to try.
+ */
+export function activitiesForAmount<T extends ActActivity>(
+  activities: readonly T[],
+  uah: DecimalInput,
+  rate: DecimalInput | null,
+): T[] | null {
+  const byGroup = new Map<string, T[]>();
+  for (const a of activities) {
+    const key = a.group ?? `#${a.id}`;
+    byGroup.set(key, [...(byGroup.get(key) ?? []), a]);
+  }
+  const groups = [...byGroup.values()];
+  if (groups.length < 2 || groups.length > MAX_FIT_ACTIVITIES) return null;
+  const target = toDecimal(uah);
+  let found: T[] | null = null;
+  for (let mask = 1; mask < (1 << groups.length) - 1; mask++) {
+    const picked = groups.filter((_, i) => mask & (1 << i)).flat();
+    const usd = sum(picked.filter((a) => a.currency !== 'UAH').map((a) => a.amount));
+    const own = sum(picked.filter((a) => a.currency === 'UAH').map((a) => a.amount));
+    if (!usd.isZero() && rate === null) continue;
+    const value = usd.isZero() ? own : roundHalfUp(usd.times(toDecimal(rate ?? '0'))).plus(own);
+    if (!value.eq(target)) continue;
+    if (found) return null;
+    found = picked;
+  }
+  return found;
+}

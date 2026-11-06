@@ -15,6 +15,7 @@ import {
   type SupplierAct,
 } from '@tally/db/schema';
 import {
+  activitiesForAmount,
   addDays,
   addMonths,
   defaultActDate,
@@ -36,7 +37,19 @@ import {
   type PayoutPart,
   type WorkCalendar,
 } from '@tally/domain';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  sql,
+  TransactionRollbackError,
+} from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 import { z } from 'zod';
 import { enqueueJob, type NewJob } from '../../jobs/queue';
@@ -300,6 +313,98 @@ export async function syncMonthlyActDraft(tx: DbTransaction, itemId: string) {
         isNull(supplierAct.amountUsd),
       ),
     );
+}
+
+/**
+ * An act issued before the close (A-089) for part of a person's pay — more work came into the
+ * payout at the close — is linked as the act of the rest yet covers less than the payout (A-139).
+ * When one set of the payout's unpaid work and adjustments makes up exactly its amount at its rate,
+ * the act becomes the act of that work, as a split before the close would have made it, and a new
+ * draft act takes the rest. Otherwise it stays as it is. Returns whether it was fitted.
+ */
+export async function fitIssuedRestAct(tx: DbTransaction, itemId: string): Promise<boolean> {
+  const data = await activitiesOf(tx, itemId);
+  if (!data?.item.totalUah || data.item.payoutMethod !== 'fiat') return false;
+  if (!toDecimal(data.item.paidAmount).isZero()) return false;
+  const acts = await monthlyActsOf(tx, itemId);
+  const rest = acts.find((a) => a.amountUsd === null);
+  if (rest?.status !== 'issued' || rest.assignmentIds !== null) return false;
+  const others = sum(acts.filter((a) => a.amountUsd !== null).map((a) => a.amountUah));
+  if (!toDecimal(rest.amountUah).lt(toDecimal(data.item.totalUah).minus(others))) return false;
+
+  const open = [
+    ...data.lines
+      .filter((l) => l.supplierActId === null)
+      .map((l) => ({ ...l, kind: 'line' as const, group: `a:${l.assignmentId}` })),
+    ...data.adjustments
+      .filter((a) => a.supplierActId === null)
+      .map((a) => ({ ...a, kind: 'adjustment' as const })),
+  ];
+  const fit = activitiesForAmount(open, rest.amountUah, rest.fxRate ?? data.item.payoutFxRate);
+  if (!fit) return false;
+  const usd = sum(fit.filter((x) => x.currency !== 'UAH').map((x) => x.amount));
+  // An issued act's rate is set; work in USD needs one.
+  if (!usd.isZero() && rest.fxRate === null) return false;
+  const lineIds = fit.filter((x) => x.kind === 'line').map((x) => x.id);
+  const adjustmentIds = fit.filter((x) => x.kind === 'adjustment').map((x) => x.id);
+  const assignmentIds = [
+    ...new Set(fit.flatMap((x) => (x.kind === 'line' ? [x.assignmentId] : []))),
+  ];
+
+  try {
+    await tx.transaction(async (sp) => {
+      await sp.execute(sql`select set_config('app.act_fit', 'on', true)`);
+      await sp
+        .update(supplierAct)
+        .set({
+          amountUsd: usd.toFixed(8),
+          assignmentIds: assignmentIds.length ? assignmentIds : null,
+        })
+        .where(eq(supplierAct.id, rest.id));
+      if (lineIds.length) {
+        await sp
+          .update(payrollLine)
+          .set({ supplierActId: rest.id })
+          .where(inArray(payrollLine.id, lineIds));
+      }
+      if (adjustmentIds.length) {
+        await sp
+          .update(adjustment)
+          .set({ supplierActId: rest.id })
+          .where(inArray(adjustment.id, adjustmentIds));
+      }
+      await sp.execute(sql`select set_config('app.act_fit', 'off', true)`);
+      if ((await createRestActIn(sp, itemId)).isErr()) sp.rollback();
+    });
+  } catch (e) {
+    if (e instanceof TransactionRollbackError) return false;
+    throw e;
+  }
+  return true;
+}
+
+/** Unpaid fiat payouts whose issued act of the rest covers less than them: fitted (A-139). */
+export async function fitIssuedRestActs(tx: DbTransaction): Promise<number> {
+  const candidates = await tx
+    .selectDistinct({ itemId: payrollItem.id })
+    .from(payrollItem)
+    .innerJoin(supplierAct, eq(supplierAct.payrollItemId, payrollItem.id))
+    .where(
+      and(
+        eq(payrollItem.payoutMethod, 'fiat'),
+        eq(payrollItem.paidAmount, '0'),
+        eq(supplierAct.type, 'monthly'),
+        eq(supplierAct.status, 'issued'),
+        isNull(supplierAct.amountUsd),
+        isNull(supplierAct.assignmentIds),
+        lt(supplierAct.amountUah, payrollItem.totalUah),
+      ),
+    );
+  let fitted = 0;
+  for (const { itemId } of candidates) {
+    if (await fitIssuedRestAct(tx, itemId)) fitted++;
+  }
+  return fitted;
 }
 
 /** The act date of a part: its last working day, as for a whole month (D9). */

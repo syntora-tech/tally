@@ -143,7 +143,17 @@ export function PayDialog(p: PayDialogProps) {
       ? picked.remaining
       : itemAmount;
   const [open, setOpen] = useState(false);
-  const [actId, setActId] = useState('');
+  // A statement row for exactly one act's amount pays that act (A-139), e.g. a signed early act.
+  const [actId, setActId] = useState(() => {
+    const paid = picked && paidFrom === 'existing' ? parseDecimal(picked.remaining) : null;
+    const same = paid?.isOk()
+      ? p.payableActs.filter((a) => {
+          const own = parseDecimal(a.amount);
+          return own.isOk() && own.value.eq(paid.value);
+        })
+      : [];
+    return same.length === 1 ? (same[0]?.id ?? '') : '';
+  });
   const pickedAct = p.payableActs.find((a) => a.id === actId);
   const [amountInput, setAmountInput] = useState<string | null>(null);
   const payCurrency = p.fiat ? 'UAH' : 'USD';
