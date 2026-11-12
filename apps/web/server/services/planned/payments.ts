@@ -142,6 +142,45 @@ export const setPlannedAmount = defineService({
   handler: async (ctx, input) => inActorScope(ctx, (tx) => setPlannedAmountIn(tx, input)),
 });
 
+export const setDueOnInput = z.object({ id: z.uuid(), dueOn: localDateString });
+
+/**
+ * Moves an unpaid payment to another date of its month or the next one (A-140), e.g. one dated
+ * by an older version of its plan; an instalment takes its charges along. Paid ones stay fixed.
+ */
+export async function setPlannedDueOnIn(
+  tx: DbTransaction,
+  { id, dueOn }: z.output<typeof setDueOnInput>,
+) {
+  const row = await lockPayment(tx, id);
+  if (!row) return err(serviceError('not_found', 'planned.paymentNotFound'));
+  if (row.status !== 'due') return err(serviceError('conflict', 'planned.notDue'));
+  const month = row.month as LocalDate;
+  if (dueOn < month || dueOn >= addMonths(month, 2)) {
+    return err(
+      serviceError('validation_error', 'planned.dueOutsideMonth', {
+        dueOn: ['planned.dueOutsideMonth'],
+      }),
+    );
+  }
+  const charges =
+    row.chargeId === null
+      ? await tx
+          .select({ id: plannedPayment.id, status: plannedPayment.status })
+          .from(plannedPayment)
+          .where(eq(plannedPayment.parentId, id))
+          .for('update')
+      : [];
+  if (charges.some((c) => c.status === 'paid')) {
+    return err(serviceError('conflict', 'planned.chargesPaid'));
+  }
+  await tx
+    .update(plannedPayment)
+    .set({ dueOn })
+    .where(sql`${plannedPayment.id} = ${id} or ${plannedPayment.parentId} = ${id}`);
+  return ok({ id, dueOn });
+}
+
 /** Back to the amounts of the rule (A-082). */
 export async function resetPlannedAmountIn(tx: DbTransaction, today: LocalDate, id: string) {
   const row = await lockPayment(tx, id);

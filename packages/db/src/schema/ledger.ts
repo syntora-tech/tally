@@ -103,6 +103,11 @@ export const transaction = pgTable(
     clientId: uuid().references(() => client.id, { onDelete: 'set null' }),
     /** Counterparty wallet of a crypto transaction, canonical form; matched to `crypto_wallet`. */
     counterpartyAddress: text(),
+    /**
+     * Why the money not linked yet needs no link (A-140), e.g. a payment from before the books;
+     * such a row leaves the "not linked" filter. Null = it still waits for a link.
+     */
+    noLinkReason: text(),
   },
   (t) => [
     unique('transaction_legacy_ref_key').on(t.legacyRef),
@@ -114,6 +119,10 @@ export const transaction = pgTable(
     index('transaction_occurred_on_idx').on(t.occurredOn),
     index('transaction_external_ref_idx').on(t.externalRef),
     check('transaction_party_check', sql`num_nonnulls(${t.personId}, ${t.clientId}) <= 1`),
+    check(
+      'transaction_no_link_reason_check',
+      sql`${t.noLinkReason} is null or (btrim(${t.noLinkReason}) <> '' and ${t.type} in ('revenue', 'expense'))`,
+    ),
     index('transaction_person_idx').on(t.personId),
     index('transaction_client_idx').on(t.clientId),
     index('transaction_counterparty_address_idx').on(t.counterpartyAddress),

@@ -303,7 +303,11 @@ export default async function LedgerPage({ searchParams }: { searchParams: Searc
                     </TableCell>
                     <TableCell>
                       {settles ? (
-                        open ? (
+                        open && tx.transaction.noLinkReason !== null ? (
+                          <Badge variant="secondary" title={tx.transaction.noLinkReason}>
+                            {t('v2.noLink')}
+                          </Badge>
+                        ) : open ? (
                           <Badge variant="outline">
                             {t('allocatedOf', {
                               allocated: fmt.amount(tx.allocated),

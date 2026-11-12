@@ -102,7 +102,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `add_legacy_acts`          | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
 | `list_contractor_invoices` | read  | Invoices contractors abroad issue to us for a payout (A-090): number, status, date, hours, USD amount, payee, contract, filed bill                      |
 | `revise_invoice`           | write | Owner only: replaces the lines of an issued unpaid invoice like Edit in the UI (number and date stay, new revision and PDF); `expectedRevision`, reason |
-| `update_planned_payments`  | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount (≤ 100)                                   |
+| `update_planned_payments`  | write | Marks payments paid (statement rows or a new expense), unlinks, skips with a reason, sets this month's amount or date (≤ 100)                           |
 
 A wrong row is corrected with `update_transactions`. `delete_transactions` is only for an explicit request of the owner (A-063): run it with `dryRun` first and show what will go; a transaction allocated to an invoice or payout cannot be deleted until the allocation is removed in the UI. Agency fees, periods and hours are UI only; issuing invoices and acts is UI only, though their files are visible in the document registry. An issued unpaid invoice may be revised with `revise_invoice` only on the owner's explicit request (A-132): read `get_invoice`, send all lines of the new revision, run `dryRun` first and show the new lines and total.
 
@@ -343,7 +343,7 @@ A payee is the legal recipient of a payout: a Ukrainian sole trader (`fop`), a c
 
 ### 8.5 Corrections — `update_transactions`
 
-Send the transaction `id` and only what changes. Legs replace the stored ones (`{ account, amount }`, positive amount; `null` removes the leg, e.g. `fee: null`). When the type, accounts or amounts of a transaction that is already allocated to an invoice or payout change, add a `reason` — it goes to the audit log — and the allocations must still fit the new amount. Use it also to link historical rows to people or clients (`personId` / `clientId`) once you recognise them in the description.
+Send the transaction `id` and only what changes. Legs replace the stored ones (`{ account, amount }`, positive amount; `null` removes the leg, e.g. `fee: null`). When the type, accounts or amounts of a transaction that is already allocated to an invoice or payout change, add a `reason` — it goes to the audit log — and the allocations must still fit the new amount. Use it also to link historical rows to people or clients (`personId` / `clientId`) once you recognise them in the description. Income or an expense that will never be linked (a payment from before the books started, a bank fee) gets `noLinkReason` (A-140): it leaves the `unallocated` filter and shows «No link needed» in the Ledger; `noLinkReason: null` takes the mark off. Only on the owner's request or confirmation.
 
 ### 8.6 Trips — `upsert_trips`, `add_trip_expenses`
 
@@ -417,9 +417,9 @@ Recurring company costs that are not contractor payouts — the accountant, the 
 3. **Taxes.** `charges` on the plan: `withheld` ones (ПДФО 18 %, військовий збір 5 %) come out of the gross and lower what the person gets; `on_top` ones (ЄСВ 22 %) are paid besides it. Each is paid the same day as its part, with its own `counterparty` and fee (5 UAH per tax transfer at PrivatBank). The director's salary for the second half of August 2026 checks out: gross 5 901.68 → ПДФО 1 062.30, ВЗ 295.08, net 4 544.30, ЄСВ 1 298.37.
 4. **Taxes on payouts.** `upsert_payout_charges` for a person (e.g. Andrii Skoropupov: 20 % on top, `currency: "UAH"`): every later payout to that person in Payroll gets a planned payment for the tax, at the NBU rate of the payout day.
 5. **Statement rows.** After entering a PrivatBank statement (section 7), find the matching due payments with `list_planned_payments` (`status: "due"`) and link them: `update_planned_payments` `{id, action: "pay", transactionIds: [...]}`. The expense must be in the payment currency; its money not linked yet is linked — the actual amount may differ from the plan. The salary transfer, ПДФО, ВЗ and ЄСВ are separate rows and separate payments.
-6. **This month's amount.** The second half of the salary changes every month: `{id, action: "set_amount", amount: "<gross>"}` on the instalment recomputes its net and taxes. `skip` needs a `reason` and skips the unpaid taxes of that instalment too; `unskip` brings it back; `unlink` undoes a wrong link.
+6. **This month's amount.** The second half of the salary changes every month: `{id, action: "set_amount", amount: "<gross>"}` on the instalment recomputes its net and taxes. `skip` needs a `reason` and skips the unpaid taxes of that instalment too; `unskip` brings it back; `unlink` undoes a wrong link. `{id, action: "set_due_on", dueOn}` moves a payment within its month or into the next one (an instalment takes its taxes along), e.g. one dated by an older version of its plan (A-140).
 
-Paid payments are fixed. A part or a tax with paid payments cannot be removed — stop it with `endsOn`.
+Paid payments are fixed. To re-date or re-link a paid one, send `unlink`, then `set_due_on` / `set_amount`, then `pay` in the same call: actions run in order and all-or-nothing. A part or a tax with paid payments cannot be removed — stop it with `endsOn`.
 
 ### 8.11 Payroll — `get_payroll_queue`, `merge_payout_acts`, `change_payout_method`, `remove_payout_line`, `adjust_closed_payout`
 

@@ -1,0 +1,2 @@
+ALTER TABLE "transaction" ADD COLUMN "no_link_reason" text;--> statement-breakpoint
+ALTER TABLE "transaction" ADD CONSTRAINT "transaction_no_link_reason_check" CHECK ("transaction"."no_link_reason" is null or (btrim("transaction"."no_link_reason") <> '' and "transaction"."type" in ('revenue', 'expense')));

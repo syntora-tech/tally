@@ -17,7 +17,14 @@ import {
   optionalText,
   requiredText,
 } from '../fields';
-import { bookTransaction, editTransaction, resolveParty, transactionInput, TX_TYPES } from '.';
+import {
+  bookTransaction,
+  editTransaction,
+  markNoLinkIn,
+  resolveParty,
+  transactionInput,
+  TX_TYPES,
+} from '.';
 
 // Batch writes for agents and bulk entry (spec 13.3, A-053): every batch is one DB transaction,
 // supports a dry run, and reports per-item outcomes or per-item errors (`items.<index>`).
@@ -367,6 +374,11 @@ const transactionPatch = z.object({
   reason: optionalText
     .optional()
     .describe('Required when type, accounts or amounts of an allocated transaction change'),
+  noLinkReason: optionalText
+    .optional()
+    .describe(
+      'Why the money not linked yet needs no link (e.g. a payment from before the books): the transaction leaves the unallocated filter; null takes the mark off. Income and expenses only',
+    ),
 });
 
 /**
@@ -467,7 +479,14 @@ export async function applyTransactionPatches(
           id: item.id,
           reason: item.reason ?? null,
         });
-        if (edited.isOk()) await sp.execute(sql`set constraints all immediate`);
+        if (edited.isErr()) return edited;
+        if (item.noLinkReason !== undefined && item.noLinkReason !== current.noLinkReason) {
+          const marked = await markNoLinkIn(sp, { ids: [item.id], reason: item.noLinkReason });
+          if (marked.isErr()) return err(marked.error);
+          await sp.execute(sql`set constraints all immediate`);
+          return ok({ id: item.id, status: 'updated' as const });
+        }
+        await sp.execute(sql`set constraints all immediate`);
         return edited;
       });
       if (outcome.isErr()) {

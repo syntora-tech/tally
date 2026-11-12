@@ -18,6 +18,8 @@ import {
   setAmountInput,
   resetPlannedAmountIn,
   setPlannedAmountIn,
+  setDueOnInput,
+  setPlannedDueOnIn,
   skipPlannedIn,
   unlinkPlannedIn,
   unskipPlannedIn,
@@ -255,6 +257,15 @@ const paymentAction = z.discriminatedUnion('action', [
       ),
   }),
   z.object({ id: z.uuid(), action: z.literal('reset_amount') }),
+  z.object({
+    id: z.uuid(),
+    action: z.literal('set_due_on'),
+    dueOn: z
+      .string()
+      .describe(
+        'New date, YYYY-MM-DD, in the payment month or the next one; an instalment moves its taxes too',
+      ),
+  }),
 ]);
 
 /** Marks planned payments paid, skipped or corrected (A-082); the owner allowed agents to do it. */
@@ -288,6 +299,12 @@ export const updatePlannedPayments = defineService({
             }
             case 'reset_amount':
               return resetPlannedAmountIn(tx, ctx.today, p.id);
+            case 'set_due_on': {
+              const parsed = setDueOnInput.safeParse(p);
+              return parsed.success
+                ? setPlannedDueOnIn(tx, parsed.data)
+                : err(invalid(parsed.error));
+            }
           }
         })();
         if (result.isErr()) {

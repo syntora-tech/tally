@@ -21,6 +21,7 @@ import { monthMargin } from '../dashboard/margin';
 import { createTransaction } from '../ledger';
 import { payItem } from '../payroll';
 import { deletePlannedExpense, savePaymentCharge, savePlannedExpense } from '.';
+import { updatePlannedPayments } from './agent';
 import {
   listPlannedPayments,
   markPlannedPaid,
@@ -277,6 +278,48 @@ describe('planned payments (A-082)', () => {
     ]);
     await unskipPlannedPayment.run(h.ctxFor(finance), { id: advance?.id ?? '' });
     expect((await find('Advance', '2042-09-22'))?.status).toBe('due');
+  });
+
+  it('moves an unpaid payment with its taxes, and re-dates a paid one only through unlink (A-140)', async () => {
+    const ctx = h.ctxFor(finance);
+    const rest = await find('Rest', '2042-09-07');
+    const moved = await updatePlannedPayments.run(ctx, {
+      payments: [{ id: rest?.id ?? '', action: 'set_due_on', dueOn: '2042-08-07' }],
+    });
+    expect(moved.isOk()).toBe(true);
+    const family = (await payments()).filter(
+      (r) => r.payment.id === rest?.id || r.payment.parentId === rest?.id,
+    );
+    expect(new Set(family.map((r) => r.payment.dueOn))).toEqual(new Set(['2042-08-07']));
+
+    const outside = await updatePlannedPayments.run(ctx, {
+      payments: [{ id: rest?.id ?? '', action: 'set_due_on', dueOn: '2042-10-01' }],
+    });
+    expect(outside._unsafeUnwrapErr().fieldErrors?.['payments.0']).toContain(
+      'planned.dueOutsideMonth',
+    );
+
+    const advance = await find('Advance', '2042-08-22');
+    const paidTx = (
+      await h.db
+        .select({ id: allocation.transactionId })
+        .from(allocation)
+        .where(eq(allocation.plannedPaymentId, advance?.id ?? ''))
+    ).map((r) => r.id);
+    const fixed = await updatePlannedPayments.run(ctx, {
+      payments: [{ id: advance?.id ?? '', action: 'set_due_on', dueOn: '2042-08-20' }],
+    });
+    expect(fixed._unsafeUnwrapErr().fieldErrors?.['payments.0']).toContain('planned.notDue');
+
+    const relinked = await updatePlannedPayments.run(ctx, {
+      payments: [
+        { id: advance?.id ?? '', action: 'unlink' },
+        { id: advance?.id ?? '', action: 'set_due_on', dueOn: '2042-08-20' },
+        { id: advance?.id ?? '', action: 'pay', transactionIds: paidTx },
+      ],
+    });
+    expect(relinked.isOk()).toBe(true);
+    expect((await find('Advance', '2042-08-20'))?.status).toBe('paid');
   });
 
   it('charges 20 % in UAH at the NBU rate on every payout to a person, with the payee fee', async () => {
