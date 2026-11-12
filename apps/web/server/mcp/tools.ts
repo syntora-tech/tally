@@ -333,7 +333,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'list_transactions',
     title: 'Ledger journal',
     description:
-      'Transactions with postings, newest first. Filters: from/to (YYYY-MM-DD), type, categoryId, accountId, unallocated, limit (max 1000). Posting amounts are signed decimal strings: negative = money out.',
+      'Transactions with postings, newest first. Filters: from/to (YYYY-MM-DD), type, categoryId, accountId, unallocated (income/expenses not fully linked, without the ones marked noLinkReason), limit (max 1000). Posting amounts are signed decimal strings: negative = money out.',
     kind: 'read',
     service: listTransactions,
     present: (rows) =>
@@ -349,6 +349,7 @@ export const TOOLS: readonly ToolDef[] = [
         counterpartyAddress: t.counterpartyAddress,
         externalRef: t.externalRef ?? t.legacyRef,
         allocated,
+        noLinkReason: t.noLinkReason,
         postings: postings.map((p) => ({
           account: p.accountName,
           amount: p.amount,
@@ -559,7 +560,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'update_transactions',
     title: 'Correct transactions',
     description:
-      'Edits up to 100 transactions by id; only the fields sent change. Legs (from/to/fee) take {account, amount} with a positive amount, or null to remove the leg; the postings are rewritten. personId/clientId link the party (null unlinks). If money (type, accounts, amounts) of an allocated transaction changes, a reason is required and the allocations must still fit. All-or-nothing; errors keyed "transactions.<index>"; use dryRun first.',
+      'Edits up to 100 transactions by id; only the fields sent change. Legs (from/to/fee) take {account, amount} with a positive amount, or null to remove the leg; the postings are rewritten. personId/clientId link the party (null unlinks). noLinkReason marks money that will never be linked (old or one-off payments) so it leaves the unallocated filter; null takes the mark off. If money (type, accounts, amounts) of an allocated transaction changes, a reason is required and the allocations must still fit. All-or-nothing; errors keyed "transactions.<index>"; use dryRun first.',
     kind: 'write',
     service: updateTransactions,
   }),
@@ -807,7 +808,7 @@ export const TOOLS: readonly ToolDef[] = [
     name: 'update_planned_payments',
     title: 'Mark planned payments paid, skipped or corrected',
     description:
-      'Up to 100 actions on planned payments (ids from list_planned_payments): pay {transactionIds of expenses already in the Ledger, e.g. statement rows in the same currency; their unlinked money is linked} or {accountId, occurredOn, amount?, feeAmount?, feeAccountId?} to book a new expense; unlink {transactionIds?}; skip {reason} (an instalment skips its unpaid taxes too); unskip; set_amount {amount: for a salary instalment the gross — net and taxes follow — else the amount}; reset_amount. Paid payments are fixed. All-or-nothing; errors keyed "payments.<index>"; use dryRun first.',
+      'Up to 100 actions on planned payments (ids from list_planned_payments): pay {transactionIds of expenses already in the Ledger, e.g. statement rows in the same currency; their unlinked money is linked} or {accountId, occurredOn, amount?, feeAmount?, feeAccountId?} to book a new expense; unlink {transactionIds?}; skip {reason} (an instalment skips its unpaid taxes too); unskip; set_amount {amount: for a salary instalment the gross — net and taxes follow — else the amount}; reset_amount; set_due_on {dueOn: in its month or the next; an instalment moves its taxes too}. Paid payments are fixed: unlink first, then re-link in the same call. Actions run in order. All-or-nothing; errors keyed "payments.<index>"; use dryRun first.',
     kind: 'write',
     service: updatePlannedPayments,
   }),

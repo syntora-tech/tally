@@ -27,7 +27,7 @@ import { countPlannedDue } from '@/server/services/planned/payments';
 import { impliedRate, type listAccounts, type listTransactions } from '@/server/services/ledger';
 import { DialogButton, RowMenu } from '@/components/v2/form-dialog';
 import { LinkTransaction } from './link-transaction';
-import { DeleteTransactionForm } from './ledger-forms';
+import { DeleteTransactionForm, NoLinkForm } from './ledger-forms';
 
 type OkOf<T> = T extends Result<infer V, unknown> ? V : never;
 type AccountRow = OkOf<Awaited<ReturnType<typeof listAccounts.run>>>[number];
@@ -274,6 +274,7 @@ export async function LedgerV2({
                   const allocated = toDecimal(tx.allocated);
                   const open =
                     settles && tx.mainAmount !== null && allocated.lt(toDecimal(tx.mainAmount));
+                  const noLink = tx.transaction.noLinkReason;
                   const Icon =
                     type === 'revenue'
                       ? ArrowDownLeft
@@ -341,14 +342,24 @@ export async function LedgerV2({
                         {settles ? (
                           open ? (
                             <span className="flex flex-wrap items-center gap-1.5">
-                              <Status tone="warning" testId="allocation">
-                                {allocated.isZero()
-                                  ? t('v2.notAllocated')
-                                  : t('allocatedOf', {
-                                      allocated: fmt.amount(tx.allocated),
-                                      total: fmt.amount(tx.mainAmount ?? '0'),
-                                    })}
-                              </Status>
+                              {noLink !== null ? (
+                                <span
+                                  className="text-xs text-muted-foreground"
+                                  data-testid="allocation"
+                                  title={noLink}
+                                >
+                                  {t('v2.noLink')}
+                                </span>
+                              ) : (
+                                <Status tone="warning" testId="allocation">
+                                  {allocated.isZero()
+                                    ? t('v2.notAllocated')
+                                    : t('allocatedOf', {
+                                        allocated: fmt.amount(tx.allocated),
+                                        total: fmt.amount(tx.mainAmount ?? '0'),
+                                      })}
+                                </Status>
+                              )}
                               <DialogButton
                                 variant="ghost"
                                 size="sm"
@@ -399,11 +410,22 @@ export async function LedgerV2({
                         >
                           <Pencil className="size-4" />
                         </Button>
-                        {allocated.isZero() && (
+                        {(allocated.isZero() || open) && (
                           <RowMenu
                             label={tc('actions')}
                             entries={[
-                              {
+                              open && {
+                                label: t(
+                                  noLink === null ? 'v2.noLinkAction' : 'v2.needsLinkAction',
+                                ),
+                                dialog: {
+                                  title: t(
+                                    noLink === null ? 'v2.noLinkTitle' : 'v2.needsLinkAction',
+                                  ),
+                                  content: <NoLinkForm id={tx.transaction.id} current={noLink} />,
+                                },
+                              },
+                              allocated.isZero() && {
                                 label: t('v2.deleteAction'),
                                 destructive: true,
                                 dialog: {

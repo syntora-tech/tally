@@ -11,7 +11,7 @@ import {
   type TxType,
 } from '@tally/db/schema';
 import { derivedRate, isCryptoNetwork, normalizeWalletAddress, toDecimal } from '@tally/domain';
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { inActorScope } from '../context';
@@ -41,6 +41,9 @@ export const TX_TYPES = [
 ] as const satisfies readonly TxType[];
 
 /** Types with a source and a destination leg (I5). */
+/** Types whose money settles documents (invoices, payouts, planned payments). */
+const SETTLING_TYPES: TxType[] = ['revenue', 'expense'];
+
 export const TWO_LEG_TYPES: readonly TxType[] = [
   'transfer',
   'fx_exchange',
@@ -239,7 +242,7 @@ export const journalFilters = z.object({
   type: z.preprocess(emptyToUndefined, z.enum(TX_TYPES).optional()),
   categoryId: optionalUuid,
   accountId: optionalUuid,
-  /** Revenue/expense whose main posting is not fully allocated yet. */
+  /** Revenue/expense whose main posting is not fully allocated yet and not marked as needing no link. */
   unallocated: checkbox,
   /** Words in the description, counterparty, reference, category or party name. */
   q: z.preprocess(emptyToUndefined, z.string().trim().max(200).optional()),
@@ -275,7 +278,8 @@ export const listTransactions = defineService({
           : undefined,
         f.unallocated
           ? and(
-              inArray(transaction.type, ['revenue', 'expense']),
+              inArray(transaction.type, SETTLING_TYPES),
+              isNull(transaction.noLinkReason),
               sql`${allocated} < ${mainAmount}`,
             )
           : undefined,
@@ -551,6 +555,8 @@ export async function editTransaction(
     counterparty: input.counterparty,
     externalRef: input.externalRef,
     ...party.value,
+    // The mark only means something on money that settles documents (A-140).
+    ...(SETTLING_TYPES.includes(input.type) ? {} : { noLinkReason: null }),
   };
   const unchanged =
     !moneyChanged &&
@@ -565,6 +571,51 @@ export async function editTransaction(
   }
   return ok({ id, status: 'updated' });
 }
+
+export const noLinkInput = z.object({
+  ids: z.array(z.uuid()).min(1).max(100),
+  /** Why the money not linked yet needs no link; null takes the mark off. */
+  reason: optionalText,
+});
+
+/**
+ * "Needs no link" (A-140): an old or one-off payment that will never be linked leaves the
+ * "not linked" filter with a reason; the mark comes off with a null reason.
+ */
+export async function markNoLinkIn(
+  tx: DbTransaction,
+  { ids, reason }: z.output<typeof noLinkInput>,
+): Promise<Result<{ ids: string[] }, ServiceError>> {
+  const rows = await tx
+    .select({ id: transaction.id, type: transaction.type, mainAmount, allocated })
+    .from(transaction)
+    .where(inArray(transaction.id, ids));
+  const fieldErrors: Record<string, string[]> = {};
+  for (const [index, id] of ids.entries()) {
+    const row = rows.find((r) => r.id === id);
+    const problem = !row
+      ? 'ledger.txNotFound'
+      : reason === null
+        ? null
+        : !SETTLING_TYPES.includes(row.type)
+          ? 'ledger.noLinkNotSettling'
+          : row.mainAmount === null || toDecimal(row.allocated).gte(toDecimal(row.mainAmount))
+            ? 'ledger.noLinkAllocated'
+            : null;
+    if (problem) fieldErrors[`ids.${String(index)}`] = [problem];
+  }
+  if (Object.keys(fieldErrors).length) {
+    return err(serviceError('validation_error', 'ledger.noLinkFailed', fieldErrors));
+  }
+  await tx.update(transaction).set({ noLinkReason: reason }).where(inArray(transaction.id, ids));
+  return ok({ ids });
+}
+
+export const markNoLink = defineService({
+  name: 'ledger.transactions.noLink',
+  input: noLinkInput,
+  handler: (ctx, input) => inActorScope(ctx, (tx) => markNoLinkIn(tx, input)),
+});
 
 export const updateTransaction = defineService({
   name: 'ledger.transactions.update',

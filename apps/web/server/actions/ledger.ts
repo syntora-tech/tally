@@ -10,6 +10,7 @@ import { saveManualRate } from '../services/fx';
 import {
   createTransaction,
   deleteTransaction,
+  markNoLink,
   moveAccount,
   saveAccount,
   setAccountHidden,
@@ -50,6 +51,19 @@ export async function deleteTransactionAction(
 ): Promise<LedgerFormState> {
   const ctx = await requireUserContext();
   const result = await deleteTransaction.run(ctx, formDataToObject(formData));
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath('/ledger');
+  return { ok: true, data: result.value };
+}
+
+/** One row's "needs no link" mark (A-140): a reason sets it, an empty one takes it off. */
+export async function markNoLinkAction(
+  _prev: ActionResult<{ ids: string[] }> | null,
+  formData: FormData,
+): Promise<ActionResult<{ ids: string[] }>> {
+  const ctx = await requireUserContext();
+  const { id, reason } = formDataToObject(formData);
+  const result = await markNoLink.run(ctx, { ids: [id], reason });
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath('/ledger');
   return { ok: true, data: result.value };

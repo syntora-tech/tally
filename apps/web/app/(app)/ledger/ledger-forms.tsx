@@ -12,6 +12,7 @@ import { editableDecimal } from '@/lib/format';
 import { toOptions, useLabels } from '@/lib/labels';
 import {
   deleteTransactionAction,
+  markNoLinkAction,
   moveAccountAction,
   saveAccountAction,
   setAccountHiddenAction,
@@ -141,6 +142,46 @@ export function DeleteTransactionForm({ id }: { id: string }) {
       <div className="flex justify-end">
         <Button type="submit" variant="destructive" disabled={pending}>
           {tc('delete')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** "Needs no link" (A-140): with a reason the row leaves the "Not allocated" filter. */
+export function NoLinkForm({ id, current }: { id: string; current: string | null }) {
+  const t = useTranslations('ledger.v2');
+  const [state, action, pending] = useActionState(markNoLinkAction, null);
+  useCloseOnSuccess(state);
+  useEffect(() => {
+    if (state?.ok) toast.success(t(current === null ? 'noLinkSaved' : 'needsLinkSaved'));
+  }, [state, current, t]);
+  const error =
+    state && !state.ok
+      ? (Object.values(state.error.fieldErrors ?? {}).flat()[0] ?? state.error.message)
+      : null;
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="id" value={id} />
+      {current === null ? (
+        <>
+          <p className="text-sm text-muted-foreground">{t('noLinkHelp')}</p>
+          <FormField label={t('noLinkReason')} htmlFor={`no-link-${id}`}>
+            <Input
+              id={`no-link-${id}`}
+              name="reason"
+              required
+              placeholder={t('noLinkPlaceholder')}
+            />
+          </FormField>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">{current}</p>
+      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending}>
+          {current === null ? t('noLinkSave') : t('needsLinkAction')}
         </Button>
       </div>
     </form>

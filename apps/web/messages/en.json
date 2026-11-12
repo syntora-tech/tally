@@ -348,7 +348,10 @@
       "oneParty": "Link the transaction to one person or one client",
       "addressNeedsCrypto": "A counterparty wallet needs a crypto account in the transaction",
       "editReason": "This transaction is allocated: enter the reason for changing its money",
-      "beforeOpening": "The date is before the account's opening date"
+      "beforeOpening": "The date is before the account's opening date",
+      "noLinkFailed": "Some transactions cannot be marked: see each one",
+      "noLinkNotSettling": "Only income and expenses are linked; this one needs no mark",
+      "noLinkAllocated": "The transaction is already fully linked"
     },
     "fx": {
       "ratePositive": "The rate must be > 0",
@@ -605,7 +608,9 @@
       "chooseFreeExpense": "An expense with money not yet linked",
       "paymentNotLinked": "No expenses are linked to this payment",
       "partHasPaid": "This part already has paid payments: change its amount instead of deleting it",
-      "chargeHasPaid": "This charge already has paid payments: stop it with an end month instead"
+      "chargeHasPaid": "This charge already has paid payments: stop it with an end month instead",
+      "dueOutsideMonth": "The date must be in the payment month or the next one",
+      "chargesPaid": "Taxes of this payment are already paid: unlink them first"
     },
     "trips": {
       "notFound": "Trip not found",
@@ -1474,7 +1479,17 @@
       "deleteAction": "Delete…",
       "deleteTitle": "Delete the transaction?",
       "hidden": "Hidden",
-      "accountsHelp": "Bank, wallets, cash. The currency of an account with postings cannot change. Arrows set the order of accounts everywhere; a hidden account leaves the overview and the pickers, but its balance still counts in the treasury."
+      "accountsHelp": "Bank, wallets, cash. The currency of an account with postings cannot change. Arrows set the order of accounts everywhere; a hidden account leaves the overview and the pickers, but its balance still counts in the treasury.",
+      "noLink": "No link needed",
+      "noLinkAction": "No link needed…",
+      "noLinkTitle": "Mark as needing no link",
+      "noLinkHelp": "The payment leaves the “Not allocated” filter, e.g. a payment from before the books or a bank fee. Linking it later stays possible.",
+      "noLinkReason": "Reason",
+      "noLinkPlaceholder": "Before the books (Aug 2026)",
+      "noLinkSave": "Mark",
+      "noLinkSaved": "Marked as needing no link",
+      "needsLinkAction": "Needs a link again",
+      "needsLinkSaved": "The mark is off"
     },
     "import": "Import"
   },
