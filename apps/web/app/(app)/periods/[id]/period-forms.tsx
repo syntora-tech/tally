@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import {
   addAdjustmentAction,
+  adjustClosedPersonAction,
   closePeriodAction,
   deletePeriodAction,
   draftEarlyActAction,
@@ -440,19 +441,31 @@ export function ReopenForm({ periodId }: { periodId: string }) {
 export function AdjustmentForm(props: {
   periodId: string;
   people: { id: string; name: string }[];
+  /** Owner only: the month is closed, the adjustment follows A-099 / A-141. */
+  closed?: boolean;
 }) {
   const [state, action, pending] = useActionState<PeriodFormState, FormData>(
-    addAdjustmentAction,
+    props.closed ? adjustClosedPersonAction : addAdjustmentAction,
     null,
   );
   const t = useTranslations('periodForms');
   const tc = useTranslations('common');
-  const { ADJUSTMENT_KIND_LABELS, PAYOUT_METHOD_LABELS } = useLabels();
+  const { ADJUSTMENT_KIND_LABELS: allKinds, PAYOUT_METHOD_LABELS } = useLabels();
+  // A trip reimbursement comes from its trip, never by hand after the close.
+  const { trip_reimbursement: _trip, ...closedKinds } = allKinds;
+  const ADJUSTMENT_KIND_LABELS = props.closed ? closedKinds : allKinds;
+  const defaultKind = props.closed ? 'correction' : 'bonus';
+  const hint = props.closed ? (
+    <p className="text-sm text-muted-foreground sm:col-span-2 col-span-full">
+      {t('adjustmentClosedHint')}
+    </p>
+  ) : null;
   const error = useResult(state, t('adjustmentAdded'));
   if (useIsV2()) {
     return (
       <form action={action} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input type="hidden" name="periodId" value={props.periodId} />
+        {hint}
         <FormField label={t('person')} htmlFor="adj-person" error={error?.fieldErrors?.personId}>
           <NativeSelect
             id="adj-person"
@@ -465,7 +478,7 @@ export function AdjustmentForm(props: {
           <NativeSelect
             id="adj-kind"
             name="kind"
-            defaultValue="bonus"
+            defaultValue={defaultKind}
             options={toOptions(ADJUSTMENT_KIND_LABELS)}
           />
         </FormField>
@@ -517,6 +530,7 @@ export function AdjustmentForm(props: {
   return (
     <form action={action} className="grid grid-cols-2 items-end gap-3 md:grid-cols-7">
       <input type="hidden" name="periodId" value={props.periodId} />
+      {hint}
       <FormField label={t('person')} htmlFor="adj-person" error={error?.fieldErrors?.personId}>
         <NativeSelect
           id="adj-person"
@@ -529,7 +543,7 @@ export function AdjustmentForm(props: {
         <NativeSelect
           id="adj-kind"
           name="kind"
-          defaultValue="bonus"
+          defaultValue={defaultKind}
           options={toOptions(ADJUSTMENT_KIND_LABELS)}
         />
       </FormField>

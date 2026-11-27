@@ -20,6 +20,7 @@ import {
   updatePeriod,
 } from '../services/periods';
 import { serviceError } from '../services/errors';
+import { adjustClosedPerson } from '../services/payroll/closed-person';
 import type { ActionResult } from './to-action-result';
 
 export type PeriodFormState = ActionResult<{ id: string }> | null;
@@ -207,6 +208,24 @@ export async function addAdjustmentAction(
   if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
   revalidatePath(`/periods/${field(formData.get('periodId'))}`);
   return { ok: true, data: result.value };
+}
+
+/** Owner's adjustment of a closed month; a person without a payout gets a new one (A-141). */
+export async function adjustClosedPersonAction(
+  _prev: PeriodFormState,
+  formData: FormData,
+): Promise<PeriodFormState> {
+  const ctx = await requireUserContext();
+  const input = formDataToObject(formData);
+  const result = await adjustClosedPerson.run(ctx, {
+    ...input,
+    amount: typeof input.amount === 'string' ? input.amount.replace(',', '.').trim() : input.amount,
+  });
+  if (result.isErr()) return { ok: false, error: await localizeForUser(result.error) };
+  revalidatePath(`/periods/${field(formData.get('periodId'))}`);
+  revalidatePath('/payroll');
+  revalidatePath('/acts');
+  return { ok: true, data: { id: result.value.itemId } };
 }
 
 export async function removeAdjustmentAction(

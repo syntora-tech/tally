@@ -150,44 +150,57 @@ export const adjustClosedPayout = defineService({
       const open = await openToOwner(tx, input.itemId);
       if (open.isErr()) return err(open.error);
       const item = open.value;
-      if (!item.personId) return err(serviceError('validation_error', 'payroll.adjustPersonOnly'));
       const [month] = await tx.select().from(period).where(eq(period.id, item.periodId));
       if (month?.status !== 'closed') {
         return err(serviceError('conflict', 'payroll.adjustOpenPeriod'));
       }
-      const [act] = input.actId
-        ? await tx.select().from(supplierAct).where(eq(supplierAct.id, input.actId))
-        : [];
-      if (
-        input.actId &&
-        (act?.payrollItemId !== item.id || act.status !== 'draft' || act.rateLocked)
-      ) {
-        return err(serviceError('validation_error', 'payroll.adjustActDraft'));
-      }
-      await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
-      const amount =
-        input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
-      const [added] = await tx
-        .insert(adjustment)
-        .values({
-          periodId: item.periodId,
-          personId: item.personId,
-          payoutMethod: item.payoutMethod,
-          kind: input.kind,
-          amount,
-          currency: input.currency,
-          reason: input.reason,
-          // The act of the rest takes the adjustments given to no other act (A-085).
-          supplierActId: act && act.amountUsd !== null ? act.id : null,
-        })
-        .returning({ id: adjustment.id });
-      const totals = await recomputePayout(tx, item);
-      return ok({
-        dryRun: input.dryRun,
-        adjustmentId: added?.id ?? null,
-        itemId: item.id,
-        ...totals,
-      });
+      return insertClosedAdjustment(tx, item, input);
     });
   },
 });
+
+/** The adjustment of a closed month's open payout and its new totals (A-099, A-100). */
+export async function insertClosedAdjustment(
+  tx: DbTransaction,
+  item: typeof payrollItem.$inferSelect,
+  input: {
+    kind: 'bonus' | 'deduction' | 'correction' | 'other';
+    amount: string;
+    currency: string;
+    reason: string;
+    actId?: string;
+    dryRun: boolean;
+  },
+) {
+  if (!item.personId) return err(serviceError('validation_error', 'payroll.adjustPersonOnly'));
+  const [act] = input.actId
+    ? await tx.select().from(supplierAct).where(eq(supplierAct.id, input.actId))
+    : [];
+  if (input.actId && (act?.payrollItemId !== item.id || act.status !== 'draft' || act.rateLocked)) {
+    return err(serviceError('validation_error', 'payroll.adjustActDraft'));
+  }
+  await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
+  const amount =
+    input.kind === 'deduction' ? toDecimal(input.amount).abs().neg().toString() : input.amount;
+  const [added] = await tx
+    .insert(adjustment)
+    .values({
+      periodId: item.periodId,
+      personId: item.personId,
+      payoutMethod: item.payoutMethod,
+      kind: input.kind,
+      amount,
+      currency: input.currency,
+      reason: input.reason,
+      // The act of the rest takes the adjustments given to no other act (A-085).
+      supplierActId: act && act.amountUsd !== null ? act.id : null,
+    })
+    .returning({ id: adjustment.id });
+  const totals = await recomputePayout(tx, item);
+  return ok({
+    dryRun: input.dryRun,
+    adjustmentId: added?.id ?? null,
+    itemId: item.id,
+    ...totals,
+  });
+}
