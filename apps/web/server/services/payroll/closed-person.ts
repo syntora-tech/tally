@@ -11,11 +11,11 @@ import { currencyCode, decimalString, requiredText } from '../fields';
 import { ensureNbuRate } from '../fx';
 import { loadCalendar } from '../periods/data';
 import { createPayroll } from '../periods/payroll';
-import { insertClosedAdjustment, openToOwner } from './lines';
+import { insertClosedAdjustment } from './lines';
 
 /**
  * An adjustment of a closed month for a person (A-141). A person with a payout of that method
- * gets it as on the payout card (A-099); a person with none gets a new payout built from it the
+ * gets it as on the payout card (A-099, A-142); a person with none gets a new payout built from it the
  * way the close builds one — payee, payout rate, draft act. Owner only, with a reason.
  */
 export const adjustClosedPerson = defineService({
@@ -69,9 +69,13 @@ export const adjustClosedPerson = defineService({
           ),
         );
       if (existing) {
-        const open = await openToOwner(tx, existing.id);
-        if (open.isErr()) return err(open.error);
-        const added = await insertClosedAdjustment(tx, open.value, input);
+        const [item] = await tx
+          .select()
+          .from(payrollItem)
+          .where(eq(payrollItem.id, existing.id))
+          .for('update');
+        if (!item) return err(serviceError('not_found', 'payroll.notFound'));
+        const added = await insertClosedAdjustment(tx, item, input);
         return added.map((r) => ({ ...r, created: false }));
       }
 

@@ -15,6 +15,7 @@ import { getFormat, getLabels } from '@/server/i18n';
 import type { listPayroll, PayrollGroup } from '@/server/services/payroll';
 import type { listPlannedPayments } from '@/server/services/planned/payments';
 import { PaymentActions } from '../ledger/planned/planned-forms';
+import { adjustableAfterClose } from './adjustable';
 import { DraftContractorInvoiceButton } from './contractor-invoices/contractor-invoice-forms';
 import {
   AdjustClosedForm,
@@ -362,8 +363,7 @@ export async function PayrollV2(p: PayrollV2Props) {
       p.isOwner &&
         i.item.kind === 'person' &&
         i.periodStatus === 'closed' &&
-        unpaid &&
-        allDraft && {
+        adjustableAfterClose(i) && {
           label: t('v2.adjust'),
           dialog: {
             title: t('adjustClosed'),

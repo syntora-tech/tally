@@ -908,7 +908,7 @@ export const TOOLS: readonly ToolDef[] = [
     title: 'Adjust an unpaid payout of a closed month',
     kind: 'write',
     description:
-      'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to an unpaid person payout of a closed month whose act is not issued — the month\'s adjustments are frozen otherwise. actId puts it into one draft act of the payout (acts[].id, e.g. a one-off rounding of -0.14 UAH so that act matches its document, A-100); by default it goes to the act of the rest. Recomputes the payout totals and its draft acts at the payout rate. Refuses payouts with payments or an issued act; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
+      'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to a person payout of a closed month not paid in full, into a draft act not paid yet (A-142: paid parts and issued acts stay) — the month\'s adjustments are frozen otherwise. actId puts it into one draft act of the payout (acts[].id, e.g. a one-off rounding of -0.14 UAH so that act matches its document, A-100); by default it goes to the act of the rest. Recomputes the payout totals and its draft acts at the payout rate. Refuses a payout paid in full, an issued act of the rest, or an amount below what is paid; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
     service: adjustClosedPayout,
   }),
   tool({
@@ -916,7 +916,7 @@ export const TOOLS: readonly ToolDef[] = [
     title: 'Adjust a person in a closed month',
     kind: 'write',
     description:
-      'Owner only, on an explicit request (A-141). Adds an adjustment (correction by default) with a reason to a person in a closed month by periodId + personId + payoutMethod. A person with a payout of that method gets it like adjust_closed_payout (refused once paid or its act issued); a person with none gets a new payout built from it as the close would — payee, NBU payout rate of today for a USD part, draft FOP act. A new payout needs a positive amount. Run dryRun first and show the payout and its total.',
+      'Owner only, on an explicit request (A-141). Adds an adjustment (correction by default) with a reason to a person in a closed month by periodId + personId + payoutMethod. A person with a payout of that method gets it like adjust_closed_payout (refused once paid in full or its act of the rest issued); a person with none gets a new payout built from it as the close would — payee, NBU payout rate of today for a USD part, draft FOP act. A new payout needs a positive amount. Run dryRun first and show the payout and its total.',
     service: adjustClosedPerson,
   }),
 ];
