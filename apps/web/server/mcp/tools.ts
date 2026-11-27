@@ -56,6 +56,7 @@ import { listContractorInvoices } from '../services/contractor-invoices';
 import { addLegacyActs } from '../services/acts/legacy';
 import { actsRegistry } from '../services/acts/registry';
 import { listPayroll } from '../services/payroll';
+import { adjustClosedPerson } from '../services/payroll/closed-person';
 import { adjustClosedPayout, removePayoutLine } from '../services/payroll/lines';
 import { changePayoutMethod } from '../services/payroll/method';
 
@@ -909,6 +910,14 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       'Owner only, on an explicit request (A-099). Adds an adjustment (correction by default; signed amount, e.g. "-0.27" USD to bring an 804 USD line to 803.73) with a reason to an unpaid person payout of a closed month whose act is not issued — the month\'s adjustments are frozen otherwise. actId puts it into one draft act of the payout (acts[].id, e.g. a one-off rounding of -0.14 UAH so that act matches its document, A-100); by default it goes to the act of the rest. Recomputes the payout totals and its draft acts at the payout rate. Refuses payouts with payments or an issued act; in an open month adjustments are added in the period. Run dryRun first and show the payout and its new total.',
     service: adjustClosedPayout,
+  }),
+  tool({
+    name: 'adjust_closed_person',
+    title: 'Adjust a person in a closed month',
+    kind: 'write',
+    description:
+      'Owner only, on an explicit request (A-141). Adds an adjustment (correction by default) with a reason to a person in a closed month by periodId + personId + payoutMethod. A person with a payout of that method gets it like adjust_closed_payout (refused once paid or its act issued); a person with none gets a new payout built from it as the close would — payee, NBU payout rate of today for a USD part, draft FOP act. A new payout needs a positive amount. Run dryRun first and show the payout and its total.',
+    service: adjustClosedPerson,
   }),
 ];
 

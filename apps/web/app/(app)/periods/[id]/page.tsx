@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { FINANCE_ROLES } from '@/lib/navigation';
 import { requireRole } from '@/server/request-context';
+import { searchPeople } from '@/server/services/people';
 import { getPeriodOverview, listPeriods, periodDocuments } from '@/server/services/periods';
 import {
   AdjustmentForm,
@@ -154,6 +155,11 @@ export default async function PeriodPage({
   const people = [...new Map(assignments.map((a) => [a.personId ?? '', a.personName])).entries()]
     .filter(([pid]) => pid)
     .map(([pid, name]) => ({ id: pid, name }));
+  // After the close the owner may adjust anyone, also a person without a payout (A-141).
+  const adjustClosed = closed && ctx.actor.role === 'owner';
+  const closedPeople = adjustClosed
+    ? (await searchPeople.run(ctx, {})).unwrapOr([]).map((x) => ({ id: x.id, name: x.fullName }))
+    : [];
   const adjustStepV2 = (
     <div className="flex flex-col">
       <table className="w-full min-w-[36rem] text-sm tabular-nums">
@@ -323,6 +329,16 @@ export default async function PeriodPage({
         <div className="mt-4">
           <AdjustmentForm periodId={p.id} people={people} />
         </div>
+      )}
+      {adjustClosed && !v2 && (
+        <details className="mt-4" data-testid="adjust-closed-period">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            {t('v2.adjustmentClosedTitle')}
+          </summary>
+          <div className="mt-2">
+            <AdjustmentForm periodId={p.id} people={closedPeople} closed />
+          </div>
+        </details>
       )}
       {docs && (docs.invoices.length > 0 || docs.acts.length > 0) && (
         <div className="mt-6 flex flex-col gap-4">
@@ -657,7 +673,7 @@ export default async function PeriodPage({
                 .filter(Boolean)
                 .join(' · '),
               help: t('step3Description'),
-              actions: closed ? undefined : (
+              actions: !closed ? (
                 <DialogButton
                   variant="outline"
                   title={t('v2.adjustmentTitle')}
@@ -665,7 +681,15 @@ export default async function PeriodPage({
                 >
                   + {t('v2.adjustment')}
                 </DialogButton>
-              ),
+              ) : adjustClosed ? (
+                <DialogButton
+                  variant="outline"
+                  title={t('v2.adjustmentClosedTitle')}
+                  content={<AdjustmentForm periodId={p.id} people={closedPeople} closed />}
+                >
+                  + {t('v2.adjustment')}
+                </DialogButton>
+              ) : undefined,
               content: calcStep,
             },
             {

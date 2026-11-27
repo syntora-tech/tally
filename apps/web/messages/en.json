@@ -540,7 +540,8 @@
       "lineActIssued": "The payout has an issued act: void it to change the payout",
       "adjustPersonOnly": "Only a person's payout takes adjustments",
       "adjustOpenPeriod": "The month is open: add the adjustment in the period",
-      "adjustActDraft": "Choose a draft act of this payout that is not paid"
+      "adjustActDraft": "Choose a draft act of this payout that is not paid",
+      "adjustNewNegative": "There is no payout to adjust: a new payout needs a positive amount"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
@@ -1654,7 +1655,8 @@
         "payouts": "{count, plural, =0 {none} one {# payout} other {# payouts}}"
       },
       "adjustment": "Adjustment",
-      "adjustmentTitle": "New adjustment"
+      "adjustmentTitle": "New adjustment",
+      "adjustmentClosedTitle": "Adjustment after the close"
     }
   },
   "periodForms": {
@@ -1708,7 +1710,8 @@
     "adjustmentUpdated": "Adjustment changed",
     "editAdjustment": "Edit",
     "editAdjustmentTitle": "Edit adjustment",
-    "save": "Save"
+    "save": "Save",
+    "adjustmentClosedHint": "The month is closed: the adjustment goes into the person's payout while it is unpaid and its act not issued, or makes a new payout if the person has none."
   },
   "invoices": {
     "title": "Invoices",
