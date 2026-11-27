@@ -147,9 +147,12 @@ export const adjustClosedPayout = defineService({
       return err(serviceError('forbidden', 'general.forbidden'));
     }
     return inActorScopeAtomic(ctx, input, async (tx) => {
-      const open = await openToOwner(tx, input.itemId);
-      if (open.isErr()) return err(open.error);
-      const item = open.value;
+      const [item] = await tx
+        .select()
+        .from(payrollItem)
+        .where(eq(payrollItem.id, input.itemId))
+        .for('update');
+      if (!item) return err(serviceError('not_found', 'payroll.notFound'));
       const [month] = await tx.select().from(period).where(eq(period.id, item.periodId));
       if (month?.status !== 'closed') {
         return err(serviceError('conflict', 'payroll.adjustOpenPeriod'));
@@ -159,7 +162,12 @@ export const adjustClosedPayout = defineService({
   },
 });
 
-/** The adjustment of a closed month's open payout and its new totals (A-099, A-100). */
+/**
+ * The adjustment of a closed month's payout and its new totals (A-099, A-100). The payout is not
+ * paid in full and the adjustment goes into a draft act not paid yet — the act of the rest by
+ * default — so paid parts and issued acts stay as they are (A-142); the payout never drops below
+ * what is paid of it.
+ */
 export async function insertClosedAdjustment(
   tx: DbTransaction,
   item: typeof payrollItem.$inferSelect,
@@ -173,11 +181,21 @@ export async function insertClosedAdjustment(
   },
 ) {
   if (!item.personId) return err(serviceError('validation_error', 'payroll.adjustPersonOnly'));
-  const [act] = input.actId
-    ? await tx.select().from(supplierAct).where(eq(supplierAct.id, input.actId))
-    : [];
-  if (input.actId && (act?.payrollItemId !== item.id || act.status !== 'draft' || act.rateLocked)) {
+  if (item.status === 'paid') return err(serviceError('conflict', 'payroll.lineItemPaid'));
+  const acts = await tx
+    .select()
+    .from(supplierAct)
+    .where(and(eq(supplierAct.payrollItemId, item.id), ne(supplierAct.status, 'void')));
+  const act = input.actId ? acts.find((a) => a.id === input.actId) : undefined;
+  if (input.actId && (!act || act.status !== 'draft' || act.rateLocked)) {
     return err(serviceError('validation_error', 'payroll.adjustActDraft'));
+  }
+  if (!input.actId) {
+    const rest = acts.find((a) => a.type === 'monthly' && a.amountUsd === null);
+    if (rest?.rateLocked) return err(serviceError('conflict', 'payroll.lineItemPaid'));
+    if (rest && rest.status !== 'draft') {
+      return err(serviceError('conflict', 'payroll.lineActIssued'));
+    }
   }
   await tx.execute(sql`select set_config('app.reason', ${input.reason}, true)`);
   const amount =
@@ -197,6 +215,11 @@ export async function insertClosedAdjustment(
     })
     .returning({ id: adjustment.id });
   const totals = await recomputePayout(tx, item);
+  const [after] = await tx.select().from(payrollItem).where(eq(payrollItem.id, item.id));
+  const total = after?.payoutMethod === 'fiat' ? after.totalUah : after?.totalUsd;
+  if (after && total != null && toDecimal(total).lt(toDecimal(after.paidAmount))) {
+    return err(serviceError('conflict', 'payroll.adjustBelowPaid'));
+  }
   return ok({
     dryRun: input.dryRun,
     adjustmentId: added?.id ?? null,

@@ -97,7 +97,7 @@ Server responses: `401` — missing or unknown token; `403` — the token was re
 | `merge_payout_acts`        | write | Joins two neighbouring draft acts of one payout into one act and one period                                                                             |
 | `change_payout_method`     | write | Owner only: moves an unpaid payout of a closed month to `bank_usd` or `crypto` when it was closed under the wrong method                                |
 | `remove_payout_line`       | write | Owner only: takes a line out of an unpaid payout of a closed month (e.g. a director salary paid by plan); totals and draft act follow                   |
-| `adjust_closed_payout`     | write | Owner only: adds an adjustment (signed, with a reason) to an unpaid payout of a closed month whose act is not issued; totals and draft act follow       |
+| `adjust_closed_payout`     | write | Owner only: adds an adjustment (signed, with a reason) to a payout of a closed month not paid in full, into a draft act; totals and the rest act follow |
 | `adjust_closed_person`     | write | Owner only: adjustment of a closed month by period + person + method; a person without a payout gets a new one (payee, rate, draft act)                 |
 | `list_acts`                | read  | Supplier acts registry: FOP acts by counterparty with UAH totals and missing months; filters `payeeId`, `year`, `all`                                   |
 | `add_legacy_acts`          | write | Historical FOP acts (≤ 100) as issued legacy rows, keyed by `legacyRef`, numbers verbatim, `documentIds` linked                                         |
@@ -429,6 +429,8 @@ Payouts themselves are made in the UI ("Pay"). A month can be paid in parts (A-0
 A director's salary is a planned expense with parts (A-082, A-097), shown on Payroll without an act; it must not also be an assignment pay line in a FOP payout. When the owner asks, take such a line out of a closed month with `remove_payout_line` (`dryRun` first) and end the assignment with `upsert_assignments` (`endsOn`).
 
 A closed month's amounts are frozen. When the owner asks to correct an unpaid payout of a closed month (e.g. 804 USD should be 803.73), add `adjust_closed_payout` with the signed difference (`-0.27`, USD) and a reason — `dryRun` first; the accrued line stays, the difference shows as an adjustment (A-099). With `actId` it goes into that draft act of the payout, e.g. a one-off rounding of one act to match its document (A-100). Fix the pay terms for later months with `upsert_assignments`.
+
+A payout paid in part takes it too (A-142): the adjustment goes into the draft act of the rest (or the draft `actId`); paid parts and issued acts stay. It is refused once the payout is paid in full, when the act of the rest is issued, or when it would bring the payout below what is paid.
 
 When the person has no payout in the closed month (e.g. a one-off bonus after the close), use `adjust_closed_person` with `periodId`, `personId`, `payoutMethod`, a positive amount and a reason — `dryRun` first; it builds the payout as the close would: payee, the NBU rate of today for a USD part of a fiat payout, a draft FOP act (A-141). For a person who has a payout of that method it works like `adjust_closed_payout`.
 

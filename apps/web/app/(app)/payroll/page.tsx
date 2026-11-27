@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { adjustableAfterClose } from './adjustable';
 import { shownAccounts } from '@/lib/accounts';
 import { getTranslations } from 'next-intl/server';
 import { addMonths, endOfMonth, startOfMonth, sum, toDecimal, type LocalDate } from '@tally/domain';
@@ -687,8 +688,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Sear
                     {isOwner &&
                       i.item.kind === 'person' &&
                       i.periodStatus === 'closed' &&
-                      toDecimal(i.item.paidAmount).isZero() &&
-                      i.acts.every((a) => a.status === 'draft') && (
+                      adjustableAfterClose(i) && (
                         <AdjustClosedForm
                           itemId={i.item.id}
                           fiat={fiat}

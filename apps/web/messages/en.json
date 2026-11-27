@@ -541,7 +541,8 @@
       "adjustPersonOnly": "Only a person's payout takes adjustments",
       "adjustOpenPeriod": "The month is open: add the adjustment in the period",
       "adjustActDraft": "Choose a draft act of this payout that is not paid",
-      "adjustNewNegative": "There is no payout to adjust: a new payout needs a positive amount"
+      "adjustNewNegative": "There is no payout to adjust: a new payout needs a positive amount",
+      "adjustBelowPaid": "The adjustment would bring the payout below what is already paid"
     },
     "db": {
       "termsClosedFrom": "Terms cannot be changed retroactively in a closed period. A new version can start no earlier than {date}.",
